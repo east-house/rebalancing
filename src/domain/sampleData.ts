@@ -1,9 +1,5 @@
-import type { Portfolio, Quote, Snapshot } from "./types";
+import type { Portfolio, Snapshot } from "./types";
 
-/**
- * Clearly fictional, local-only values used until a market-data provider is
- * connected. Prices are expressed in KRW.
- */
 export const samplePortfolio: Portfolio = {
   totalAssets: 100_000_000,
   targetCashWeight: 10,
@@ -31,12 +27,6 @@ export const samplePortfolio: Portfolio = {
     },
   ],
 };
-
-export const sampleQuotes: Quote[] = [
-  { ticker: "VOO", close: 782_000, asOf: "2026-07-17" },
-  { ticker: "QQQ", close: 691_000, asOf: "2026-07-17" },
-  { ticker: "GOOG", close: 253_000, asOf: "2026-07-17" },
-];
 
 export const sampleSnapshots: Snapshot[] = [
   { date: "2025-08-01", totalValue: 76_800_000 },

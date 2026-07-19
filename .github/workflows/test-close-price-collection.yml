@@ -1,23 +1,14 @@
-name: Test closing-price collection
+name: Test rolling closing-price collection
 
 run-name: >-
-  Closing-price test (${{ inputs.market }}, ${{ inputs.limit }} tickers,
+  Closing-price test (${{ inputs.limit }} active tickers,
   R2=${{ inputs.upload_to_r2 }})
 
 on:
   workflow_dispatch:
     inputs:
-      market:
-        description: Market sample
-        required: true
-        type: choice
-        default: ALL
-        options:
-          - ALL
-          - KR
-          - US
       limit:
-        description: Number of tickers to test
+        description: Number of active tickers to test
         required: true
         type: choice
         default: "10"
@@ -27,7 +18,7 @@ on:
           - "20"
           - "50"
       upload_to_r2:
-        description: Upload results under the R2 test/ prefix
+        description: Read/write rolling histories under the R2 test prefix
         required: true
         type: boolean
         default: true
@@ -41,9 +32,9 @@ concurrency:
 
 jobs:
   collect:
-    name: Collect and verify sample prices
+    name: Collect and verify active-ticker histories
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -67,7 +58,10 @@ jobs:
           "boto3>=1.34,<2"
 
       - name: Test collector logic
-        run: python -m unittest scripts/test_collect_close_prices.py
+        run: >-
+          python -m unittest
+          scripts/test_collect_close_prices.py
+          scripts/test_aggregate_latest_quotes.py
 
       - name: Validate R2 configuration
         if: ${{ inputs.upload_to_r2 }}
@@ -87,17 +81,19 @@ jobs:
           done
           exit "${missing}"
 
-      - name: Collect closing-price sample
+      - name: Collect closing-price histories
         shell: bash
         run: |
           args=(
+            --active-config config/active-close-prices.json
             --catalog public/data/instruments.json
             --output-dir action-output
-            --market "${{ inputs.market }}"
-            --limit "${{ inputs.limit }}"
+            --max-instruments "${{ inputs.limit }}"
+            --rotation-seed "${{ github.run_number }}"
+            --soft-time-budget-minutes 15
             --retries 1
-            --request-delay 0.25
-            --r2-prefix test
+            --request-delay 0.2
+            --r2-prefix test/market-data
           )
           if [[ "${UPLOAD_TO_R2}" == "true" ]]; then
             args+=(--upload-r2)
@@ -111,13 +107,14 @@ jobs:
           if [[ -f action-output/summary.md ]]; then
             cat action-output/summary.md >> "${GITHUB_STEP_SUMMARY}"
           else
-            echo "## Closing-price collection test" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## Rolling closing-price collection test" \
+              >> "${GITHUB_STEP_SUMMARY}"
             echo "" >> "${GITHUB_STEP_SUMMARY}"
             echo "The collector stopped before producing a summary." \
               >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload test result artifact
+      - name: Upload test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:

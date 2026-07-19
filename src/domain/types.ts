@@ -11,9 +11,15 @@ export interface Holding {
 
 export interface Quote {
   ticker: string;
+  /** Close converted to KRW for portfolio calculations. */
   close: number;
   /** ISO-8601 calendar date for the close. */
   asOf: string;
+  nativeClose?: number;
+  nativeCurrency?: "KRW" | "USD";
+  country?: "KR" | "US";
+  /** USD/KRW rate used when nativeCurrency is USD. */
+  fxRate?: number;
 }
 
 export interface Portfolio {

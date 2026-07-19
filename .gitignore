@@ -5,6 +5,11 @@ dist/
 coverage/
 artifacts/
 action-output/
+shard-output/
+shard-results/
+merged-output/
+__pycache__/
+*.py[cod]
 
 # Local environment and Cloudflare secrets
 .env

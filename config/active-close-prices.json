@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "maxInstruments": 5000,
+  "selectionPolicy": "Collect every KR stock and ETF in the committed catalog plus explicit US stock and ETF lists.",
+  "groups": [
+    {
+      "country": "KR",
+      "assetType": "STOCK",
+      "selection": "all",
+      "minimumCount": 2500,
+      "exclude": []
+    },
+    {
+      "country": "KR",
+      "assetType": "ETF",
+      "selection": "all",
+      "minimumCount": 1000,
+      "exclude": []
+    },
+    {
+      "country": "US",
+      "assetType": "STOCK",
+      "selection": "explicit",
+      "asOf": "2026-07-20",
+      "selectionNote": "50 high-market-cap US companies at the configuration snapshot date.",
+      "source": "https://companiesmarketcap.com/usa/largest-companies-in-the-usa-by-market-cap/",
+      "tickers": [
+        "NVDA", "AAPL", "GOOG", "MSFT", "AMZN", "AVGO", "SPCX", "META",
+        "TSLA", "BRK.B", "LLY", "MU", "JPM", "WMT", "AMD", "V", "XOM",
+        "JNJ", "INTC", "MA", "AMAT", "CSCO", "BAC", "ABBV", "CAT", "LRCX",
+        "COST", "ORCL", "UNH", "GE", "CVX", "MS", "KO", "PG", "HD", "GS",
+        "PLTR", "NFLX", "MRK", "KLAC", "PANW", "GEV", "PM", "TXN", "DELL",
+        "WFC", "RTX", "AXP", "SNDK", "C"
+      ],
+      "exclude": []
+    },
+    {
+      "country": "US",
+      "assetType": "ETF",
+      "selection": "explicit",
+      "selectionNote": "50 widely used US ETFs, including SOXL, TQQQ, and QLD.",
+      "tickers": [
+        "SPY", "QQQ", "VOO", "VTI", "IVV", "DIA", "IWM", "SCHD", "VUG",
+        "VTV", "QQQM", "XLG", "VT", "VXUS", "BND", "AGG", "TLT", "SGOV",
+        "BIL", "GLD", "IAU", "SLV", "XLK", "XLF", "XLE", "XLV", "XLI",
+        "XLY", "XLP", "XLU", "XLB", "XLRE", "SMH", "SOXX", "ARKK", "JEPI",
+        "JEPQ", "VYM", "DGRO", "RSP", "USMV", "QUAL", "EEM", "VEA", "VWO",
+        "HYG", "LQD", "SOXL", "TQQQ", "QLD"
+      ],
+      "exclude": []
+    }
+  ]
+}

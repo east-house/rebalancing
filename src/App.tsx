@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -22,15 +22,20 @@ import {
 import AssetChart from "./components/AssetChart";
 import InstrumentSearch from "./components/InstrumentSearch";
 import {
+  latestQuoteDate,
+  parseMarketDataPayload,
+  quotesForPolicy,
+  type MarketDataPayload,
+  type PricePolicy,
+} from "./api/marketData";
+import {
   calculateRebalancePreview,
   normalizeTicker,
   samplePortfolio,
-  sampleQuotes,
   sampleSnapshots,
   validateTargetWeights,
   type Holding,
   type Portfolio,
-  type Quote,
   type RebalancePreview,
 } from "./domain";
 import type {
@@ -38,22 +43,26 @@ import type {
   InstrumentCatalogMeta,
   InstrumentCatalogPayload,
 } from "./types/instrument";
+import {
+  deleteLocalAppState,
+  loadLocalAppState,
+  parseLocalAppState,
+  PORTFOLIO_STORAGE_KEY,
+  saveLocalAppState,
+  upsertDailySnapshot,
+  type LocalAppState,
+  type LocalStateSource,
+} from "./storage/portfolioStorage";
 
 type AllocationMode = "current" | "target";
-type PricePolicy = "previous" | "today";
 
-interface MockInstrument extends Instrument {
-  close: number;
-}
-
-const MOCK_INSTRUMENTS: MockInstrument[] = [
+const FALLBACK_INSTRUMENTS: Instrument[] = [
   {
     ticker: "VOO",
     name: "Vanguard S&P 500 ETF",
     market: "NYSE Arca",
     country: "US",
     assetType: "ETF",
-    close: 782_000,
   },
   {
     ticker: "QQQ",
@@ -61,7 +70,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "ETF",
-    close: 691_000,
   },
   {
     ticker: "GOOG",
@@ -69,7 +77,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 253_000,
   },
   {
     ticker: "GOOGL",
@@ -77,7 +84,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 252_000,
   },
   {
     ticker: "SPY",
@@ -85,7 +91,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NYSE Arca",
     country: "US",
     assetType: "ETF",
-    close: 862_000,
   },
   {
     ticker: "SCHD",
@@ -93,7 +98,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NYSE Arca",
     country: "US",
     assetType: "ETF",
-    close: 39_800,
   },
   {
     ticker: "AAPL",
@@ -101,7 +105,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 311_000,
   },
   {
     ticker: "MSFT",
@@ -109,7 +112,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 688_000,
   },
   {
     ticker: "AMZN",
@@ -117,7 +119,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 321_000,
   },
   {
     ticker: "META",
@@ -125,7 +126,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 972_000,
   },
   {
     ticker: "NVDA",
@@ -133,7 +133,6 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 248_000,
   },
   {
     ticker: "TSLA",
@@ -141,25 +140,8 @@ const MOCK_INSTRUMENTS: MockInstrument[] = [
     market: "NASDAQ",
     country: "US",
     assetType: "STOCK",
-    close: 441_000,
   },
 ];
-
-const FALLBACK_INSTRUMENTS: Instrument[] = MOCK_INSTRUMENTS.map(
-  ({ ticker, name, market, country, assetType }) => ({
-    ticker,
-    name,
-    market,
-    country,
-    assetType,
-  }),
-);
-
-const ALL_MOCK_QUOTES: Quote[] = MOCK_INSTRUMENTS.map((instrument) => ({
-  ticker: instrument.ticker,
-  close: instrument.close,
-  asOf: sampleQuotes[0]?.asOf ?? "2026-07-17",
-}));
 
 const WON = new Intl.NumberFormat("ko-KR", {
   style: "currency",
@@ -178,15 +160,31 @@ const NUMBER = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 
 const ALLOCATION_COLORS = ["#3f7657", "#56866a", "#6d967c", "#84a68e", "#9bb5a2"];
 
-function findQuote(ticker: string) {
-  const normalized = normalizeTicker(ticker);
-  return ALL_MOCK_QUOTES.find((quote) => quote.ticker === normalized);
+const USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+
+function formatPriceDate(value?: string) {
+  if (!value) return "종가 연결 대기";
+  const [year, month, day] = value.split("-");
+  return `${year}. ${month}. ${day} 종가`;
 }
 
 function cloneSamplePortfolio(): Portfolio {
   return {
     ...samplePortfolio,
     holdings: samplePortfolio.holdings.map((holding) => ({ ...holding })),
+  };
+}
+
+function createDefaultLocalState(): LocalAppState {
+  return {
+    portfolio: cloneSamplePortfolio(),
+    allocationMode: "target",
+    pricePolicy: "previous",
+    snapshots: sampleSnapshots.map((snapshot) => ({ ...snapshot })),
   };
 }
 
@@ -202,9 +200,34 @@ function actionLabel(action: "BUY" | "SELL" | "HOLD") {
 }
 
 function App() {
-  const [portfolio, setPortfolio] = useState<Portfolio>(cloneSamplePortfolio);
-  const [allocationMode, setAllocationMode] = useState<AllocationMode>("target");
-  const [pricePolicy, setPricePolicy] = useState<PricePolicy>("previous");
+  const [initialLocalState] = useState(() =>
+    loadLocalAppState(createDefaultLocalState()),
+  );
+  const [portfolio, setPortfolio] = useState<Portfolio>(
+    initialLocalState.state.portfolio,
+  );
+  const [allocationMode, setAllocationMode] = useState<AllocationMode>(
+    initialLocalState.state.allocationMode,
+  );
+  const [pricePolicy, setPricePolicy] = useState<PricePolicy>(
+    initialLocalState.state.pricePolicy,
+  );
+  const [snapshots, setSnapshots] = useState(
+    initialLocalState.state.snapshots,
+  );
+  const [storageSource, setStorageSource] = useState<LocalStateSource>(
+    initialLocalState.source,
+  );
+  const [storageMessage, setStorageMessage] = useState(
+    initialLocalState.source === "saved"
+      ? "이 기기에 저장된 자산 정보를 복구했습니다."
+      : initialLocalState.source === "invalid"
+        ? "저장 데이터가 손상되어 안전한 샘플 상태로 시작했습니다."
+        : initialLocalState.source === "unavailable"
+          ? "브라우저 설정으로 로컬 저장소를 사용할 수 없어 재방문 시 복구할 수 없습니다."
+        : "",
+  );
+  const skipNextSave = useRef(false);
   const [preview, setPreview] = useState<RebalancePreview | null>(null);
   const [calculationMessage, setCalculationMessage] = useState("");
   const [instruments, setInstruments] =
@@ -215,6 +238,13 @@ function App() {
   const [catalogStatus, setCatalogStatus] = useState<
     "loading" | "ready" | "fallback"
   >("loading");
+  const [marketData, setMarketData] = useState<MarketDataPayload | null>(null);
+  const [marketStatus, setMarketStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [marketMessage, setMarketMessage] = useState(
+    "R2에서 최신 종가를 불러오는 중입니다.",
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -245,10 +275,62 @@ function App() {
     return () => controller.abort();
   }, []);
 
-  const quoteMap = useMemo(
-    () => new Map(ALL_MOCK_QUOTES.map((quote) => [quote.ticker, quote])),
-    [],
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${import.meta.env.BASE_URL}api/market-data/latest`, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`종가 API 응답 오류 (${response.status})`);
+        }
+        return parseMarketDataPayload(await response.json());
+      })
+      .then((payload) => {
+        setMarketData(payload);
+        setMarketStatus("ready");
+        setMarketMessage(
+          payload.complete
+            ? `${NUMBER.format(payload.quoteCount)}개 종목의 R2 종가를 불러왔습니다.`
+            : `${NUMBER.format(payload.quoteCount)}개 종목의 종가를 불러왔지만 일부 수집 조각은 이전 상태입니다.`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setMarketData(null);
+        setMarketStatus("error");
+        setMarketMessage(
+          error instanceof Error
+            ? error.message
+            : "R2 종가를 불러오지 못했습니다.",
+        );
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const activeQuotes = useMemo(
+    () => (marketData ? quotesForPolicy(marketData, pricePolicy) : []),
+    [marketData, pricePolicy],
   );
+  const quoteMap = useMemo(
+    () =>
+      new Map(
+        activeQuotes.map((quote) => [normalizeTicker(quote.ticker), quote]),
+    ),
+    [activeQuotes],
+  );
+  const heldQuotes = useMemo(
+    () =>
+      portfolio.holdings.flatMap((holding) => {
+        const quote = quoteMap.get(normalizeTicker(holding.ticker));
+        return quote ? [quote] : [];
+      }),
+    [portfolio.holdings, quoteMap],
+  );
+  const priceDate = latestQuoteDate(heldQuotes);
 
   const valuations = useMemo(
     () =>
@@ -276,7 +358,7 @@ function App() {
     ),
   );
   const missingPriceTickers = portfolio.holdings
-    .filter((holding) => !findQuote(holding.ticker))
+    .filter((holding) => !quoteMap.has(normalizeTicker(holding.ticker)))
     .map((holding) => normalizeTicker(holding.ticker) || "미입력 종목");
 
   const canRebalance =
@@ -288,15 +370,51 @@ function App() {
     missingPriceTickers.length === 0 &&
     portfolio.holdings.length > 0;
 
-  const chartData = useMemo(
-    () =>
-      sampleSnapshots.map((snapshot, index) =>
-        index === sampleSnapshots.length - 1
-          ? { ...snapshot, totalValue: portfolio.totalAssets }
-          : snapshot,
-      ),
-    [portfolio.totalAssets],
-  );
+  const chartData = snapshots;
+
+  useEffect(() => {
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+
+    const saved = saveLocalAppState({
+      portfolio,
+      allocationMode,
+      pricePolicy,
+      snapshots: chartData,
+    });
+    setStorageSource(saved ? "saved" : "unavailable");
+  }, [allocationMode, chartData, portfolio, pricePolicy]);
+
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key !== PORTFOLIO_STORAGE_KEY) return;
+
+      const nextState =
+        event.newValue === null
+          ? createDefaultLocalState()
+          : parseLocalAppState(event.newValue);
+      if (!nextState) return;
+
+      skipNextSave.current = true;
+      setPortfolio(nextState.portfolio);
+      setAllocationMode(nextState.allocationMode);
+      setPricePolicy(nextState.pricePolicy);
+      setSnapshots(nextState.snapshots);
+      setPreview(null);
+      setCalculationMessage("");
+      setStorageSource(event.newValue === null ? "default" : "saved");
+      setStorageMessage(
+        event.newValue === null
+          ? "다른 탭에서 로컬 데이터를 삭제해 샘플 상태로 초기화했습니다."
+          : "다른 탭에서 변경한 자산 정보를 반영했습니다.",
+      );
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   const allocationItems = [
     ...valuations.map((item, index) => ({
@@ -332,6 +450,16 @@ function App() {
     }));
   };
 
+  const updateTotalAssets = (totalAssets: number) => {
+    updatePortfolio((current) => ({
+      ...current,
+      totalAssets,
+    }));
+    setSnapshots((current) =>
+      upsertDailySnapshot(current, totalAssets),
+    );
+  };
+
   const handleInstrumentSelect = (index: number, instrument: Instrument) => {
     updateHolding(index, {
       ticker: instrument.ticker,
@@ -343,8 +471,9 @@ function App() {
   const addHolding = () => {
     const used = new Set(normalizedTickers);
     const nextInstrument =
-      MOCK_INSTRUMENTS.find((instrument) => !used.has(instrument.ticker)) ??
-      MOCK_INSTRUMENTS[0];
+      instruments.find((instrument) => !used.has(instrument.ticker)) ??
+      FALLBACK_INSTRUMENTS[0];
+    if (!nextInstrument) return;
     updatePortfolio((current) => ({
       ...current,
       holdings: [
@@ -370,8 +499,10 @@ function App() {
   const calculatePreview = () => {
     if (!canRebalance) return;
     try {
-      setPreview(calculateRebalancePreview(portfolio, ALL_MOCK_QUOTES));
-      setCalculationMessage("샘플 종가를 기준으로 리밸런싱 미리보기를 계산했습니다.");
+      setPreview(calculateRebalancePreview(portfolio, heldQuotes));
+      setCalculationMessage(
+        `${formatPriceDate(priceDate)}를 기준으로 리밸런싱 미리보기를 계산했습니다.`,
+      );
       window.setTimeout(() => {
         document
           .getElementById("rebalance-results")
@@ -383,6 +514,29 @@ function App() {
         error instanceof Error ? error.message : "계산 중 오류가 발생했습니다.",
       );
     }
+  };
+
+  const deleteSavedData = () => {
+    const confirmed = window.confirm(
+      "이 브라우저에 저장된 보유 종목, 수량, 목표 비중과 자산 이력을 삭제할까요?",
+    );
+    if (!confirmed) return;
+
+    skipNextSave.current = true;
+    const defaults = createDefaultLocalState();
+    const deleted = deleteLocalAppState();
+    setPortfolio(defaults.portfolio);
+    setAllocationMode(defaults.allocationMode);
+    setPricePolicy(defaults.pricePolicy);
+    setSnapshots(defaults.snapshots);
+    setPreview(null);
+    setCalculationMessage("");
+    setStorageSource(deleted ? "default" : "unavailable");
+    setStorageMessage(
+      deleted
+        ? "이 기기에 저장된 자산 정보를 삭제하고 샘플 상태로 초기화했습니다."
+        : "브라우저 저장소에 접근할 수 없어 저장 데이터를 삭제하지 못했습니다.",
+    );
   };
 
   return (
@@ -401,7 +555,11 @@ function App() {
         <div className="topbar-meta">
           <span className="status-pill status-pill--demo">
             <Database size={14} />
-            샘플 데이터
+            {marketStatus === "loading"
+              ? "종가 불러오는 중"
+              : marketStatus === "ready"
+                ? "R2 종가"
+                : "종가 연결 오류"}
           </span>
           <span className="status-pill status-pill--private">
             <ShieldCheck size={14} />
@@ -414,7 +572,10 @@ function App() {
         <div className="intro-row">
           <div>
             <p className="eyebrow">MY PORTFOLIO</p>
-            <h1>자산을 한눈에, 조정은 정확하게.</h1>
+            <h1>
+              자산을 한눈에,
+              <span className="mobile-title-break"> 조정은 정확하게.</span>
+            </h1>
             <p className="intro-copy">
               한글 종목명, 6자리 종목코드 또는 영문 Ticker로 자산을 찾아보세요.
             </p>
@@ -423,7 +584,7 @@ function App() {
             <CalendarDays size={16} />
             <div>
               <span>가격 기준일</span>
-              <strong>2026. 07. 17 종가</strong>
+              <strong>{formatPriceDate(priceDate)}</strong>
             </div>
           </div>
         </div>
@@ -555,8 +716,22 @@ function App() {
                     </label>
 
                     <div className="table-value" data-label="기준 종가">
-                      <strong>{quote ? WON.format(quote.close) : "가격 없음"}</strong>
-                      <small>{quote ? "샘플 종가" : "API 연결 대기"}</small>
+                      <strong>
+                        {quote
+                          ? quote.nativeCurrency === "USD"
+                            ? USD.format(quote.nativeClose ?? quote.close)
+                            : WON.format(quote.nativeClose ?? quote.close)
+                          : "가격 없음"}
+                      </strong>
+                      <small>
+                        {quote
+                          ? quote.nativeCurrency === "USD"
+                            ? `${WON.format(quote.close)} 환산 · ${quote.asOf}`
+                            : `R2 종가 · ${quote.asOf}`
+                          : marketStatus === "loading"
+                            ? "R2 종가 확인 중"
+                            : "수집 종가 없음"}
+                      </small>
                     </div>
 
                     <div className="table-value" data-label="평가금액">
@@ -631,7 +806,9 @@ function App() {
               </div>
               <div className="panel-footnote panel-footnote--secondary">
                 <Info size={14} />
-                현재 가격은 화면 확인을 위한 가상 값이며 실제 시세와 무관합니다.
+                {marketStatus === "ready" && marketData
+                  ? `${marketMessage} 미국 종목은 수집된 USD/KRW 종가로 원화 환산합니다.`
+                  : marketMessage}
               </div>
             </div>
           </section>
@@ -679,16 +856,16 @@ function App() {
               </span>
               <div className="amount-input">
                 <input
+                  aria-label="현재 총자산"
                   type="number"
                   min="0"
                   step="100000"
                   inputMode="numeric"
                   value={portfolio.totalAssets}
                   onChange={(event) =>
-                    updatePortfolio((current) => ({
-                      ...current,
-                      totalAssets: Math.max(0, Number(event.target.value) || 0),
-                    }))
+                    updateTotalAssets(
+                      Math.max(0, Number(event.target.value) || 0),
+                    )
                   }
                 />
                 <span>원</span>
@@ -699,11 +876,14 @@ function App() {
             <label className="setting-field">
               <span>
                 <span>가격 기준</span>
-                <small>API 연결 예정</small>
+                <small>R2 수집 데이터</small>
               </span>
               <select
                 value={pricePolicy}
-                onChange={(event) => setPricePolicy(event.target.value as PricePolicy)}
+                onChange={(event) => {
+                  setPricePolicy(event.target.value as PricePolicy);
+                  clearResult();
+                }}
               >
                 <option value="previous">전일 종가</option>
                 <option value="today">당일 확정 종가</option>
@@ -796,7 +976,7 @@ function App() {
             {missingPriceTickers.length > 0 && (
               <div className="inline-alert">
                 <AlertCircle size={15} />
-                {missingPriceTickers.join(", ")}의 샘플 가격이 없습니다.
+                {missingPriceTickers.join(", ")}의 선택 기준 종가가 없습니다.
               </div>
             )}
 
@@ -817,7 +997,10 @@ function App() {
             </p>
             <div className="privacy-inline">
               <LockKeyhole size={15} />
-              <span>입력값은 서버로 전송하거나 저장하지 않습니다.</span>
+              <span>
+                공개 종가 묶음만 내려받으며 입력값은 서버나 R2로 전송하지 않고 이
+                브라우저에만 저장합니다.
+              </span>
             </div>
           </aside>
         </div>
@@ -886,7 +1069,7 @@ function App() {
           <AssetChart data={chartData} currency="KRW" initialPeriod="1Y" />
           <div className="chart-demo-note">
             <Database size={14} />
-            차트는 화면 확인용 가상 시계열이며 마지막 값만 현재 총자산 입력을 반영합니다.
+            자산 시계열도 이 브라우저에만 저장되며 마지막 값은 현재 총자산을 반영합니다.
           </div>
         </div>
 
@@ -895,13 +1078,33 @@ function App() {
             <ShieldCheck size={22} />
           </span>
           <div>
-            <strong>당신의 자산 정보는 이 화면 안에만 머뭅니다.</strong>
+            <strong>당신의 자산 정보는 현재 브라우저 기기에만 머뭅니다.</strong>
             <p>
-              현재 버전은 브라우저 메모리에서만 동작합니다. 새로고침하면 입력한 정보가
-              초기화되며, 외부 서버로 전송되지 않습니다.
+              보유 종목·수량·목표 비중·현금 설정과 자산 이력은 브라우저 로컬 저장소에
+              보관되어 재방문 시 복구됩니다. 화면은 R2의 전체 공개 종가 묶음을
+              내려받아 현재 브라우저 안에서만 보유 종목과 매칭합니다. 입력 정보는
+              서버와 R2에 전송하지 않지만, 같은 브라우저 프로필을 쓰는 사람은 볼 수
+              있으며 브라우저 데이터 삭제 시 함께 사라집니다.
             </p>
+            {storageMessage && (
+              <p className="storage-message" role="status">
+                {storageMessage}
+              </p>
+            )}
           </div>
-          <span className="local-chip">LOCAL ONLY</span>
+          <div className="local-data-actions">
+            <span className="local-chip">
+              {storageSource === "unavailable" ? "저장 불가" : "LOCAL ONLY"}
+            </span>
+            <button
+              className="delete-local-button"
+              type="button"
+              onClick={deleteSavedData}
+            >
+              <Trash2 size={14} />
+              내 데이터 삭제
+            </button>
+          </div>
         </section>
 
         <p className="live-region" aria-live="polite">
@@ -919,7 +1122,7 @@ function App() {
           <span className="brand-word">balance</span>
           <span className="brand-dot">.</span>
         </div>
-        <p>샘플 데이터를 사용하는 포트폴리오 프로토타입</p>
+        <p>R2 종가와 로컬 전용 자산 정보를 사용하는 포트폴리오 도구</p>
       </footer>
     </div>
   );

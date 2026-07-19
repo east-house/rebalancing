@@ -1223,6 +1223,16 @@ input[type="number"] {
   line-height: 1.5;
 }
 
+.security-banner .storage-message {
+  color: var(--accent);
+}
+
+.local-data-actions {
+  display: grid;
+  justify-items: end;
+  gap: 9px;
+}
+
 .local-chip {
   padding: 6px 9px;
   color: var(--accent);
@@ -1232,6 +1242,29 @@ input[type="number"] {
   background: rgb(111 157 125 / 7%);
   border: 1px solid rgb(111 157 125 / 17%);
   border-radius: 7px;
+}
+
+.delete-local-button {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 0 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #8fa29b;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.delete-local-button:hover {
+  color: var(--danger);
+  background: rgb(169 184 175 / 8%);
+  border-color: rgb(169 184 175 / 28%);
 }
 
 .live-region {
@@ -1409,12 +1442,18 @@ footer p {
   }
 
   .intro-row h1 {
+    width: 100%;
     max-width: 100%;
-    overflow-wrap: anywhere;
+    white-space: normal;
+    overflow-wrap: break-word;
     font-size: clamp(31px, 9vw, 36px);
     line-break: auto;
-    text-wrap: balance;
-    word-break: normal;
+    text-wrap: pretty;
+    word-break: keep-all;
+  }
+
+  .mobile-title-break {
+    display: block;
   }
 
   .intro-copy {
@@ -1543,6 +1582,11 @@ footer p {
 
   .local-chip {
     display: none;
+  }
+
+  .local-data-actions {
+    grid-column: 1 / -1;
+    justify-items: stretch;
   }
 
   footer {

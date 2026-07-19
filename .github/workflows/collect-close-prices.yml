@@ -1,0 +1,182 @@
+name: Maintain rolling closing-price histories
+
+run-name: Rolling closing-price collection (${{ github.event_name }})
+
+on:
+  schedule:
+    - cron: "30 16 * * 1-5"
+      timezone: "Asia/Seoul"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-close-price-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect shard ${{ matrix.shard }} and upload to R2
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install collector dependencies
+        run: >-
+          python -m pip install
+          "finance-datareader>=0.9,<1"
+          "boto3>=1.34,<2"
+
+      - name: Test and validate active-universe logic
+        run: >-
+          python -m unittest
+          scripts/test_collect_close_prices.py
+          scripts/test_aggregate_latest_quotes.py
+
+      - name: Validate R2 configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in \
+            R2_ACCOUNT_ID \
+            R2_ACCESS_KEY_ID \
+            R2_SECRET_ACCESS_KEY \
+            R2_BUCKET_NAME
+          do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Maintain per-ticker rolling histories
+        run: >-
+          python scripts/collect_close_prices.py
+          --active-config config/active-close-prices.json
+          --catalog public/data/instruments.json
+          --output-dir action-output
+          --shard-count 8
+          --shard-index "${{ matrix.shard }}"
+          --soft-time-budget-minutes 95
+          --rotation-seed "${{ github.run_number }}"
+          --retries 2
+          --request-delay 0.4
+          --max-consecutive-failures 20
+          --r2-prefix market-data
+          --upload-r2
+
+      - name: Add result to workflow summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f action-output/summary.md ]]; then
+            cat action-output/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "## Rolling closing-price collection" \
+              >> "${GITHUB_STEP_SUMMARY}"
+            echo "" >> "${GITHUB_STEP_SUMMARY}"
+            echo "The collector stopped before producing a summary." \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload run diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: closing-price-production-${{ github.run_id }}-shard-${{ matrix.shard }}
+          path: action-output/
+          if-no-files-found: warn
+          retention-days: 3
+
+  aggregate:
+    name: Publish latest quotes for the Worker API
+    needs: collect
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install aggregation dependencies
+        run: >-
+          python -m pip install
+          "finance-datareader>=0.9,<1"
+          "boto3>=1.34,<2"
+
+      - name: Validate R2 configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in \
+            R2_ACCOUNT_ID \
+            R2_ACCESS_KEY_ID \
+            R2_SECRET_ACCESS_KEY \
+            R2_BUCKET_NAME
+          do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Merge shard quotes and publish the API object
+        run: >-
+          python -m scripts.aggregate_latest_quotes
+          --shard-count 8
+          --r2-prefix market-data
+          --output-dir aggregate-output
+
+      - name: Add aggregation result to workflow summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f aggregate-output/summary.md ]]; then
+            cat aggregate-output/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "## Latest quote aggregation" >> "${GITHUB_STEP_SUMMARY}"
+            echo "" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Aggregation stopped before producing a summary." \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload aggregation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-quotes-${{ github.run_id }}
+          path: aggregate-output/
+          if-no-files-found: warn
+          retention-days: 3
