@@ -10,6 +10,7 @@
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "deploy:check": "npm run build && wrangler deploy --dry-run",
+    "catalog:update": "uv run --with finance-datareader python scripts/build_instrument_catalog.py",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"

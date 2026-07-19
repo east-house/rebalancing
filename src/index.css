@@ -14,11 +14,11 @@
   --line-strong: rgb(190 226 214 / 22%);
   --text: #f4f8f7;
   --muted: #8ca19b;
-  --accent: #7ee7bd;
-  --accent-strong: #4bd7a0;
-  --accent-ink: #09281f;
-  --danger: #ff8f9c;
-  --warning: #f6c875;
+  --accent: #6f9d7d;
+  --accent-strong: #3f7657;
+  --accent-ink: #07120c;
+  --danger: #a9b8af;
+  --warning: #87a392;
   --radius: 20px;
   --text-primary: #f4f8f7;
   --text-secondary: #b8c8c3;
@@ -93,7 +93,7 @@ select:hover {
 
 input:focus,
 select:focus {
-  border-color: rgb(126 231 189 / 55%);
+  border-color: rgb(111 157 125 / 62%);
 }
 
 input:disabled {
@@ -201,15 +201,15 @@ input[type="number"] {
 }
 
 .status-pill--demo {
-  color: #f0cc84;
-  background: rgb(246 200 117 / 7%);
-  border-color: rgb(246 200 117 / 16%);
+  color: #c7d3cc;
+  background: rgb(111 157 125 / 7%);
+  border-color: rgb(111 157 125 / 18%);
 }
 
 .status-pill--private {
-  color: #99dfc3;
-  background: rgb(126 231 189 / 6%);
-  border-color: rgb(126 231 189 / 14%);
+  color: #9fbaa9;
+  background: rgb(111 157 125 / 6%);
+  border-color: rgb(111 157 125 / 16%);
 }
 
 .dashboard {
@@ -273,8 +273,8 @@ input[type="number"] {
   align-items: center;
   gap: 11px;
   color: var(--accent);
-  background: rgb(126 231 189 / 5%);
-  border: 1px solid rgb(126 231 189 / 13%);
+  background: rgb(111 157 125 / 6%);
+  border: 1px solid rgb(111 157 125 / 18%);
   border-radius: 13px;
 }
 
@@ -302,7 +302,7 @@ input[type="number"] {
   overflow: hidden;
   grid-template-columns: 1.3fr 0.9fr;
   background:
-    radial-gradient(circle at 10% 0%, rgb(126 231 189 / 12%), transparent 27rem),
+    radial-gradient(circle at 10% 0%, rgb(111 157 125 / 10%), transparent 27rem),
     linear-gradient(135deg, #12241f 0%, #0e1d1a 53%, #0c1715 100%);
   border: 1px solid rgb(172 224 204 / 15%);
   border-radius: 26px;
@@ -315,7 +315,7 @@ input[type="number"] {
   right: -100px;
   width: 340px;
   height: 340px;
-  background: radial-gradient(circle, rgb(126 231 189 / 7%), transparent 66%);
+  background: radial-gradient(circle, rgb(111 157 125 / 6%), transparent 66%);
   content: "";
   pointer-events: none;
 }
@@ -342,8 +342,8 @@ input[type="number"] {
   height: 34px;
   place-items: center;
   color: var(--accent);
-  background: rgb(126 231 189 / 10%);
-  border: 1px solid rgb(126 231 189 / 14%);
+  background: rgb(111 157 125 / 10%);
+  border: 1px solid rgb(111 157 125 / 18%);
   border-radius: 9px;
 }
 
@@ -546,15 +546,15 @@ input[type="number"] {
   color: #b6c8c2;
   font-size: 12px;
   font-weight: 700;
-  background: rgb(126 231 189 / 5%);
+  background: rgb(111 157 125 / 6%);
   border: 1px solid var(--line-strong);
   border-radius: 10px;
 }
 
 .secondary-button:hover {
   color: var(--text);
-  background: rgb(126 231 189 / 9%);
-  border-color: rgb(126 231 189 / 30%);
+  background: rgb(111 157 125 / 11%);
+  border-color: rgb(111 157 125 / 34%);
 }
 
 .secondary-button:active,
@@ -614,13 +614,13 @@ input[type="number"] {
   text-transform: uppercase;
 }
 
-.ticker-line span {
+.ticker-line > span {
   padding: 4px 6px;
   color: var(--accent);
   font-size: 8px;
   font-weight: 800;
-  background: rgb(126 231 189 / 7%);
-  border: 1px solid rgb(126 231 189 / 12%);
+  background: rgb(111 157 125 / 8%);
+  border: 1px solid rgb(111 157 125 / 17%);
   border-radius: 5px;
 }
 
@@ -641,7 +641,7 @@ input[type="number"] {
 }
 
 .input-error {
-  border-color: rgb(255 143 156 / 55%) !important;
+  border-color: rgb(169 184 175 / 68%) !important;
 }
 
 .asset-field:has(.input-error) small {
@@ -718,18 +718,26 @@ input[type="number"] {
 
 .icon-button:hover {
   color: var(--danger);
-  background: rgb(255 143 156 / 7%);
+  background: rgb(169 184 175 / 8%);
+}
+
+.panel-footnotes {
+  margin-top: 19px;
+  padding-top: 17px;
+  border-top: 1px solid rgb(190 226 214 / 8%);
 }
 
 .panel-footnote {
   display: flex;
-  margin-top: 19px;
-  padding-top: 17px;
   align-items: center;
   gap: 7px;
   color: #70857e;
   font-size: 10px;
-  border-top: 1px solid rgb(190 226 214 / 8%);
+}
+
+.panel-footnote--secondary {
+  margin-top: 7px;
+  color: #60756e;
 }
 
 .empty-state {
@@ -770,7 +778,7 @@ input[type="number"] {
   height: 35px;
   place-items: center;
   color: var(--accent);
-  background: rgb(126 231 189 / 8%);
+  background: rgb(111 157 125 / 9%);
   border-radius: 10px;
 }
 
@@ -935,8 +943,8 @@ input[type="number"] {
   padding: 15px;
   gap: 11px;
   color: var(--accent);
-  background: rgb(126 231 189 / 5%);
-  border: 1px solid rgb(126 231 189 / 11%);
+  background: rgb(111 157 125 / 6%);
+  border: 1px solid rgb(111 157 125 / 15%);
   border-radius: 12px;
 }
 
@@ -963,11 +971,11 @@ input[type="number"] {
   padding: 10px 11px;
   align-items: flex-start;
   gap: 7px;
-  color: #f2a6af;
+  color: #b9c6be;
   font-size: 9px;
   line-height: 1.5;
-  background: rgb(255 143 156 / 6%);
-  border: 1px solid rgb(255 143 156 / 13%);
+  background: rgb(169 184 175 / 7%);
+  border: 1px solid rgb(169 184 175 / 17%);
   border-radius: 9px;
 }
 
@@ -986,7 +994,7 @@ input[type="number"] {
   font-weight: 800;
   background: var(--accent);
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgb(75 215 160 / 12%);
+  box-shadow: 0 12px 30px rgb(63 118 87 / 16%);
 }
 
 .primary-button svg:last-child {
@@ -994,7 +1002,7 @@ input[type="number"] {
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #90efc9;
+  background: #82aa91;
 }
 
 .primary-button:disabled {
@@ -1079,8 +1087,8 @@ input[type="number"] {
   color: var(--accent);
   font-size: 10px;
   font-weight: 800;
-  background: rgb(126 231 189 / 7%);
-  border: 1px solid rgb(126 231 189 / 12%);
+  background: rgb(111 157 125 / 8%);
+  border: 1px solid rgb(111 157 125 / 17%);
   border-radius: 11px;
 }
 
@@ -1141,15 +1149,15 @@ input[type="number"] {
 }
 
 .action-badge--buy {
-  color: #8ff0c9;
-  background: rgb(126 231 189 / 8%);
-  border: 1px solid rgb(126 231 189 / 15%);
+  color: #9fbaa9;
+  background: rgb(111 157 125 / 9%);
+  border: 1px solid rgb(111 157 125 / 19%);
 }
 
 .action-badge--sell {
-  color: #ff9eaa;
-  background: rgb(255 143 156 / 7%);
-  border: 1px solid rgb(255 143 156 / 14%);
+  color: #c2ccc6;
+  background: rgb(194 204 198 / 7%);
+  border: 1px solid rgb(194 204 198 / 18%);
 }
 
 .action-badge--hold {
@@ -1167,7 +1175,7 @@ input[type="number"] {
   min-height: 438px;
   padding: 29px 30px 25px;
   background:
-    radial-gradient(circle at 88% 5%, rgb(126 231 189 / 7%), transparent 28%),
+    radial-gradient(circle at 88% 5%, rgb(111 157 125 / 6%), transparent 28%),
     var(--surface);
 }
 
@@ -1189,8 +1197,8 @@ input[type="number"] {
   align-items: center;
   grid-template-columns: auto 1fr auto;
   gap: 16px;
-  background: rgb(126 231 189 / 4%);
-  border: 1px solid rgb(126 231 189 / 10%);
+  background: rgb(111 157 125 / 5%);
+  border: 1px solid rgb(111 157 125 / 14%);
   border-radius: 15px;
 }
 
@@ -1200,7 +1208,7 @@ input[type="number"] {
   height: 42px;
   place-items: center;
   color: var(--accent);
-  background: rgb(126 231 189 / 8%);
+  background: rgb(111 157 125 / 9%);
   border-radius: 12px;
 }
 
@@ -1221,8 +1229,8 @@ input[type="number"] {
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  background: rgb(126 231 189 / 6%);
-  border: 1px solid rgb(126 231 189 / 13%);
+  background: rgb(111 157 125 / 7%);
+  border: 1px solid rgb(111 157 125 / 17%);
   border-radius: 7px;
 }
 
@@ -1402,9 +1410,11 @@ footer p {
 
   .intro-row h1 {
     max-width: 100%;
-    font-size: 36px;
-    line-break: strict;
-    word-break: keep-all;
+    overflow-wrap: anywhere;
+    font-size: clamp(31px, 9vw, 36px);
+    line-break: auto;
+    text-wrap: balance;
+    word-break: normal;
   }
 
   .intro-copy {

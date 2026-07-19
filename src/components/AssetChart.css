@@ -1,15 +1,15 @@
 .asset-chart {
-  --asset-chart-accent: #6ee7b7;
-  --asset-chart-accent-strong: #34d399;
-  --asset-chart-positive: #6ee7b7;
-  --asset-chart-negative: #fb7185;
+  --asset-chart-accent: #6f9d7d;
+  --asset-chart-accent-strong: #3f7657;
+  --asset-chart-positive: #87aa92;
+  --asset-chart-negative: #a9b4ad;
   position: relative;
   min-width: 0;
   padding: clamp(1.15rem, 2.5vw, 1.75rem);
   overflow: hidden;
   color: var(--text-primary, #f4f7fb);
   background:
-    radial-gradient(circle at 88% 5%, rgb(52 211 153 / 9%), transparent 28%),
+    radial-gradient(circle at 88% 5%, rgb(63 118 87 / 8%), transparent 28%),
     var(--surface-elevated, #101b2b);
   border: 1px solid var(--border-subtle, rgb(148 163 184 / 14%));
   border-radius: var(--radius-xl, 1.25rem);
@@ -66,12 +66,12 @@
 
 .asset-chart__change--positive {
   color: var(--asset-chart-positive);
-  background: rgb(52 211 153 / 11%);
+  background: rgb(63 118 87 / 12%);
 }
 
 .asset-chart__change--negative {
   color: var(--asset-chart-negative);
-  background: rgb(251 113 133 / 11%);
+  background: rgb(169 180 173 / 11%);
 }
 
 .asset-chart__change--neutral {
@@ -115,7 +115,7 @@
 .asset-chart__period[aria-pressed='true'] {
   color: #06241b;
   background: var(--asset-chart-accent);
-  box-shadow: 0 4px 14px rgb(52 211 153 / 20%);
+  box-shadow: 0 4px 14px rgb(63 118 87 / 22%);
 }
 
 .asset-chart__period:focus-visible,
@@ -163,7 +163,7 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.5;
-  filter: drop-shadow(0 4px 5px rgb(52 211 153 / 16%));
+  filter: drop-shadow(0 4px 5px rgb(63 118 87 / 18%));
 }
 
 .asset-chart__single-point {
@@ -177,12 +177,12 @@
 }
 
 .asset-chart__guide {
-  stroke: rgb(110 231 183 / 38%);
+  stroke: rgb(111 157 125 / 45%);
   stroke-dasharray: 3 4;
 }
 
 .asset-chart__point-halo {
-  fill: rgb(110 231 183 / 17%);
+  fill: rgb(111 157 125 / 18%);
 }
 
 .asset-chart__point {
@@ -234,7 +234,7 @@
   place-items: center;
   color: var(--asset-chart-accent);
   font-size: 1.2rem;
-  background: rgb(52 211 153 / 10%);
+  background: rgb(63 118 87 / 11%);
   border-radius: 0.85rem;
 }
 

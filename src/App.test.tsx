@@ -1,9 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
 describe("App", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => undefined)),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders the sample portfolio dashboard", () => {
     render(<App />);
 
@@ -14,11 +25,12 @@ describe("App", () => {
     expect(screen.getAllByText("Alphabet Inc. Class C").length).toBeGreaterThan(0);
   });
 
-  it("normalizes ticker search to English uppercase and shows the instrument name", () => {
+  it("searches by ticker and selects the matching instrument", () => {
     render(<App />);
 
-    const firstTicker = screen.getByLabelText("1번째 종목 ticker");
-    fireEvent.change(firstTicker, { target: { value: "aapl한글12" } });
+    const firstTicker = screen.getByLabelText("1번째 종목 검색");
+    fireEvent.change(firstTicker, { target: { value: "aapl" } });
+    fireEvent.keyDown(firstTicker, { key: "Enter" });
 
     expect(screen.getByDisplayValue("AAPL")).toBeTruthy();
     expect(screen.getAllByText("Apple Inc.").length).toBeGreaterThan(0);
@@ -29,7 +41,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "종목 추가" }));
 
-    expect(screen.getAllByLabelText(/번째 종목 ticker/)).toHaveLength(4);
+    expect(screen.getAllByLabelText(/번째 종목 검색/)).toHaveLength(4);
   });
 
   it("calculates and displays a rebalance preview", () => {

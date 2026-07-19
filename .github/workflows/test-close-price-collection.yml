@@ -1,0 +1,127 @@
+name: Test closing-price collection
+
+run-name: >-
+  Closing-price test (${{ inputs.market }}, ${{ inputs.limit }} tickers,
+  R2=${{ inputs.upload_to_r2 }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      market:
+        description: Market sample
+        required: true
+        type: choice
+        default: ALL
+        options:
+          - ALL
+          - KR
+          - US
+      limit:
+        description: Number of tickers to test
+        required: true
+        type: choice
+        default: "10"
+        options:
+          - "4"
+          - "10"
+          - "20"
+          - "50"
+      upload_to_r2:
+        description: Upload results under the R2 test/ prefix
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-close-price-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect and verify sample prices
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+      UPLOAD_TO_R2: ${{ inputs.upload_to_r2 }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install collector dependencies
+        run: >-
+          python -m pip install
+          "finance-datareader>=0.9,<1"
+          "boto3>=1.34,<2"
+
+      - name: Test collector logic
+        run: python -m unittest scripts/test_collect_close_prices.py
+
+      - name: Validate R2 configuration
+        if: ${{ inputs.upload_to_r2 }}
+        shell: bash
+        run: |
+          missing=0
+          for name in \
+            R2_ACCOUNT_ID \
+            R2_ACCESS_KEY_ID \
+            R2_SECRET_ACCESS_KEY \
+            R2_BUCKET_NAME
+          do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Collect closing-price sample
+        shell: bash
+        run: |
+          args=(
+            --catalog public/data/instruments.json
+            --output-dir action-output
+            --market "${{ inputs.market }}"
+            --limit "${{ inputs.limit }}"
+            --retries 1
+            --request-delay 0.25
+            --r2-prefix test
+          )
+          if [[ "${UPLOAD_TO_R2}" == "true" ]]; then
+            args+=(--upload-r2)
+          fi
+          python scripts/collect_close_prices.py "${args[@]}"
+
+      - name: Add result to workflow summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f action-output/summary.md ]]; then
+            cat action-output/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "## Closing-price collection test" >> "${GITHUB_STEP_SUMMARY}"
+            echo "" >> "${GITHUB_STEP_SUMMARY}"
+            echo "The collector stopped before producing a summary." \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload test result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: closing-price-test-${{ github.run_id }}
+          path: action-output/
+          if-no-files-found: warn
+          retention-days: 7

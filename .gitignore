@@ -4,6 +4,7 @@ dist/
 .vite/
 coverage/
 artifacts/
+action-output/
 
 # Local environment and Cloudflare secrets
 .env

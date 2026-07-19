@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import AssetChart from "./components/AssetChart";
+import InstrumentSearch from "./components/InstrumentSearch";
 import {
   calculateRebalancePreview,
   normalizeTicker,
@@ -27,57 +28,132 @@ import {
   sampleQuotes,
   sampleSnapshots,
   validateTargetWeights,
-  type AssetType,
   type Holding,
   type Portfolio,
   type Quote,
   type RebalancePreview,
 } from "./domain";
+import type {
+  Instrument,
+  InstrumentCatalogMeta,
+  InstrumentCatalogPayload,
+} from "./types/instrument";
 
 type AllocationMode = "current" | "target";
 type PricePolicy = "previous" | "today";
 
-interface MockInstrument {
-  ticker: string;
-  name: string;
-  assetType: AssetType;
+interface MockInstrument extends Instrument {
   close: number;
 }
 
 const MOCK_INSTRUMENTS: MockInstrument[] = [
-  { ticker: "VOO", name: "Vanguard S&P 500 ETF", assetType: "ETF", close: 782_000 },
-  { ticker: "QQQ", name: "Invesco QQQ Trust", assetType: "ETF", close: 691_000 },
-  { ticker: "GOOG", name: "Alphabet Inc. Class C", assetType: "STOCK", close: 253_000 },
-  { ticker: "GOOGL", name: "Alphabet Inc. Class A", assetType: "STOCK", close: 252_000 },
-  { ticker: "SPY", name: "SPDR S&P 500 ETF Trust", assetType: "ETF", close: 862_000 },
+  {
+    ticker: "VOO",
+    name: "Vanguard S&P 500 ETF",
+    market: "NYSE Arca",
+    country: "US",
+    assetType: "ETF",
+    close: 782_000,
+  },
+  {
+    ticker: "QQQ",
+    name: "Invesco QQQ Trust",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "ETF",
+    close: 691_000,
+  },
+  {
+    ticker: "GOOG",
+    name: "Alphabet Inc. Class C",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "STOCK",
+    close: 253_000,
+  },
+  {
+    ticker: "GOOGL",
+    name: "Alphabet Inc. Class A",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "STOCK",
+    close: 252_000,
+  },
+  {
+    ticker: "SPY",
+    name: "SPDR S&P 500 ETF Trust",
+    market: "NYSE Arca",
+    country: "US",
+    assetType: "ETF",
+    close: 862_000,
+  },
   {
     ticker: "SCHD",
     name: "Schwab U.S. Dividend Equity ETF",
+    market: "NYSE Arca",
+    country: "US",
     assetType: "ETF",
     close: 39_800,
   },
-  { ticker: "AAPL", name: "Apple Inc.", assetType: "STOCK", close: 311_000 },
+  {
+    ticker: "AAPL",
+    name: "Apple Inc.",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "STOCK",
+    close: 311_000,
+  },
   {
     ticker: "MSFT",
     name: "Microsoft Corporation",
+    market: "NASDAQ",
+    country: "US",
     assetType: "STOCK",
     close: 688_000,
   },
-  { ticker: "AMZN", name: "Amazon.com, Inc.", assetType: "STOCK", close: 321_000 },
+  {
+    ticker: "AMZN",
+    name: "Amazon.com, Inc.",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "STOCK",
+    close: 321_000,
+  },
   {
     ticker: "META",
     name: "Meta Platforms, Inc.",
+    market: "NASDAQ",
+    country: "US",
     assetType: "STOCK",
     close: 972_000,
   },
   {
     ticker: "NVDA",
     name: "NVIDIA Corporation",
+    market: "NASDAQ",
+    country: "US",
     assetType: "STOCK",
     close: 248_000,
   },
-  { ticker: "TSLA", name: "Tesla, Inc.", assetType: "STOCK", close: 441_000 },
+  {
+    ticker: "TSLA",
+    name: "Tesla, Inc.",
+    market: "NASDAQ",
+    country: "US",
+    assetType: "STOCK",
+    close: 441_000,
+  },
 ];
+
+const FALLBACK_INSTRUMENTS: Instrument[] = MOCK_INSTRUMENTS.map(
+  ({ ticker, name, market, country, assetType }) => ({
+    ticker,
+    name,
+    market,
+    country,
+    assetType,
+  }),
+);
 
 const ALL_MOCK_QUOTES: Quote[] = MOCK_INSTRUMENTS.map((instrument) => ({
   ticker: instrument.ticker,
@@ -100,12 +176,7 @@ const COMPACT_WON = new Intl.NumberFormat("ko-KR", {
 
 const NUMBER = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 
-const ALLOCATION_COLORS = ["#7ee7bd", "#81a7ff", "#f6c875", "#c49cff", "#ff91a5"];
-
-function findInstrument(ticker: string) {
-  const normalized = normalizeTicker(ticker);
-  return MOCK_INSTRUMENTS.find((instrument) => instrument.ticker === normalized);
-}
+const ALLOCATION_COLORS = ["#3f7657", "#56866a", "#6d967c", "#84a68e", "#9bb5a2"];
 
 function findQuote(ticker: string) {
   const normalized = normalizeTicker(ticker);
@@ -136,6 +207,43 @@ function App() {
   const [pricePolicy, setPricePolicy] = useState<PricePolicy>("previous");
   const [preview, setPreview] = useState<RebalancePreview | null>(null);
   const [calculationMessage, setCalculationMessage] = useState("");
+  const [instruments, setInstruments] =
+    useState<readonly Instrument[]>(FALLBACK_INSTRUMENTS);
+  const [catalogMeta, setCatalogMeta] = useState<InstrumentCatalogMeta | null>(
+    null,
+  );
+  const [catalogStatus, setCatalogStatus] = useState<
+    "loading" | "ready" | "fallback"
+  >("loading");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${import.meta.env.BASE_URL}data/instruments.json`, {
+      cache: "force-cache",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`종목 목록을 불러오지 못했습니다 (${response.status})`);
+        }
+        return response.json() as Promise<InstrumentCatalogPayload>;
+      })
+      .then((payload) => {
+        if (!Array.isArray(payload.instruments) || payload.instruments.length === 0) {
+          throw new Error("종목 목록이 비어 있습니다.");
+        }
+        setInstruments(payload.instruments);
+        setCatalogMeta(payload.meta);
+        setCatalogStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCatalogStatus("fallback");
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const quoteMap = useMemo(
     () => new Map(ALL_MOCK_QUOTES.map((quote) => [quote.ticker, quote])),
@@ -201,7 +309,7 @@ function App() {
       key: "cash",
       label: "현금",
       value: Math.max(0, cashWeight),
-      color: "#475569",
+      color: "#c4cec8",
     },
   ];
 
@@ -224,17 +332,11 @@ function App() {
     }));
   };
 
-  const handleTickerChange = (index: number, ticker: string) => {
-    const normalized = ticker
-      .toUpperCase()
-      .replace(/[^A-Z.-]/g, "")
-      .slice(0, 10);
-    const instrument = findInstrument(normalized);
+  const handleInstrumentSelect = (index: number, instrument: Instrument) => {
     updateHolding(index, {
-      ticker: normalized,
-      ...(instrument
-        ? { name: instrument.name, assetType: instrument.assetType }
-        : { name: normalized ? "가격 연결 대기" : "새 자산" }),
+      ticker: instrument.ticker,
+      name: instrument.name,
+      assetType: instrument.assetType,
     });
   };
 
@@ -314,7 +416,7 @@ function App() {
             <p className="eyebrow">MY PORTFOLIO</p>
             <h1>자산을 한눈에, 조정은 정확하게.</h1>
             <p className="intro-copy">
-              영문 Ticker로 보유 자산을 찾고 현재 비중과 목표 비중을 비교하세요.
+              한글 종목명, 6자리 종목코드 또는 영문 Ticker로 자산을 찾아보세요.
             </p>
           </div>
           <div className="price-date">
@@ -393,21 +495,13 @@ function App() {
               <div>
                 <p className="panel-kicker">HOLDINGS</p>
                 <h2 id="holdings-title">보유 자산</h2>
-                <p>영문 Ticker를 검색하면 실제 회사·ETF 이름과 샘플 평가액을 보여줍니다.</p>
+                <p>한국·미국 회사 및 ETF를 종목명이나 Ticker로 검색할 수 있습니다.</p>
               </div>
               <button className="secondary-button" type="button" onClick={addHolding}>
                 <Plus size={16} />
                 종목 추가
               </button>
             </div>
-
-            <datalist id="ticker-options">
-              {MOCK_INSTRUMENTS.map((instrument) => (
-                <option key={instrument.ticker} value={instrument.ticker}>
-                  {instrument.name}
-                </option>
-              ))}
-            </datalist>
 
             <div className="holdings-table">
               <div className="holdings-head" aria-hidden="true">
@@ -427,19 +521,15 @@ function App() {
                   <div className="holding-row" key={`holding-${index}`}>
                     <div className="asset-field" data-label="Ticker / 종목명">
                       <div className="ticker-line">
-                        <input
-                          aria-label={`${index + 1}번째 종목 ticker`}
-                          className={isDuplicate ? "input-error" : ""}
-                          list="ticker-options"
-                          inputMode="text"
-                          autoCapitalize="characters"
-                          autoComplete="off"
-                          spellCheck={false}
-                          pattern="[A-Za-z.-]*"
-                          maxLength={10}
+                        <InstrumentSearch
+                          ariaLabel={`${index + 1}번째 종목 검색`}
+                          instruments={instruments}
                           value={holding.ticker}
-                          onChange={(event) => handleTickerChange(index, event.target.value)}
-                          placeholder="GOOG"
+                          selectedName={holding.name}
+                          hasError={isDuplicate}
+                          onSelect={(instrument) =>
+                            handleInstrumentSelect(index, instrument)
+                          }
                         />
                         <span>{holding.assetType}</span>
                       </div>
@@ -530,9 +620,19 @@ function App() {
               </div>
             )}
 
-            <div className="panel-footnote">
-              <Info size={14} />
-              현재 가격은 화면 확인을 위한 가상 값이며 실제 시세와 무관합니다.
+            <div className="panel-footnotes">
+              <div className="panel-footnote">
+                <Database size={14} />
+                {catalogStatus === "ready" && catalogMeta
+                  ? `${NUMBER.format(catalogMeta.counts.total)}개 정적 종목 목록 · 검색 시 서버 호출 없음`
+                  : catalogStatus === "loading"
+                    ? "한국·미국 정적 종목 목록을 불러오는 중입니다."
+                    : "종목 목록을 불러오지 못해 샘플 목록으로 검색합니다."}
+              </div>
+              <div className="panel-footnote panel-footnote--secondary">
+                <Info size={14} />
+                현재 가격은 화면 확인을 위한 가상 값이며 실제 시세와 무관합니다.
+              </div>
             </div>
           </section>
 
