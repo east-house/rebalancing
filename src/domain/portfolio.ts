@@ -1,0 +1,228 @@
+import type {
+  Holding,
+  Portfolio,
+  PortfolioSummary,
+  Quote,
+  RebalanceAction,
+  RebalancePreview,
+  TargetWeightValidation,
+} from "./types";
+
+const TARGET_WEIGHT_TOTAL = 100;
+const TARGET_WEIGHT_TOLERANCE = 0.01;
+
+export function normalizeTicker(ticker: string): string {
+  return ticker.trim().toUpperCase();
+}
+
+function assertFiniteNonNegative(value: number, field: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${field} must be a finite, non-negative number.`);
+  }
+}
+
+function assertValidPortfolio(portfolio: Portfolio): void {
+  assertFiniteNonNegative(portfolio.totalAssets, "totalAssets");
+
+  const seenTickers = new Set<string>();
+  for (const holding of portfolio.holdings) {
+    const ticker = normalizeTicker(holding.ticker);
+    if (!ticker) {
+      throw new Error("Holding ticker is required.");
+    }
+    if (seenTickers.has(ticker)) {
+      throw new Error(`Duplicate holding ticker: ${ticker}`);
+    }
+    seenTickers.add(ticker);
+
+    assertFiniteNonNegative(holding.quantity, `${ticker} quantity`);
+    if (!Number.isInteger(holding.quantity)) {
+      throw new Error(`${ticker} quantity must be an integer.`);
+    }
+  }
+}
+
+function createQuoteMap(quotes: readonly Quote[]): Map<string, Quote> {
+  const quoteMap = new Map<string, Quote>();
+
+  for (const quote of quotes) {
+    const ticker = normalizeTicker(quote.ticker);
+    if (!ticker) {
+      throw new Error("Quote ticker is required.");
+    }
+    if (quoteMap.has(ticker)) {
+      throw new Error(`Duplicate quote ticker: ${ticker}`);
+    }
+    if (!Number.isFinite(quote.close) || quote.close <= 0) {
+      throw new Error(`${ticker} close must be a finite number greater than zero.`);
+    }
+    quoteMap.set(ticker, { ...quote, ticker });
+  }
+
+  return quoteMap;
+}
+
+function quoteFor(
+  quoteMap: ReadonlyMap<string, Quote>,
+  holding: Holding,
+): Quote {
+  const ticker = normalizeTicker(holding.ticker);
+  const quote = quoteMap.get(ticker);
+  if (!quote) {
+    throw new Error(`Missing quote for ticker: ${ticker}`);
+  }
+  return quote;
+}
+
+function percentage(value: number, total: number): number {
+  return total === 0 ? 0 : (value / total) * 100;
+}
+
+/**
+ * Values a portfolio against supplied closing prices. `cash` is the remainder
+ * of the user-declared total assets after the holdings have been valued.
+ */
+export function calculatePortfolio(
+  portfolio: Portfolio,
+  quotes: readonly Quote[],
+): PortfolioSummary {
+  assertValidPortfolio(portfolio);
+  const quoteMap = createQuoteMap(quotes);
+
+  const holdings = portfolio.holdings.map((holding) => {
+    const quote = quoteFor(quoteMap, holding);
+    const marketValue = holding.quantity * quote.close;
+
+    return {
+      holding: { ...holding, ticker: normalizeTicker(holding.ticker) },
+      quote,
+      marketValue,
+      weight: percentage(marketValue, portfolio.totalAssets),
+    };
+  });
+
+  const investedValue = holdings.reduce(
+    (total, holding) => total + holding.marketValue,
+    0,
+  );
+  const cash = portfolio.totalAssets - investedValue;
+
+  return {
+    totalValue: portfolio.totalAssets,
+    investedValue,
+    cash,
+    cashWeight: percentage(cash, portfolio.totalAssets),
+    holdings,
+  };
+}
+
+/**
+ * Checks that all target allocations, including cash, add up to exactly 100%
+ * within a small tolerance suitable for decimal percentage inputs.
+ */
+export function validateTargetWeights(
+  portfolio: Portfolio,
+): TargetWeightValidation {
+  const errors: string[] = [];
+  const weights = [
+    { label: "Cash", value: portfolio.targetCashWeight },
+    ...portfolio.holdings.map((holding) => ({
+      label: normalizeTicker(holding.ticker) || "Holding",
+      value: holding.targetWeight,
+    })),
+  ];
+
+  for (const weight of weights) {
+    if (!Number.isFinite(weight.value)) {
+      errors.push(`${weight.label} target weight must be a finite number.`);
+    } else if (weight.value < 0 || weight.value > TARGET_WEIGHT_TOTAL) {
+      errors.push(`${weight.label} target weight must be between 0 and 100.`);
+    }
+  }
+
+  const totalWeight = weights.reduce(
+    (total, weight) =>
+      total + (Number.isFinite(weight.value) ? weight.value : 0),
+    0,
+  );
+  const difference = TARGET_WEIGHT_TOTAL - totalWeight;
+
+  if (Math.abs(difference) > TARGET_WEIGHT_TOLERANCE) {
+    errors.push("Target weights, including cash, must add up to 100.");
+  }
+
+  return {
+    valid: errors.length === 0,
+    totalWeight,
+    difference,
+    errors,
+  };
+}
+
+function actionFor(quantityDelta: number): RebalanceAction {
+  if (quantityDelta > 0) return "BUY";
+  if (quantityDelta < 0) return "SELL";
+  return "HOLD";
+}
+
+/**
+ * Creates a whole-share rebalance preview. Target quantities are rounded down
+ * so purchases never exceed their target allocation. Fees and taxes are not
+ * included.
+ */
+export function calculateRebalancePreview(
+  portfolio: Portfolio,
+  quotes: readonly Quote[],
+): RebalancePreview {
+  assertValidPortfolio(portfolio);
+  const targetValidation = validateTargetWeights(portfolio);
+  if (!targetValidation.valid) {
+    throw new Error(targetValidation.errors.join(" "));
+  }
+
+  const current = calculatePortfolio(portfolio, quotes);
+
+  const items = current.holdings.map(
+    ({ holding, quote, marketValue, weight }) => {
+      const targetAllocation =
+        portfolio.totalAssets * (holding.targetWeight / TARGET_WEIGHT_TOTAL);
+      const targetQuantity = Math.floor(targetAllocation / quote.close);
+      const quantityDelta = targetQuantity - holding.quantity;
+      const targetValue = targetQuantity * quote.close;
+
+      return {
+        ticker: holding.ticker,
+        name: holding.name,
+        assetType: holding.assetType,
+        price: quote.close,
+        currentQuantity: holding.quantity,
+        targetQuantity,
+        quantityDelta,
+        action: actionFor(quantityDelta),
+        currentValue: marketValue,
+        targetValue,
+        estimatedTradeValue: Math.abs(quantityDelta) * quote.close,
+        currentWeight: weight,
+        targetWeight: holding.targetWeight,
+        projectedWeight: percentage(targetValue, portfolio.totalAssets),
+      };
+    },
+  );
+
+  const projectedInvestedValue = items.reduce(
+    (total, item) => total + item.targetValue,
+    0,
+  );
+  const projectedCash = portfolio.totalAssets - projectedInvestedValue;
+
+  return {
+    totalAssets: portfolio.totalAssets,
+    currentInvestedValue: current.investedValue,
+    currentCash: current.cash,
+    targetCashWeight: portfolio.targetCashWeight,
+    projectedInvestedValue,
+    projectedCash,
+    projectedCashWeight: percentage(projectedCash, portfolio.totalAssets),
+    items,
+  };
+}

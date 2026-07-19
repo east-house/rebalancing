@@ -1,0 +1,309 @@
+.asset-chart {
+  --asset-chart-accent: #6ee7b7;
+  --asset-chart-accent-strong: #34d399;
+  --asset-chart-positive: #6ee7b7;
+  --asset-chart-negative: #fb7185;
+  position: relative;
+  min-width: 0;
+  padding: clamp(1.15rem, 2.5vw, 1.75rem);
+  overflow: hidden;
+  color: var(--text-primary, #f4f7fb);
+  background:
+    radial-gradient(circle at 88% 5%, rgb(52 211 153 / 9%), transparent 28%),
+    var(--surface-elevated, #101b2b);
+  border: 1px solid var(--border-subtle, rgb(148 163 184 / 14%));
+  border-radius: var(--radius-xl, 1.25rem);
+  box-shadow: var(--shadow-card, 0 18px 48px rgb(2 8 23 / 16%));
+}
+
+.asset-chart__header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.asset-chart__eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--text-muted, #8290a5);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.asset-chart__title {
+  margin: 0;
+  color: inherit;
+  font-size: clamp(1rem, 2vw, 1.16rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.asset-chart__headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.7rem;
+  align-items: baseline;
+  margin-top: 0.65rem;
+}
+
+.asset-chart__headline strong {
+  font-size: clamp(1.45rem, 4vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+}
+
+.asset-chart__change {
+  padding: 0.22rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-chart__change--positive {
+  color: var(--asset-chart-positive);
+  background: rgb(52 211 153 / 11%);
+}
+
+.asset-chart__change--negative {
+  color: var(--asset-chart-negative);
+  background: rgb(251 113 133 / 11%);
+}
+
+.asset-chart__change--neutral {
+  color: var(--text-secondary, #b6c0ce);
+  background: rgb(148 163 184 / 10%);
+}
+
+.asset-chart__periods {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.18rem;
+  padding: 0.22rem;
+  background: var(--surface-sunken, rgb(3 10 22 / 38%));
+  border: 1px solid var(--border-subtle, rgb(148 163 184 / 12%));
+  border-radius: 0.72rem;
+}
+
+.asset-chart__period {
+  min-width: 2.45rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--text-muted, #8290a5);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 0.52rem;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.asset-chart__period:hover {
+  color: var(--text-primary, #f4f7fb);
+}
+
+.asset-chart__period[aria-pressed='true'] {
+  color: #06241b;
+  background: var(--asset-chart-accent);
+  box-shadow: 0 4px 14px rgb(52 211 153 / 20%);
+}
+
+.asset-chart__period:focus-visible,
+.asset-chart__svg:focus-visible {
+  outline: 2px solid var(--asset-chart-accent);
+  outline-offset: 3px;
+}
+
+.asset-chart__canvas {
+  width: 100%;
+  min-width: 0;
+}
+
+.asset-chart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.asset-chart__grid line {
+  stroke: var(--chart-grid, rgb(148 163 184 / 13%));
+  stroke-dasharray: 3 5;
+}
+
+.asset-chart__grid text,
+.asset-chart__axis-date {
+  fill: var(--text-muted, #8290a5);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-chart__area {
+  pointer-events: none;
+}
+
+.asset-chart__line {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--asset-chart-accent-strong);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 4px 5px rgb(52 211 153 / 16%));
+}
+
+.asset-chart__single-point {
+  fill: var(--surface-elevated, #101b2b);
+  stroke: var(--asset-chart-accent);
+  stroke-width: 2.5;
+}
+
+.asset-chart__tooltip {
+  pointer-events: none;
+}
+
+.asset-chart__guide {
+  stroke: rgb(110 231 183 / 38%);
+  stroke-dasharray: 3 4;
+}
+
+.asset-chart__point-halo {
+  fill: rgb(110 231 183 / 17%);
+}
+
+.asset-chart__point {
+  fill: var(--surface-elevated, #101b2b);
+  stroke: var(--asset-chart-accent);
+  stroke-width: 2.5;
+}
+
+.asset-chart__tooltip rect {
+  fill: var(--tooltip-background, #07111f);
+  stroke: var(--border-strong, rgb(148 163 184 / 25%));
+  stroke-width: 1;
+  filter: drop-shadow(0 8px 13px rgb(2 8 23 / 28%));
+}
+
+.asset-chart__tooltip text {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-chart__tooltip-date {
+  fill: var(--text-muted, #8290a5);
+  font-size: 10px;
+}
+
+.asset-chart__tooltip-value {
+  fill: var(--text-primary, #f4f7fb);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.asset-chart__empty {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  align-content: center;
+  padding: 2rem;
+  text-align: center;
+  background: rgb(148 163 184 / 3%);
+  border: 1px dashed var(--border-subtle, rgb(148 163 184 / 18%));
+  border-radius: 1rem;
+}
+
+.asset-chart__empty-icon {
+  display: grid;
+  width: 2.8rem;
+  height: 2.8rem;
+  margin-bottom: 0.8rem;
+  place-items: center;
+  color: var(--asset-chart-accent);
+  font-size: 1.2rem;
+  background: rgb(52 211 153 / 10%);
+  border-radius: 0.85rem;
+}
+
+.asset-chart__empty strong {
+  font-size: 0.95rem;
+}
+
+.asset-chart__empty p {
+  max-width: 24rem;
+  margin: 0.45rem 0 0;
+  color: var(--text-muted, #8290a5);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.asset-chart__sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+}
+
+@media (max-width: 559px) {
+  .asset-chart {
+    padding: 1rem 0.85rem 0.85rem;
+    border-radius: 1rem;
+  }
+
+  .asset-chart__header {
+    display: block;
+    margin-bottom: 0.7rem;
+  }
+
+  .asset-chart__headline {
+    margin-top: 0.48rem;
+  }
+
+  .asset-chart__periods {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    width: 100%;
+    margin-top: 0.9rem;
+  }
+
+  .asset-chart__period {
+    min-height: 2.15rem;
+  }
+
+  .asset-chart__grid text,
+  .asset-chart__axis-date {
+    font-size: 9.5px;
+  }
+
+  .asset-chart__tooltip-date {
+    font-size: 9px;
+  }
+
+  .asset-chart__tooltip-value {
+    font-size: 11.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-chart__period {
+    transition: none;
+  }
+}
