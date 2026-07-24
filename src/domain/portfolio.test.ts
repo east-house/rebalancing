@@ -15,14 +15,18 @@ const portfolio: Portfolio = {
       ticker: "aaa",
       name: "Alpha",
       assetType: "ETF",
+      country: "US",
       quantity: 20,
+      averagePrice: 80,
       targetWeight: 50,
     },
     {
       ticker: "BBB",
       name: "Beta",
       assetType: "STOCK",
+      country: "US",
       quantity: 30,
+      averagePrice: 220,
       targetWeight: 40,
     },
   ],
@@ -97,6 +101,7 @@ describe("calculateRebalancePreview", () => {
       quantityDelta: 30,
       targetValue: 5_000,
       estimatedTradeValue: 3_000,
+      estimatedTradeFee: 7.59,
       projectedWeight: 50,
     });
     expect(result.items[1]).toMatchObject({
@@ -107,11 +112,13 @@ describe("calculateRebalancePreview", () => {
       quantityDelta: -10,
       targetValue: 4_000,
       estimatedTradeValue: 2_000,
+      estimatedTradeFee: 5.0712,
       projectedWeight: 40,
     });
     expect(result.projectedInvestedValue).toBe(9_000);
-    expect(result.projectedCash).toBe(1_000);
-    expect(result.projectedCashWeight).toBe(10);
+    expect(result.projectedTransactionFees).toBeCloseTo(12.6612);
+    expect(result.projectedCash).toBeCloseTo(987.3388);
+    expect(result.projectedCashWeight).toBeCloseTo(9.873388);
   });
 
   it("rounds target quantities down to whole shares", () => {
@@ -123,7 +130,9 @@ describe("calculateRebalancePreview", () => {
           ticker: "AAA",
           name: "Alpha",
           assetType: "ETF",
+          country: "US",
           quantity: 3,
+          averagePrice: 100,
           targetWeight: 50,
         },
       ],
@@ -139,7 +148,7 @@ describe("calculateRebalancePreview", () => {
       targetValue: 480,
       projectedWeight: 48,
     });
-    expect(result.projectedCash).toBe(520);
+    expect(result.projectedCash).toBeCloseTo(519.697);
   });
 
   it("refuses to preview an invalid target allocation", () => {

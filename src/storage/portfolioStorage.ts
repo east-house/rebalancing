@@ -1,14 +1,12 @@
 import type { Portfolio, Snapshot } from "../domain";
 
 export const PORTFOLIO_STORAGE_KEY = "balance.local-portfolio";
-export const PORTFOLIO_STORAGE_VERSION = 1;
+export const PORTFOLIO_STORAGE_VERSION = 2;
 
-export type StoredAllocationMode = "current" | "target";
-export type StoredPricePolicy = "previous" | "today";
+export type StoredPricePolicy = "auto";
 
 export interface LocalAppState {
   portfolio: Portfolio;
-  allocationMode: StoredAllocationMode;
   pricePolicy: StoredPricePolicy;
   snapshots: Snapshot[];
 }
@@ -33,6 +31,20 @@ export interface LoadLocalStateResult {
 const MAX_HOLDINGS = 500;
 const MAX_SNAPSHOTS = 5_000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
+const LEGACY_SAMPLE_SNAPSHOTS = new Map<string, number>([
+  ["2025-08-01", 76_800_000],
+  ["2025-09-01", 79_100_000],
+  ["2025-10-01", 78_400_000],
+  ["2025-11-01", 82_700_000],
+  ["2025-12-01", 84_900_000],
+  ["2026-01-01", 86_200_000],
+  ["2026-02-01", 85_600_000],
+  ["2026-03-01", 90_800_000],
+  ["2026-04-01", 92_300_000],
+  ["2026-05-01", 95_900_000],
+  ["2026-06-01", 97_400_000],
+  ["2026-07-17", 100_000_000],
+]);
 
 function cloneState(state: LocalAppState): LocalAppState {
   return {
@@ -58,8 +70,23 @@ export function upsertDailySnapshot(
   totalValue: number,
   now = new Date(),
 ): Snapshot[] {
-  const today = getKstCalendarDate(now);
-  const cutoff = new Date(`${today}T00:00:00Z`);
+  return upsertSnapshotForDate(snapshots, totalValue, getKstCalendarDate(now));
+}
+
+/** Keeps one value for the actual closing-price date used by the portfolio. */
+export function upsertSnapshotForDate(
+  snapshots: readonly Snapshot[],
+  totalValue: number,
+  priceDate: string,
+): Snapshot[] {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(priceDate) ||
+    Number.isNaN(Date.parse(`${priceDate}T00:00:00Z`))
+  ) {
+    return snapshots.map((snapshot) => ({ ...snapshot }));
+  }
+
+  const cutoff = new Date(`${priceDate}T00:00:00Z`);
   cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
   const cutoffDate = cutoff.toISOString().slice(0, 10);
 
@@ -68,11 +95,11 @@ export function upsertDailySnapshot(
       .filter(
         (snapshot) =>
           snapshot.date >= cutoffDate &&
-          snapshot.date <= today &&
-          snapshot.date !== today,
+          snapshot.date <= priceDate &&
+          snapshot.date !== priceDate,
       )
       .map((snapshot) => ({ ...snapshot })),
-    { date: today, totalValue },
+    { date: priceDate, totalValue },
   ].sort((left, right) => left.date.localeCompare(right.date));
 }
 
@@ -93,7 +120,7 @@ function isFiniteNumber(
   );
 }
 
-function isSafeText(value: unknown, maximumLength: number) {
+function isSafeText(value: unknown, maximumLength: number): value is string {
   return typeof value === "string" && value.length <= maximumLength;
 }
 
@@ -115,15 +142,26 @@ function parsePortfolio(value: unknown): Portfolio | null {
     if (candidate.assetType !== "ETF" && candidate.assetType !== "STOCK") {
       return null;
     }
+    const country =
+      candidate.country === "KR" || candidate.country === "US"
+        ? candidate.country
+        : /^\d{6}$/.test(candidate.ticker)
+          ? "KR"
+          : "US";
     if (!isFiniteNumber(candidate.quantity)) return null;
     if (!Number.isInteger(candidate.quantity)) return null;
+    const averagePrice =
+      candidate.averagePrice === undefined ? 0 : candidate.averagePrice;
+    if (!isFiniteNumber(averagePrice)) return null;
     if (!isFiniteNumber(candidate.targetWeight, 0, 100)) return null;
 
     return {
       ticker: candidate.ticker,
       name: candidate.name,
       assetType: candidate.assetType,
+      country,
       quantity: candidate.quantity,
+      averagePrice,
       targetWeight: candidate.targetWeight,
     };
   });
@@ -140,7 +178,6 @@ function parsePortfolio(value: unknown): Portfolio | null {
 function parseSnapshots(value: unknown): Snapshot[] | null {
   if (
     !Array.isArray(value) ||
-    value.length === 0 ||
     value.length > MAX_SNAPSHOTS
   ) {
     return null;
@@ -167,12 +204,27 @@ function parseSnapshots(value: unknown): Snapshot[] | null {
   return snapshots as Snapshot[];
 }
 
-/** Parses only the current, explicitly versioned schema. */
+function removeLegacySampleSnapshots(snapshots: Snapshot[]): Snapshot[] {
+  const sampleMatchCount = snapshots.filter(
+    (snapshot) =>
+      LEGACY_SAMPLE_SNAPSHOTS.get(snapshot.date) === snapshot.totalValue,
+  ).length;
+
+  if (sampleMatchCount < 3) return snapshots;
+  return snapshots.filter(
+    (snapshot) =>
+      LEGACY_SAMPLE_SNAPSHOTS.get(snapshot.date) !== snapshot.totalValue,
+  );
+}
+
+/** Parses the current schema and migrates the preceding browser-only schema. */
 export function parseLocalAppState(raw: string): LocalAppState | null {
   try {
     const envelope: unknown = JSON.parse(raw);
     if (!isRecord(envelope)) return null;
-    if (envelope.version !== PORTFOLIO_STORAGE_VERSION) return null;
+    if (envelope.version !== 1 && envelope.version !== PORTFOLIO_STORAGE_VERSION) {
+      return null;
+    }
     if (
       typeof envelope.updatedAt !== "string" ||
       Number.isNaN(Date.parse(envelope.updatedAt))
@@ -183,18 +235,31 @@ export function parseLocalAppState(raw: string): LocalAppState | null {
 
     const portfolio = parsePortfolio(envelope.data.portfolio);
     const snapshots = parseSnapshots(envelope.data.snapshots);
-    const allocationMode = envelope.data.allocationMode;
-    const pricePolicy = envelope.data.pricePolicy;
+    const storedPricePolicy = envelope.data.pricePolicy;
 
     if (!portfolio || !snapshots) return null;
-    if (allocationMode !== "current" && allocationMode !== "target") return null;
-    if (pricePolicy !== "previous" && pricePolicy !== "today") return null;
+    if (
+      envelope.version === 1 &&
+      envelope.data.allocationMode !== "current" &&
+      envelope.data.allocationMode !== "target"
+    ) {
+      return null;
+    }
+    if (
+      storedPricePolicy !== "auto" &&
+      storedPricePolicy !== "previous" &&
+      storedPricePolicy !== "today"
+    ) {
+      return null;
+    }
 
     return {
       portfolio,
-      snapshots,
-      allocationMode,
-      pricePolicy,
+      snapshots:
+        envelope.version === 1
+          ? removeLegacySampleSnapshots(snapshots)
+          : snapshots,
+      pricePolicy: "auto",
     };
   } catch {
     return null;

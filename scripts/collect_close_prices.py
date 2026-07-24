@@ -359,6 +359,13 @@ def _frame_index_date(value: Any) -> date:
     return date.fromisoformat(str(value)[:10])
 
 
+def _provider_ticker(instrument: dict[str, str]) -> str:
+    ticker = instrument["ticker"]
+    if instrument["country"] == "US":
+        return ticker.replace(".", "-")
+    return ticker
+
+
 class FinanceDataReaderProvider:
     def __init__(self) -> None:
         try:
@@ -377,7 +384,7 @@ class FinanceDataReaderProvider:
         end: date,
     ) -> list[dict[str, Any]]:
         frame = self._fdr.DataReader(
-            instrument["ticker"],
+            _provider_ticker(instrument),
             start.isoformat(),
             end.isoformat(),
         )

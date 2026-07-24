@@ -9,6 +9,7 @@ import {
   PORTFOLIO_STORAGE_VERSION,
   saveLocalAppState,
   upsertDailySnapshot,
+  upsertSnapshotForDate,
   type LocalAppState,
 } from "./portfolioStorage";
 
@@ -18,9 +19,8 @@ function createState(): LocalAppState {
       ...samplePortfolio,
       holdings: samplePortfolio.holdings.map((holding) => ({ ...holding })),
     },
-    allocationMode: "target",
-    pricePolicy: "previous",
-    snapshots: sampleSnapshots.map((snapshot) => ({ ...snapshot })),
+    pricePolicy: "auto",
+    snapshots: [{ date: "2026-07-24", totalValue: 123_000_000 }],
   };
 }
 
@@ -40,6 +40,68 @@ describe("portfolioStorage", () => {
     expect(
       JSON.parse(localStorage.getItem(PORTFOLIO_STORAGE_KEY) ?? "{}").version,
     ).toBe(PORTFOLIO_STORAGE_VERSION);
+  });
+
+  it("migrates saved holdings that predate purchase details", () => {
+    const state = createState();
+    const legacyHoldings = state.portfolio.holdings.map(
+      ({
+        averagePrice: _averagePrice,
+        country: _country,
+        ...holding
+      }) => holding,
+    );
+    const raw = JSON.stringify({
+      version: PORTFOLIO_STORAGE_VERSION,
+      updatedAt: new Date().toISOString(),
+      data: {
+        ...state,
+        portfolio: { ...state.portfolio, holdings: legacyHoldings },
+      },
+    });
+
+    const parsed = parseLocalAppState(raw);
+
+    expect(parsed?.portfolio.holdings[0]).toMatchObject({
+      country: "US",
+      averagePrice: 0,
+    });
+  });
+
+  it("migrates the former manual price policy to automatic selection", () => {
+    const state = createState();
+    const raw = JSON.stringify({
+      version: PORTFOLIO_STORAGE_VERSION,
+      updatedAt: new Date().toISOString(),
+      data: { ...state, pricePolicy: "previous" },
+    });
+
+    expect(parseLocalAppState(raw)?.pricePolicy).toBe("auto");
+  });
+
+  it("removes prototype chart points while preserving real history from v1", () => {
+    const state = createState();
+    const realSnapshot = { date: "2026-07-24", totalValue: 123_000_000 };
+    const raw = JSON.stringify({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      data: {
+        ...state,
+        allocationMode: "target",
+        snapshots: [...sampleSnapshots, realSnapshot],
+      },
+    });
+
+    expect(parseLocalAppState(raw)?.snapshots).toEqual([realSnapshot]);
+  });
+
+  it("accepts an empty chart history for a new device", () => {
+    const state = { ...createState(), snapshots: [] };
+
+    expect(saveLocalAppState(state, localStorage)).toBe(true);
+    expect(loadLocalAppState(createState(), localStorage).state.snapshots).toEqual(
+      [],
+    );
   });
 
   it("falls back safely when JSON is corrupt or fields are invalid", () => {
@@ -112,5 +174,18 @@ describe("portfolioStorage", () => {
       date: "2026-07-20",
       totalValue: 200,
     });
+  });
+
+  it("stores the valuation under its R2 closing-price date", () => {
+    const updated = upsertSnapshotForDate(
+      [{ date: "2026-07-23", totalValue: 100 }],
+      200,
+      "2026-07-24",
+    );
+
+    expect(updated).toEqual([
+      { date: "2026-07-23", totalValue: 100 },
+      { date: "2026-07-24", totalValue: 200 },
+    ]);
   });
 });

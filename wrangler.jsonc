@@ -14,7 +14,8 @@
   "r2_buckets": [
     {
       "binding": "MARKET_DATA",
-      "bucket_name": "closeprice"
+      "bucket_name": "closeprice",
+      "remote": true
     }
   ]
 }

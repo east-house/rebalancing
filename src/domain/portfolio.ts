@@ -7,6 +7,7 @@ import type {
   RebalancePreview,
   TargetWeightValidation,
 } from "./types";
+import { calculateKiwoomTradeFee } from "./fees";
 
 const TARGET_WEIGHT_TOTAL = 100;
 const TARGET_WEIGHT_TOLERANCE = 0.01;
@@ -39,6 +40,7 @@ function assertValidPortfolio(portfolio: Portfolio): void {
     if (!Number.isInteger(holding.quantity)) {
       throw new Error(`${ticker} quantity must be an integer.`);
     }
+    assertFiniteNonNegative(holding.averagePrice, `${ticker} averagePrice`);
   }
 }
 
@@ -167,8 +169,8 @@ function actionFor(quantityDelta: number): RebalanceAction {
 
 /**
  * Creates a whole-share rebalance preview. Target quantities are rounded down
- * so purchases never exceed their target allocation. Fees and taxes are not
- * included.
+ * so purchases never exceed their target allocation. Standard Kiwoom online
+ * commissions and applicable sell levies are deducted from projected cash.
  */
 export function calculateRebalancePreview(
   portfolio: Portfolio,
@@ -189,6 +191,19 @@ export function calculateRebalancePreview(
       const targetQuantity = Math.floor(targetAllocation / quote.close);
       const quantityDelta = targetQuantity - holding.quantity;
       const targetValue = targetQuantity * quote.close;
+      const estimatedTradeValue = Math.abs(quantityDelta) * quote.close;
+      const action = actionFor(quantityDelta);
+      const estimatedTradeFee = calculateKiwoomTradeFee({
+        country: holding.country,
+        assetType: holding.assetType,
+        action: action === "SELL" ? "SELL" : "BUY",
+        grossValue: action === "HOLD" ? 0 : estimatedTradeValue,
+        quantity: Math.abs(quantityDelta),
+        usEcnFeePerShare:
+          holding.country === "US" ? 0.003 * (quote.fxRate ?? 1) : undefined,
+        usSecFeeMinimum:
+          holding.country === "US" ? 0.01 * (quote.fxRate ?? 1) : undefined,
+      }).total;
 
       return {
         ticker: holding.ticker,
@@ -198,10 +213,11 @@ export function calculateRebalancePreview(
         currentQuantity: holding.quantity,
         targetQuantity,
         quantityDelta,
-        action: actionFor(quantityDelta),
+        action,
         currentValue: marketValue,
         targetValue,
-        estimatedTradeValue: Math.abs(quantityDelta) * quote.close,
+        estimatedTradeValue,
+        estimatedTradeFee,
         currentWeight: weight,
         targetWeight: holding.targetWeight,
         projectedWeight: percentage(targetValue, portfolio.totalAssets),
@@ -213,7 +229,12 @@ export function calculateRebalancePreview(
     (total, item) => total + item.targetValue,
     0,
   );
-  const projectedCash = portfolio.totalAssets - projectedInvestedValue;
+  const projectedTransactionFees = items.reduce(
+    (total, item) => total + item.estimatedTradeFee,
+    0,
+  );
+  const projectedCash =
+    portfolio.totalAssets - projectedInvestedValue - projectedTransactionFees;
 
   return {
     totalAssets: portfolio.totalAssets,
@@ -221,6 +242,7 @@ export function calculateRebalancePreview(
     currentCash: current.cash,
     targetCashWeight: portfolio.targetCashWeight,
     projectedInvestedValue,
+    projectedTransactionFees,
     projectedCash,
     projectedCashWeight: percentage(projectedCash, portfolio.totalAssets),
     items,

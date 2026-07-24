@@ -1,6 +1,6 @@
 import type { Quote } from "../domain";
 
-export type PricePolicy = "previous" | "today";
+export type PricePolicy = "previous" | "today" | "auto";
 
 export interface ClosePoint {
   date: string;
@@ -45,12 +45,12 @@ function isClosePoint(value: unknown): value is ClosePoint {
   );
 }
 
-function parseCloses(value: unknown): ClosePoint[] {
+function parseCloses(value: unknown, limit?: number): ClosePoint[] {
   if (!Array.isArray(value)) return [];
-  return value
+  const closes = value
     .filter(isClosePoint)
-    .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(-2);
+    .sort((left, right) => left.date.localeCompare(right.date));
+  return limit === undefined ? closes : closes.slice(-limit);
 }
 
 export function parseMarketDataPayload(value: unknown): MarketDataPayload {
@@ -76,7 +76,7 @@ export function parseMarketDataPayload(value: unknown): MarketDataPayload {
         const country = quote.country;
         const assetType = quote.assetType;
         const currency = quote.currency;
-        const closes = parseCloses(quote.closes);
+        const closes = parseCloses(quote.closes, 2);
         if (
           !ticker ||
           !name ||
@@ -137,7 +137,7 @@ function selectClose(
   closes: readonly ClosePoint[],
   policy: PricePolicy,
 ): ClosePoint | undefined {
-  if (policy === "today") return closes.at(-1);
+  if (policy === "today" || policy === "auto") return closes.at(-1);
   return closes.length >= 2 ? closes.at(-2) : undefined;
 }
 

@@ -10,7 +10,6 @@ import {
   CircleDollarSign,
   Database,
   Info,
-  Landmark,
   LockKeyhole,
   Plus,
   ShieldCheck,
@@ -21,20 +20,23 @@ import {
 
 import AssetChart from "./components/AssetChart";
 import InstrumentSearch from "./components/InstrumentSearch";
+import { parseMarketHistoryPayload } from "./api/marketHistory";
 import {
   latestQuoteDate,
   parseMarketDataPayload,
   quotesForPolicy,
   type MarketDataPayload,
-  type PricePolicy,
 } from "./api/marketData";
 import {
+  calculateFixedHoldingsTrend,
+  calculateKiwoomTradeFee,
   calculateRebalancePreview,
+  kiwoomFeeRateLabel,
   normalizeTicker,
   samplePortfolio,
-  sampleSnapshots,
   validateTargetWeights,
   type Holding,
+  type HoldingPriceHistory,
   type Portfolio,
   type RebalancePreview,
 } from "./domain";
@@ -49,12 +51,10 @@ import {
   parseLocalAppState,
   PORTFOLIO_STORAGE_KEY,
   saveLocalAppState,
-  upsertDailySnapshot,
+  upsertSnapshotForDate,
   type LocalAppState,
   type LocalStateSource,
 } from "./storage/portfolioStorage";
-
-type AllocationMode = "current" | "target";
 
 const FALLBACK_INSTRUMENTS: Instrument[] = [
   {
@@ -182,9 +182,8 @@ function cloneSamplePortfolio(): Portfolio {
 function createDefaultLocalState(): LocalAppState {
   return {
     portfolio: cloneSamplePortfolio(),
-    allocationMode: "target",
-    pricePolicy: "previous",
-    snapshots: sampleSnapshots.map((snapshot) => ({ ...snapshot })),
+    pricePolicy: "auto",
+    snapshots: [],
   };
 }
 
@@ -193,10 +192,30 @@ function formatPercent(value: number) {
   return `${value.toFixed(value < 10 && value % 1 !== 0 ? 1 : 0)}%`;
 }
 
+function formatSignedPercent(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function formatNativeAmount(value: number, country: "KR" | "US") {
+  return country === "US" ? USD.format(value) : WON.format(value);
+}
+
+function formatSignedNativeAmount(value: number, country: "KR" | "US") {
+  const formatted = formatNativeAmount(Math.abs(value), country);
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `-${formatted}`;
+  return formatted;
+}
+
 function actionLabel(action: "BUY" | "SELL" | "HOLD") {
   if (action === "BUY") return "매수";
   if (action === "SELL") return "매도";
   return "유지";
+}
+
+function holdingHistoryKey(country: "KR" | "US", ticker: string) {
+  return `${country}:${normalizeTicker(ticker)}`;
 }
 
 function App() {
@@ -206,10 +225,7 @@ function App() {
   const [portfolio, setPortfolio] = useState<Portfolio>(
     initialLocalState.state.portfolio,
   );
-  const [allocationMode, setAllocationMode] = useState<AllocationMode>(
-    initialLocalState.state.allocationMode,
-  );
-  const [pricePolicy, setPricePolicy] = useState<PricePolicy>(
+  const [pricePolicy, setPricePolicy] = useState<LocalAppState["pricePolicy"]>(
     initialLocalState.state.pricePolicy,
   );
   const [snapshots, setSnapshots] = useState(
@@ -245,6 +261,12 @@ function App() {
   const [marketMessage, setMarketMessage] = useState(
     "R2에서 최신 종가를 불러오는 중입니다.",
   );
+  const [marketHistories, setMarketHistories] = useState<
+    Map<string, HoldingPriceHistory>
+  >(new Map());
+  const [historyStatus, setHistoryStatus] = useState<
+    "idle" | "loading" | "ready" | "partial"
+  >("idle");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -263,9 +285,24 @@ function App() {
         if (!Array.isArray(payload.instruments) || payload.instruments.length === 0) {
           throw new Error("종목 목록이 비어 있습니다.");
         }
+        const countryByTicker = new Map(
+          payload.instruments.map((instrument) => [
+            normalizeTicker(instrument.ticker),
+            instrument.country,
+          ]),
+        );
         setInstruments(payload.instruments);
         setCatalogMeta(payload.meta);
         setCatalogStatus("ready");
+        setPortfolio((current) => ({
+          ...current,
+          holdings: current.holdings.map((holding) => ({
+            ...holding,
+            country:
+              countryByTicker.get(normalizeTicker(holding.ticker)) ??
+              holding.country,
+          })),
+        }));
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -274,6 +311,76 @@ function App() {
 
     return () => controller.abort();
   }, []);
+
+  const historyTargets = useMemo(() => {
+    const targets = new Map<
+      string,
+      { country: "KR" | "US"; ticker: string }
+    >();
+    for (const holding of portfolio.holdings) {
+      const ticker = normalizeTicker(holding.ticker);
+      if (!ticker || holding.quantity <= 0) continue;
+      targets.set(holdingHistoryKey(holding.country, ticker), {
+        country: holding.country,
+        ticker,
+      });
+    }
+    return Array.from(targets.values()).sort((left, right) =>
+      holdingHistoryKey(left.country, left.ticker).localeCompare(
+        holdingHistoryKey(right.country, right.ticker),
+      ),
+    );
+  }, [portfolio.holdings]);
+  const historyRequestKey = historyTargets
+    .map((target) => holdingHistoryKey(target.country, target.ticker))
+    .join("|");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (historyTargets.length === 0) {
+      setMarketHistories(new Map());
+      setHistoryStatus("ready");
+      return () => controller.abort();
+    }
+
+    setHistoryStatus("loading");
+    Promise.all(
+      historyTargets.map(async ({ country, ticker }) => {
+        try {
+          const response = await fetch(
+            `${import.meta.env.BASE_URL}api/market-data/history/${country}/${encodeURIComponent(ticker)}`,
+            { headers: { accept: "application/json" }, signal: controller.signal },
+          );
+          if (!response.ok) return null;
+          const payload = parseMarketHistoryPayload(await response.json());
+          return [
+            holdingHistoryKey(country, ticker),
+            {
+              ticker: payload.instrument.ticker,
+              country: payload.instrument.country,
+              prices: payload.prices,
+            },
+          ] as const;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return null;
+          }
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (controller.signal.aborted) return;
+      const available = results.filter(
+        (result): result is NonNullable<typeof result> => result !== null,
+      );
+      setMarketHistories(new Map(available));
+      setHistoryStatus(
+        available.length === historyTargets.length ? "ready" : "partial",
+      );
+    });
+
+    return () => controller.abort();
+  }, [historyRequestKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -332,22 +439,116 @@ function App() {
   );
   const priceDate = latestQuoteDate(heldQuotes);
 
-  const valuations = useMemo(
+  const baseValuations = useMemo(
     () =>
       portfolio.holdings.map((holding) => {
         const quote = quoteMap.get(normalizeTicker(holding.ticker));
         const marketValue = quote ? holding.quantity * quote.close : 0;
-        const weight =
-          portfolio.totalAssets > 0 ? (marketValue / portfolio.totalAssets) * 100 : 0;
-        return { holding, quote, marketValue, weight };
+        const nativeClose = quote?.nativeClose ?? quote?.close;
+        const purchaseNativeValue = holding.quantity * holding.averagePrice;
+        const currentNativeValue = nativeClose
+          ? holding.quantity * nativeClose
+          : 0;
+        const purchaseFee = calculateKiwoomTradeFee({
+          country: holding.country,
+          assetType: holding.assetType,
+          action: "BUY",
+          grossValue: purchaseNativeValue,
+          quantity: holding.quantity,
+        });
+        const estimatedSellFee = calculateKiwoomTradeFee({
+          country: holding.country,
+          assetType: holding.assetType,
+          action: "SELL",
+          grossValue: currentNativeValue,
+          quantity: holding.quantity,
+        });
+        const purchaseValue =
+          holding.averagePrice > 0
+            ? holding.country === "US"
+              ? purchaseNativeValue * (quote?.fxRate ?? 0)
+              : purchaseNativeValue
+            : 0;
+        const currencyMultiplier =
+          holding.country === "US" ? (quote?.fxRate ?? 0) : 1;
+        const purchaseFeeValue = purchaseFee.total * currencyMultiplier;
+        const estimatedSellFeeValue =
+          estimatedSellFee.total * currencyMultiplier;
+        const profitNativeValue =
+          nativeClose && holding.averagePrice > 0
+            ? currentNativeValue -
+              purchaseNativeValue -
+              purchaseFee.total -
+              estimatedSellFee.total
+            : null;
+        const profitRate =
+          nativeClose && purchaseNativeValue > 0
+            ? ((currentNativeValue -
+                purchaseNativeValue -
+                purchaseFee.total -
+                estimatedSellFee.total) /
+                (purchaseNativeValue + purchaseFee.total)) *
+              100
+            : null;
+        return {
+          holding,
+          quote,
+          marketValue,
+          purchaseNativeValue,
+          purchaseValue,
+          purchaseFeeNativeValue: purchaseFee.total,
+          estimatedSellFeeNativeValue: estimatedSellFee.total,
+          purchaseFeeValue,
+          estimatedSellFeeValue,
+          profitNativeValue,
+          profitRate,
+        };
       }),
-    [portfolio, quoteMap],
+    [portfolio.holdings, quoteMap],
   );
 
-  const investedValue = valuations.reduce((sum, item) => sum + item.marketValue, 0);
-  const cash = portfolio.totalAssets - investedValue;
+  const investedValue = baseValuations.reduce(
+    (sum, item) => sum + item.marketValue,
+    0,
+  );
+  const purchaseValue = baseValuations.reduce(
+    (sum, item) => sum + item.purchaseValue,
+    0,
+  );
+  const purchaseFees = baseValuations.reduce(
+    (sum, item) => sum + item.purchaseFeeValue,
+    0,
+  );
+  const estimatedSellFees = baseValuations.reduce(
+    (sum, item) => sum + item.estimatedSellFeeValue,
+    0,
+  );
+  const missingAveragePriceTickers = portfolio.holdings
+    .filter((holding) => holding.quantity > 0 && holding.averagePrice <= 0)
+    .map((holding) => normalizeTicker(holding.ticker) || "미입력 종목");
+  const purchaseDataComplete =
+    missingAveragePriceTickers.length === 0 &&
+    baseValuations.every(
+      ({ holding, quote }) => holding.quantity === 0 || Boolean(quote),
+    );
+  const investmentDifference = purchaseDataComplete
+    ? portfolio.totalAssets - purchaseValue
+    : 0;
+  const investmentShortfall = Math.max(0, -investmentDifference);
+  const cash = purchaseDataComplete ? Math.max(0, investmentDifference) : 0;
+  const currentTotalAssets = investedValue + cash;
+  const totalProfit = purchaseDataComplete
+    ? investedValue - purchaseValue - purchaseFees - estimatedSellFees
+    : null;
   const cashWeight =
-    portfolio.totalAssets > 0 ? (cash / portfolio.totalAssets) * 100 : 0;
+    currentTotalAssets > 0 ? (cash / currentTotalAssets) * 100 : 0;
+  const valuations = baseValuations.map((item) => ({
+    ...item,
+    weight:
+      currentTotalAssets > 0
+        ? (item.marketValue / currentTotalAssets) * 100
+        : 0,
+  }));
   const targetValidation = validateTargetWeights(portfolio);
   const normalizedTickers = portfolio.holdings.map((holding) =>
     normalizeTicker(holding.ticker),
@@ -362,15 +563,63 @@ function App() {
     .map((holding) => normalizeTicker(holding.ticker) || "미입력 종목");
 
   const canRebalance =
-    allocationMode === "target" &&
-    portfolio.totalAssets > 0 &&
-    cash >= 0 &&
+    currentTotalAssets > 0 &&
+    investmentShortfall === 0 &&
+    purchaseDataComplete &&
     targetValidation.valid &&
     duplicateTickers.size === 0 &&
     missingPriceTickers.length === 0 &&
     portfolio.holdings.length > 0;
 
-  const chartData = snapshots;
+  const historicalTrend = useMemo(
+    () =>
+      purchaseDataComplete
+        ? calculateFixedHoldingsTrend(
+            portfolio.holdings,
+            marketHistories,
+            marketData?.fx.usdKrw.closes ?? [],
+            cash,
+          )
+        : [],
+    [
+      cash,
+      marketData,
+      marketHistories,
+      portfolio.holdings,
+      purchaseDataComplete,
+    ],
+  );
+  const chartData = historicalTrend.length > 0 ? historicalTrend : snapshots;
+
+  useEffect(() => {
+    if (
+      marketStatus !== "ready" ||
+      !purchaseDataComplete ||
+      !priceDate ||
+      currentTotalAssets < 0
+    ) {
+      return;
+    }
+
+    setSnapshots((current) => {
+      const next = upsertSnapshotForDate(
+        current,
+        currentTotalAssets,
+        priceDate,
+      );
+      if (
+        next.length === current.length &&
+        next.every(
+          (snapshot, index) =>
+            snapshot.date === current[index]?.date &&
+            snapshot.totalValue === current[index]?.totalValue,
+        )
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [currentTotalAssets, marketStatus, priceDate, purchaseDataComplete]);
 
   useEffect(() => {
     if (skipNextSave.current) {
@@ -380,12 +629,11 @@ function App() {
 
     const saved = saveLocalAppState({
       portfolio,
-      allocationMode,
       pricePolicy,
-      snapshots: chartData,
+      snapshots,
     });
     setStorageSource(saved ? "saved" : "unavailable");
-  }, [allocationMode, chartData, portfolio, pricePolicy]);
+  }, [portfolio, pricePolicy, snapshots]);
 
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
@@ -399,7 +647,6 @@ function App() {
 
       skipNextSave.current = true;
       setPortfolio(nextState.portfolio);
-      setAllocationMode(nextState.allocationMode);
       setPricePolicy(nextState.pricePolicy);
       setSnapshots(nextState.snapshots);
       setPreview(null);
@@ -419,7 +666,12 @@ function App() {
   const allocationItems = [
     ...valuations.map((item, index) => ({
       key: `${normalizeTicker(item.holding.ticker)}-${index}`,
-      label: normalizeTicker(item.holding.ticker) || "새 종목",
+      label:
+        item.holding.country === "KR"
+          ? item.holding.name.trim() ||
+            normalizeTicker(item.holding.ticker) ||
+            "새 종목"
+          : normalizeTicker(item.holding.ticker) || item.holding.name.trim() || "새 종목",
       value: Math.max(0, item.weight),
       color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
     })),
@@ -450,14 +702,11 @@ function App() {
     }));
   };
 
-  const updateTotalAssets = (totalAssets: number) => {
+  const updateInvestmentAmount = (totalAssets: number) => {
     updatePortfolio((current) => ({
       ...current,
       totalAssets,
     }));
-    setSnapshots((current) =>
-      upsertDailySnapshot(current, totalAssets),
-    );
   };
 
   const handleInstrumentSelect = (index: number, instrument: Instrument) => {
@@ -465,6 +714,8 @@ function App() {
       ticker: instrument.ticker,
       name: instrument.name,
       assetType: instrument.assetType,
+      country: instrument.country,
+      averagePrice: 0,
     });
   };
 
@@ -482,7 +733,9 @@ function App() {
           ticker: nextInstrument.ticker,
           name: nextInstrument.name,
           assetType: nextInstrument.assetType,
+          country: nextInstrument.country,
           quantity: 0,
+          averagePrice: 0,
           targetWeight: 0,
         },
       ],
@@ -499,7 +752,12 @@ function App() {
   const calculatePreview = () => {
     if (!canRebalance) return;
     try {
-      setPreview(calculateRebalancePreview(portfolio, heldQuotes));
+      setPreview(
+        calculateRebalancePreview(
+          { ...portfolio, totalAssets: currentTotalAssets },
+          heldQuotes,
+        ),
+      );
       setCalculationMessage(
         `${formatPriceDate(priceDate)}를 기준으로 리밸런싱 미리보기를 계산했습니다.`,
       );
@@ -518,7 +776,7 @@ function App() {
 
   const deleteSavedData = () => {
     const confirmed = window.confirm(
-      "이 브라우저에 저장된 보유 종목, 수량, 목표 비중과 자산 이력을 삭제할까요?",
+      "이 브라우저에 저장된 보유 종목, 수량, 평단가, 총 투자금, 목표 비중과 자산 이력을 삭제할까요?",
     );
     if (!confirmed) return;
 
@@ -526,7 +784,6 @@ function App() {
     const defaults = createDefaultLocalState();
     const deleted = deleteLocalAppState();
     setPortfolio(defaults.portfolio);
-    setAllocationMode(defaults.allocationMode);
     setPricePolicy(defaults.pricePolicy);
     setSnapshots(defaults.snapshots);
     setPreview(null);
@@ -597,23 +854,43 @@ function App() {
               </span>
               <span id="total-assets-title">현재 총자산</span>
             </div>
-            <div className="summary-amount">{WON.format(portfolio.totalAssets)}</div>
+            <div className="summary-amount">{WON.format(currentTotalAssets)}</div>
             <p className="summary-note">
-              입력한 총자산을 기준으로 투자자산과 현금을 함께 계산합니다.
+              {purchaseDataComplete
+                ? "보유자산의 종가 평가액과 총 투자금 중 남은 현금을 합산했습니다."
+                : missingAveragePriceTickers.length > 0
+                  ? "모든 보유 종목의 평단가를 입력하면 남은 현금까지 합산됩니다."
+                  : "보유 종목의 종가가 연결되면 남은 현금까지 합산됩니다."}
             </p>
 
             <div className="summary-stats">
               <div className="summary-stat">
-                <span>투자자산</span>
-                <strong>{WON.format(investedValue)}</strong>
+                <span>투자금</span>
+                <strong>{WON.format(purchaseValue + purchaseFees)}</strong>
+              </div>
+              <div className="summary-stat">
+                <span>평가손익</span>
+                <strong
+                  className={
+                    totalProfit === null
+                      ? ""
+                      : totalProfit > 0
+                        ? "positive"
+                        : totalProfit < 0
+                          ? "negative"
+                          : ""
+                  }
+                >
+                  {totalProfit === null
+                    ? "—"
+                    : `${totalProfit > 0 ? "+" : ""}${WON.format(totalProfit)}`}
+                </strong>
               </div>
               <div className="summary-stat">
                 <span>가용 현금</span>
-                <strong className={cash < 0 ? "negative" : ""}>{WON.format(cash)}</strong>
-              </div>
-              <div className="summary-stat">
-                <span>보유 종목</span>
-                <strong>{portfolio.holdings.length}개</strong>
+                <strong className={cash < 0 ? "negative" : ""}>
+                  {purchaseDataComplete ? WON.format(cash) : "—"}
+                </strong>
               </div>
             </div>
           </div>
@@ -638,9 +915,13 @@ function App() {
                 />
               ))}
             </div>
-            <div className="allocation-legend">
+            <div
+              className="allocation-legend"
+              role="list"
+              aria-label="현재 자산 구성 범례"
+            >
               {allocationItems.slice(0, 5).map((item) => (
-                <div key={item.key}>
+                <div key={item.key} role="listitem">
                   <i style={{ backgroundColor: item.color }} />
                   <span>{item.label}</span>
                   <strong>{formatPercent(item.value)}</strong>
@@ -668,17 +949,36 @@ function App() {
               <div className="holdings-head" aria-hidden="true">
                 <span>TICKER / NAME</span>
                 <span>보유수</span>
-                <span>기준 종가</span>
-                <span>평가금액</span>
-                <span>현재 비중</span>
+                <span>평단가</span>
+                <span>거래비용</span>
+                <span>매수금액</span>
+                <span>종가</span>
+                <span>현재금액</span>
+                <span>수익률</span>
                 <span>목표 비중</span>
                 <span />
               </div>
 
-              {valuations.map(({ holding, quote, marketValue, weight }, index) => {
-                const ticker = normalizeTicker(holding.ticker);
-                const isDuplicate = duplicateTickers.has(ticker);
-                return (
+              {valuations.map(
+                (
+                  {
+                    holding,
+                    quote,
+                    marketValue,
+                    purchaseNativeValue,
+                    purchaseValue: holdingPurchaseValue,
+                    purchaseFeeNativeValue,
+                    estimatedSellFeeNativeValue,
+                    profitNativeValue,
+                    weight,
+                    profitRate,
+                  },
+                  index,
+                ) => {
+                  const ticker = normalizeTicker(holding.ticker);
+                  const isDuplicate = duplicateTickers.has(ticker);
+                  const averagePriceCountry = quote?.country ?? holding.country;
+                  return (
                   <div className="holding-row" key={`holding-${index}`}>
                     <div className="asset-field" data-label="Ticker / 종목명">
                       <div className="ticker-line">
@@ -715,7 +1015,67 @@ function App() {
                       <small>주</small>
                     </label>
 
-                    <div className="table-value" data-label="기준 종가">
+                    <label className="table-field" data-label="평단가">
+                      <span className="sr-only">평균 매수가</span>
+                      <input
+                        aria-label={`${ticker || index + 1} 평균 매수가`}
+                        type="number"
+                        min="0"
+                        step={averagePriceCountry === "US" ? "0.01" : "1"}
+                        inputMode="decimal"
+                        value={holding.averagePrice || ""}
+                        placeholder="미입력"
+                        onChange={(event) =>
+                          updateHolding(index, {
+                            averagePrice: Math.max(
+                              0,
+                              Number(event.target.value) || 0,
+                            ),
+                          })
+                        }
+                      />
+                      <small>{averagePriceCountry === "US" ? "$" : "원"}</small>
+                    </label>
+
+                    <div className="table-value" data-label="자동 거래비용">
+                      <strong>
+                        {quote && holding.averagePrice > 0
+                          ? formatNativeAmount(
+                              purchaseFeeNativeValue +
+                                estimatedSellFeeNativeValue,
+                              averagePriceCountry,
+                            )
+                          : "—"}
+                      </strong>
+                      <small>
+                        {quote
+                          ? kiwoomFeeRateLabel(
+                              averagePriceCountry,
+                              holding.assetType,
+                            )
+                          : "종가 연결 필요"}
+                      </small>
+                    </div>
+
+                    <div className="table-value" data-label="매수금액">
+                      <strong>
+                        {holding.averagePrice > 0
+                          ? formatNativeAmount(
+                              purchaseNativeValue,
+                              averagePriceCountry,
+                            )
+                          : "평단 입력"}
+                      </strong>
+                      <small>
+                        {holding.averagePrice > 0
+                          ? averagePriceCountry === "US" && quote
+                            ? `${WON.format(holdingPurchaseValue)} 환산`
+                            : WON.format(holdingPurchaseValue)
+                          : "보유수 × 평단가"}
+                      </small>
+                    </div>
+
+                    <div className="table-value" data-label="종가">
                       <strong>
                         {quote
                           ? quote.nativeCurrency === "USD"
@@ -734,24 +1094,50 @@ function App() {
                       </small>
                     </div>
 
-                    <div className="table-value" data-label="평가금액">
+                    <div className="table-value" data-label="현재금액">
                       <strong>{quote ? COMPACT_WON.format(marketValue) : "—"}</strong>
-                      <small>{quote ? WON.format(marketValue) : "계산 불가"}</small>
+                      <small>
+                        {quote
+                          ? `${WON.format(marketValue)} · ${formatPercent(weight)}`
+                          : "계산 불가"}
+                      </small>
                     </div>
 
-                    <div className="weight-value" data-label="현재 비중">
-                      <strong>{quote ? formatPercent(weight) : "—"}</strong>
-                      <span>
-                        <i style={{ width: `${Math.min(100, Math.max(0, weight))}%` }} />
-                      </span>
+                    <div className="table-value profit-value" data-label="수익률">
+                      <strong
+                        className={
+                          profitRate === null
+                            ? ""
+                            : profitRate > 0
+                              ? "profit-positive"
+                              : profitRate < 0
+                                ? "profit-negative"
+                                : ""
+                        }
+                      >
+                        {profitRate === null ? "—" : formatSignedPercent(profitRate)}
+                      </strong>
+                      <small
+                        className={
+                          profitNativeValue === null
+                            ? ""
+                            : profitNativeValue > 0
+                              ? "profit-positive"
+                              : profitNativeValue < 0
+                                ? "profit-negative"
+                                : ""
+                        }
+                      >
+                        {profitNativeValue === null
+                          ? "평단가 필요"
+                          : formatSignedNativeAmount(
+                              profitNativeValue,
+                              averagePriceCountry,
+                            )}
+                      </small>
                     </div>
 
-                    <label
-                      className={`target-field ${
-                        allocationMode === "current" ? "target-field--disabled" : ""
-                      }`}
-                      data-label="목표 비중"
-                    >
+                    <label className="target-field" data-label="목표 비중">
                       <span className="sr-only">목표 비중</span>
                       <input
                         aria-label={`${ticker || index + 1} 목표 비중`}
@@ -760,7 +1146,6 @@ function App() {
                         max="100"
                         step="1"
                         value={holding.targetWeight}
-                        disabled={allocationMode === "current"}
                         onChange={(event) =>
                           updateHolding(index, {
                             targetWeight: Number(event.target.value) || 0,
@@ -779,8 +1164,9 @@ function App() {
                       <Trash2 size={16} />
                     </button>
                   </div>
-                );
-              })}
+                  );
+                },
+              )}
             </div>
 
             {portfolio.holdings.length === 0 && (
@@ -807,8 +1193,13 @@ function App() {
               <div className="panel-footnote panel-footnote--secondary">
                 <Info size={14} />
                 {marketStatus === "ready" && marketData
-                  ? `${marketMessage} 미국 종목은 수집된 USD/KRW 종가로 원화 환산합니다.`
+                  ? `${marketMessage} 미국 종목의 종가와 매수금액은 선택한 종가일의 USD/KRW 환율로 원화 환산합니다.`
                   : marketMessage}
+              </div>
+              <div className="panel-footnote panel-footnote--secondary">
+                <Info size={14} />
+                키움 일반 온라인 기준을 자동 적용합니다. 국내 ETF의 상품별 배당소득세와
+                이벤트·협의·NXT 수수료는 포함하지 않습니다.
               </div>
             </div>
           </section>
@@ -824,46 +1215,21 @@ function App() {
               </span>
             </div>
 
-            <div className="mode-toggle" role="group" aria-label="비중 설정 모드">
-              <button
-                type="button"
-                className={allocationMode === "current" ? "active" : ""}
-                aria-pressed={allocationMode === "current"}
-                onClick={() => {
-                  setAllocationMode("current");
-                  clearResult();
-                }}
-              >
-                현재 비중
-              </button>
-              <button
-                type="button"
-                className={allocationMode === "target" ? "active" : ""}
-                aria-pressed={allocationMode === "target"}
-                onClick={() => {
-                  setAllocationMode("target");
-                  clearResult();
-                }}
-              >
-                목표 비중 지정
-              </button>
-            </div>
-
             <label className="setting-field">
               <span>
-                <span>현재 총자산</span>
-                <small>현금 포함</small>
+                <span>총 투자금</span>
+                <small>미투자 현금 포함</small>
               </span>
               <div className="amount-input">
                 <input
-                  aria-label="현재 총자산"
+                  aria-label="총 투자금"
                   type="number"
                   min="0"
                   step="100000"
                   inputMode="numeric"
                   value={portfolio.totalAssets}
                   onChange={(event) =>
-                    updateTotalAssets(
+                    updateInvestmentAmount(
                       Math.max(0, Number(event.target.value) || 0),
                     )
                   }
@@ -871,100 +1237,106 @@ function App() {
                 <span>원</span>
               </div>
               <small className="formatted-value">{WON.format(portfolio.totalAssets)}</small>
+              <small className="setting-help">
+                매수금액 {WON.format(purchaseValue)}을 제외한 금액만 현금으로 계산하며,
+                수수료는 평가손익에 반영합니다.
+              </small>
             </label>
+
+            <div className="setting-field">
+              <span>
+                <span>가격 기준</span>
+                <small>자동 선택</small>
+              </span>
+              <div className="price-policy-auto">
+                <CalendarDays size={16} />
+                <div>
+                  <strong>당일 종가 우선</strong>
+                  <small>당일 데이터가 없으면 가장 최근 전일 종가를 사용합니다.</small>
+                </div>
+              </div>
+            </div>
 
             <label className="setting-field">
               <span>
-                <span>가격 기준</span>
-                <small>R2 수집 데이터</small>
+                <span>목표 현금 비중</span>
+                <small>리밸런싱 후</small>
               </span>
-              <select
-                value={pricePolicy}
-                onChange={(event) => {
-                  setPricePolicy(event.target.value as PricePolicy);
-                  clearResult();
-                }}
-              >
-                <option value="previous">전일 종가</option>
-                <option value="today">당일 확정 종가</option>
-              </select>
+              <div className="percent-input">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={portfolio.targetCashWeight}
+                  onChange={(event) =>
+                    updatePortfolio((current) => ({
+                      ...current,
+                      targetCashWeight: Number(event.target.value) || 0,
+                    }))
+                  }
+                />
+                <span>%</span>
+              </div>
             </label>
 
-            {allocationMode === "target" ? (
-              <>
-                <label className="setting-field">
-                  <span>
-                    <span>목표 현금 비중</span>
-                    <small>리밸런싱 후</small>
-                  </span>
-                  <div className="percent-input">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={portfolio.targetCashWeight}
-                      onChange={(event) =>
-                        updatePortfolio((current) => ({
-                          ...current,
-                          targetCashWeight: Number(event.target.value) || 0,
-                        }))
-                      }
-                    />
-                    <span>%</span>
-                  </div>
-                </label>
-
-                <div className="target-summary">
-                  <div className="target-summary-row">
-                    <span>목표 비중 합계</span>
-                    <strong className={targetValidation.valid ? "valid" : "invalid"}>
-                      {targetValidation.totalWeight.toFixed(0)}%
-                    </strong>
-                  </div>
-                  <div className="target-progress">
-                    <span
-                      className={targetValidation.valid ? "valid" : ""}
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          Math.max(0, targetValidation.totalWeight),
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <p>
-                    {targetValidation.valid ? (
-                      <>
-                        <Check size={13} /> 현금 포함 100%로 설정되었습니다.
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle size={13} />
-                        {targetValidation.difference > 0
-                          ? `${targetValidation.difference.toFixed(0)}%를 더 배분해 주세요.`
-                          : `${Math.abs(targetValidation.difference).toFixed(
-                              0,
-                            )}%를 줄여 주세요.`}
-                      </>
-                    )}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="current-mode-card">
-                <Landmark size={18} />
-                <div>
-                  <strong>현재 구성만 확인 중</strong>
-                  <p>목표 비중을 지정하면 매수·매도 수량을 계산할 수 있습니다.</p>
-                </div>
+            <div className="target-summary">
+              <div className="target-summary-row">
+                <span>목표 비중 합계</span>
+                <strong className={targetValidation.valid ? "valid" : "invalid"}>
+                  {targetValidation.totalWeight.toFixed(0)}%
+                </strong>
               </div>
-            )}
+              <div className="target-progress">
+                <span
+                  className={targetValidation.valid ? "valid" : ""}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(0, targetValidation.totalWeight),
+                    )}%`,
+                  }}
+                />
+              </div>
+              <p>
+                {targetValidation.valid ? (
+                  <>
+                    <Check size={13} /> 현금 포함 100%로 설정되었습니다.
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={13} />
+                    {targetValidation.difference > 0
+                      ? `${targetValidation.difference.toFixed(0)}%를 더 배분해 주세요.`
+                      : `${Math.abs(targetValidation.difference).toFixed(
+                          0,
+                        )}%를 줄여 주세요.`}
+                  </>
+                )}
+              </p>
+            </div>
 
-            {cash < 0 && (
+            <div className="rebalance-basis">
+              <WalletCards size={18} />
+              <div>
+                <strong>리밸런싱 기준 현재 자산</strong>
+                <p>
+                  {WON.format(currentTotalAssets)}을 목표 비중에 맞춰 종목별 매수·매도
+                  수량으로 계산합니다.
+                </p>
+              </div>
+            </div>
+
+              {investmentShortfall > 0 && (
               <div className="inline-alert">
                 <AlertCircle size={15} />
-                보유자산 평가액이 총자산보다 {WON.format(Math.abs(cash))} 큽니다.
+                매수금액 합계가 총 투자금보다 {WON.format(investmentShortfall)} 큽니다.
+              </div>
+            )}
+            {missingAveragePriceTickers.length > 0 && (
+              <div className="inline-alert">
+                <AlertCircle size={15} />
+                {missingAveragePriceTickers.join(", ")}의 평단가를 입력해 주세요.
               </div>
             )}
             {duplicateTickers.size > 0 && (
@@ -976,7 +1348,7 @@ function App() {
             {missingPriceTickers.length > 0 && (
               <div className="inline-alert">
                 <AlertCircle size={15} />
-                {missingPriceTickers.join(", ")}의 선택 기준 종가가 없습니다.
+                {missingPriceTickers.join(", ")}의 선택한 종가가 없습니다.
               </div>
             )}
 
@@ -987,19 +1359,19 @@ function App() {
               onClick={calculatePreview}
             >
               <Calculator size={18} />
-              리밸런싱 계산
+              매수·매도 수량 계산
               <ArrowRight size={17} />
             </button>
 
             <p className="estimate-note">
-              수수료·세금을 제외한 정수 주식 기준 예상치입니다. 실제 주문은 실행되지
-              않습니다.
+              키움 일반 온라인 수수료와 매도 제비용을 반영한 정수 주식 기준
+              예상치입니다. 실제 주문은 실행되지 않습니다.
             </p>
             <div className="privacy-inline">
               <LockKeyhole size={15} />
               <span>
-                공개 종가 묶음만 내려받으며 입력값은 서버나 R2로 전송하지 않고 이
-                브라우저에만 저장합니다.
+                최신 종가 묶음과 종목별 공개 과거 종가만 내려받습니다. 수량·평단가·투자금은
+                서버나 R2로 전송하지 않습니다.
               </span>
             </div>
           </aside>
@@ -1020,7 +1392,10 @@ function App() {
               <div className="result-cash">
                 <span>예상 잔여 현금</span>
                 <strong>{WON.format(preview.projectedCash)}</strong>
-                <small>{formatPercent(preview.projectedCashWeight)}</small>
+                <small>
+                  거래비용 {WON.format(preview.projectedTransactionFees)} 반영 ·{" "}
+                  {formatPercent(preview.projectedCashWeight)}
+                </small>
               </div>
             </div>
 
@@ -1045,6 +1420,7 @@ function App() {
                   <div className="result-metric">
                     <span>예상 거래금액</span>
                     <strong>{WON.format(item.estimatedTradeValue)}</strong>
+                    <small>비용 {WON.format(item.estimatedTradeFee)}</small>
                   </div>
                   <div className="result-metric">
                     <span>예상 비중</span>
@@ -1069,7 +1445,13 @@ function App() {
           <AssetChart data={chartData} currency="KRW" initialPeriod="1Y" />
           <div className="chart-demo-note">
             <Database size={14} />
-            자산 시계열도 이 브라우저에만 저장되며 마지막 값은 현재 총자산을 반영합니다.
+            {historicalTrend.length > 0
+              ? `현재 보유수량과 현금을 고정해 R2 과거 종가 ${NUMBER.format(
+                  historicalTrend.length,
+                )}개 기준일을 재계산했습니다.`
+              : historyStatus === "loading"
+                ? "R2에서 보유 종목의 과거 종가를 불러오는 중입니다."
+                : "과거 종가가 없는 종목은 브라우저에 기록된 실제 종가일 이력을 사용합니다."}
           </div>
         </div>
 
@@ -1080,11 +1462,12 @@ function App() {
           <div>
             <strong>당신의 자산 정보는 현재 브라우저 기기에만 머뭅니다.</strong>
             <p>
-              보유 종목·수량·목표 비중·현금 설정과 자산 이력은 브라우저 로컬 저장소에
-              보관되어 재방문 시 복구됩니다. 화면은 R2의 전체 공개 종가 묶음을
-              내려받아 현재 브라우저 안에서만 보유 종목과 매칭합니다. 입력 정보는
-              서버와 R2에 전송하지 않지만, 같은 브라우저 프로필을 쓰는 사람은 볼 수
-              있으며 브라우저 데이터 삭제 시 함께 사라집니다.
+              보유 종목·수량·평단가·목표 비중·총 투자금과 자산 이력은 브라우저 로컬 저장소에
+              보관되어 재방문 시 복구됩니다. 화면은 R2의 전체 최신 종가 묶음과 보유
+              Ticker의 공개 과거 종가를 내려받아 현재 브라우저 안에서 평가합니다.
+              과거 종가 요청에는 국가와 Ticker만 포함되며 수량·평단가·목표 비중·투자금은
+              서버와 R2에 전송하지 않습니다. 같은 브라우저 프로필을 쓰는 사람은 저장값을
+              볼 수 있으며 브라우저 데이터 삭제 시 함께 사라집니다.
             </p>
             {storageMessage && (
               <p className="storage-message" role="status">

@@ -56,7 +56,10 @@ def load_json_object(
     return _decode_history(_read_body(response))
 
 
-def _normalise_closes(value: Any) -> list[dict[str, Any]]:
+def _normalise_closes(
+    value: Any,
+    limit: int | None = 2,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     by_date: dict[str, float] = {}
@@ -71,10 +74,11 @@ def _normalise_closes(value: Any) -> list[dict[str, Any]]:
             continue
         if close > 0:
             by_date[price_date] = close
-    return [
+    closes = [
         {"date": price_date, "close": by_date[price_date]}
-        for price_date in sorted(by_date)[-2:]
+        for price_date in sorted(by_date)
     ]
+    return closes[-limit:] if limit is not None else closes
 
 
 def normalise_quote(value: Any) -> dict[str, Any] | None:
@@ -108,7 +112,7 @@ def normalise_quote(value: Any) -> dict[str, Any] | None:
 def normalise_fx(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
-    closes = _normalise_closes(value.get("closes"))
+    closes = _normalise_closes(value.get("closes"), limit=None)
     if not closes:
         return None
     return {
@@ -188,7 +192,7 @@ def fetch_usd_krw(today: date) -> dict[str, Any]:
 
     frame = fdr.DataReader(
         "USD/KRW",
-        (today - timedelta(days=14)).isoformat(),
+        (today - timedelta(days=365)).isoformat(),
         (today + timedelta(days=1)).isoformat(),
     )
     if frame is None or frame.empty:
@@ -207,7 +211,7 @@ def fetch_usd_krw(today: date) -> dict[str, Any]:
         }
         for index, raw_close in frame[column].dropna().items()
         if float(raw_close) > 0
-    ][-2:]
+    ]
     rate = normalise_fx({"closes": closes})
     if rate is None:
         raise ValueError("USD/KRW response has no valid closes")

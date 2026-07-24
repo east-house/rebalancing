@@ -17,6 +17,7 @@ from scripts.collect_close_prices import (
     MemoryHistoryStore,
     R2HistoryStore,
     ROLLING_WINDOW_DAYS,
+    _provider_ticker,
     collect_active_histories,
     history_object_key,
     load_active_instruments,
@@ -40,6 +41,15 @@ def instrument(ticker: str = "AAA") -> dict[str, str]:
 
 
 class ActiveUniverseTests(unittest.TestCase):
+    def test_provider_uses_yahoo_class_share_symbol_format(self) -> None:
+        self.assertEqual(_provider_ticker(instrument("BRK.B")), "BRK-B")
+        korean = {
+            **instrument("005930"),
+            "country": "KR",
+            "market": "KOSPI",
+        }
+        self.assertEqual(_provider_ticker(korean), "005930")
+
     def test_default_config_resolves_kr_all_and_100_explicit_us(
         self,
     ) -> None:

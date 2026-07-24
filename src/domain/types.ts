@@ -4,7 +4,10 @@ export interface Holding {
   ticker: string;
   name: string;
   assetType: AssetType;
+  country: "KR" | "US";
   quantity: number;
+  /** Average purchase price per share in the instrument's native currency. */
+  averagePrice: number;
   /** Percentage from 0 to 100. */
   targetWeight: number;
 }
@@ -23,7 +26,7 @@ export interface Quote {
 }
 
 export interface Portfolio {
-  /** User-declared total assets, including cash. */
+  /** App state stores investment principal; valuation previews receive current assets. */
   totalAssets: number;
   /** Percentage from 0 to 100. */
   targetCashWeight: number;
@@ -72,6 +75,7 @@ export interface RebalanceItem {
   currentValue: number;
   targetValue: number;
   estimatedTradeValue: number;
+  estimatedTradeFee: number;
   currentWeight: number;
   targetWeight: number;
   projectedWeight: number;
@@ -83,6 +87,7 @@ export interface RebalancePreview {
   currentCash: number;
   targetCashWeight: number;
   projectedInvestedValue: number;
+  projectedTransactionFees: number;
   projectedCash: number;
   projectedCashWeight: number;
   items: RebalanceItem[];

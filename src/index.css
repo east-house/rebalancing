@@ -394,6 +394,10 @@ input[type="number"] {
   color: var(--danger) !important;
 }
 
+.positive {
+  color: var(--accent) !important;
+}
+
 .allocation-overview {
   position: relative;
   z-index: 1;
@@ -570,9 +574,10 @@ input[type="number"] {
 .holding-row {
   display: grid;
   grid-template-columns:
-    minmax(150px, 1.55fr) minmax(72px, 0.65fr) minmax(88px, 0.82fr)
-    minmax(92px, 0.9fr) minmax(75px, 0.68fr) minmax(68px, 0.62fr) 34px;
-  gap: 13px;
+    minmax(128px, 1.42fr) minmax(54px, 0.5fr) minmax(66px, 0.62fr)
+    minmax(62px, 0.58fr) minmax(76px, 0.7fr) minmax(74px, 0.68fr)
+    minmax(80px, 0.74fr) minmax(60px, 0.56fr) minmax(60px, 0.56fr) 32px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -688,6 +693,22 @@ input[type="number"] {
   white-space: nowrap;
 }
 
+.table-value small.profit-positive {
+  color: var(--accent);
+}
+
+.table-value small.profit-negative {
+  color: var(--danger);
+}
+
+.profit-value strong.profit-positive {
+  color: var(--accent);
+}
+
+.profit-value strong.profit-negative {
+  color: var(--danger);
+}
+
 .weight-value span {
   display: block;
   height: 3px;
@@ -711,6 +732,7 @@ input[type="number"] {
 .icon-button {
   width: 32px;
   height: 32px;
+  justify-self: end;
   color: #657a73;
   background: transparent;
   border-radius: 8px;
@@ -782,33 +804,6 @@ input[type="number"] {
   border-radius: 10px;
 }
 
-.mode-toggle {
-  display: grid;
-  margin-bottom: 25px;
-  padding: 4px;
-  grid-template-columns: 1fr 1.28fr;
-  background: rgb(4 13 11 / 55%);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-}
-
-.mode-toggle button {
-  height: 34px;
-  color: #71867f;
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-}
-
-.mode-toggle button.active {
-  color: var(--text);
-  background: var(--surface-soft);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 17%);
-}
-
 .setting-field {
   display: block;
   margin-top: 18px;
@@ -839,6 +834,35 @@ input[type="number"] {
   padding: 0 12px;
   color-scheme: dark;
   font-size: 11px;
+}
+
+.price-policy-auto {
+  display: flex;
+  min-height: 52px;
+  padding: 10px 12px;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+  background: rgb(111 157 125 / 7%);
+  border: 1px solid rgb(111 157 125 / 17%);
+  border-radius: 10px;
+}
+
+.price-policy-auto > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.price-policy-auto strong {
+  color: #b9cac4;
+  font-size: 10px;
+}
+
+.price-policy-auto small {
+  color: #71867f;
+  font-size: 8px;
+  line-height: 1.45;
 }
 
 .amount-input,
@@ -872,6 +896,14 @@ input[type="number"] {
   color: var(--accent);
   font-size: 10px;
   text-align: right;
+}
+
+.setting-help {
+  display: block;
+  margin-top: 8px;
+  color: #62766f;
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .target-summary {
@@ -937,9 +969,9 @@ input[type="number"] {
   line-height: 1.45;
 }
 
-.current-mode-card {
+.rebalance-basis {
   display: flex;
-  margin-top: 22px;
+  margin-top: 16px;
   padding: 15px;
   gap: 11px;
   color: var(--accent);
@@ -948,17 +980,17 @@ input[type="number"] {
   border-radius: 12px;
 }
 
-.current-mode-card div {
-  min-width: 0;
+.rebalance-basis > svg {
+  flex: 0 0 auto;
 }
 
-.current-mode-card strong {
+.rebalance-basis strong {
   display: block;
   color: var(--text);
   font-size: 11px;
 }
 
-.current-mode-card p {
+.rebalance-basis p {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: 9px;
@@ -1129,6 +1161,12 @@ input[type="number"] {
   align-items: center;
   gap: 4px;
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-metric small {
+  color: #657a73;
+  font-size: 8px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1308,7 +1346,7 @@ footer p {
   font-size: 9px;
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1180px) {
   .summary-card {
     grid-template-columns: 1.15fr 0.85fr;
   }
@@ -1324,8 +1362,54 @@ footer p {
   .holdings-head,
   .holding-row {
     grid-template-columns:
-      minmax(155px, 1.5fr) minmax(75px, 0.65fr) minmax(90px, 0.85fr)
-      minmax(94px, 0.9fr) minmax(76px, 0.7fr) minmax(70px, 0.65fr) 34px;
+      minmax(145px, 1.42fr) minmax(58px, 0.52fr) minmax(72px, 0.64fr)
+      minmax(68px, 0.6fr) minmax(82px, 0.72fr) minmax(80px, 0.7fr)
+      minmax(86px, 0.76fr) minmax(66px, 0.58fr) minmax(66px, 0.58fr) 34px;
+  }
+}
+
+@media (max-width: 900px) {
+  .holdings-head {
+    display: none;
+  }
+
+  .holding-row {
+    position: relative;
+    min-height: 0;
+    padding: 18px 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+
+  .holding-row:first-child {
+    border-top: 0;
+  }
+
+  .holding-row > div::before,
+  .holding-row > label::before {
+    display: block;
+    margin-bottom: 7px;
+    color: #60756e;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    content: attr(data-label);
+  }
+
+  .asset-field {
+    grid-column: 1 / -1;
+    padding-right: 44px;
+  }
+
+  .ticker-line input {
+    width: 110px;
+  }
+
+  .holding-row .icon-button {
+    position: absolute;
+    top: 18px;
+    right: 0;
+    margin: 0;
   }
 }
 

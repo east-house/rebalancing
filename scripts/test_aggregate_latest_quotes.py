@@ -67,6 +67,39 @@ class LatestQuoteAggregationTests(unittest.TestCase):
             1390.0,
         )
 
+    def test_keeps_full_fx_history_for_won_valued_asset_trends(self) -> None:
+        payload = build_combined_payload(
+            [
+                {
+                    "shard": {"count": 1, "index": 0},
+                    "expectedQuoteCount": 1,
+                    "quotes": [
+                        {
+                            "ticker": "AAPL",
+                            "name": "Apple Inc.",
+                            "country": "US",
+                            "assetType": "STOCK",
+                            "currency": "USD",
+                            "closes": [
+                                {"date": "2026-07-20", "close": 330},
+                            ],
+                        }
+                    ],
+                }
+            ],
+            {
+                "closes": [
+                    {"date": "2026-07-18", "close": 1370},
+                    {"date": "2026-07-19", "close": 1380},
+                    {"date": "2026-07-20", "close": 1390},
+                ],
+            },
+            "2026-07-20T07:30:00Z",
+            1,
+        )
+
+        self.assertEqual(len(payload["fx"]["usdKrw"]["closes"]), 3)
+
     def test_combined_object_uses_the_collection_prefix(self) -> None:
         self.assertEqual(
             combined_object_key("/market-data/"),

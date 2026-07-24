@@ -68,6 +68,49 @@ describe("market-data API adapter", () => {
     expect(latestQuoteDate(quotes)).toBe("2026-07-20");
   });
 
+  it("automatically uses today's close when present", () => {
+    const quotes = quotesForPolicy(payload, "auto");
+
+    expect(quotes.find((quote) => quote.ticker === "005930")).toMatchObject({
+      close: 91_000,
+      asOf: "2026-07-20",
+    });
+  });
+
+  it("automatically falls back to the most recent prior close", () => {
+    const withoutToday = {
+      ...payload,
+      quotes: [
+        {
+          ...payload.quotes[0],
+          closes: [{ date: "2026-07-17", close: 90_000 }],
+        },
+      ],
+    };
+
+    expect(quotesForPolicy(withoutToday, "auto")[0]).toMatchObject({
+      close: 90_000,
+      asOf: "2026-07-17",
+    });
+  });
+
+  it("keeps full FX history for historical won valuations", () => {
+    const parsed = parseMarketDataPayload({
+      ...payload,
+      fx: {
+        usdKrw: {
+          closes: [
+            { date: "2026-07-16", close: 1370 },
+            { date: "2026-07-17", close: 1380 },
+            { date: "2026-07-20", close: 1390 },
+          ],
+        },
+      },
+    });
+
+    expect(parsed.fx.usdKrw.closes).toHaveLength(3);
+  });
+
   it("does not apply an FX close later than the stock close", () => {
     const stockClosedBeforeLatestFx = {
       ...payload,
