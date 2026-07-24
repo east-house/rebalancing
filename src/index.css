@@ -121,7 +121,7 @@ input[type="number"] {
   position: relative;
   z-index: 10;
   display: flex;
-  width: min(1380px, calc(100% - 48px));
+  width: min(1500px, calc(100% - 48px));
   height: 76px;
   margin: 0 auto;
   align-items: center;
@@ -212,11 +212,165 @@ input[type="number"] {
   border-color: rgb(111 157 125 / 16%);
 }
 
+.portfolio-layout {
+  display: grid;
+  width: min(1500px, calc(100% - 48px));
+  margin: 0 auto;
+  align-items: start;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 32px;
+}
+
+.portfolio-page {
+  min-width: 0;
+}
+
+.portfolio-sidebar {
+  position: sticky;
+  top: 20px;
+  z-index: 4;
+  max-height: calc(100vh - 40px);
+  margin-top: 70px;
+  padding: 18px;
+  overflow-y: auto;
+  background: rgb(13 24 23 / 92%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(18px);
+}
+
+.portfolio-sidebar__header {
+  display: flex;
+  margin-bottom: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.portfolio-sidebar__header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.portfolio-sidebar__header span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+.portfolio-sidebar__header strong {
+  font-size: 14px;
+}
+
+.portfolio-sidebar__header > button,
+.portfolio-sidebar__delete {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #90a69f;
+  cursor: pointer;
+  background: rgb(111 157 125 / 7%);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.portfolio-sidebar__header > button:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.portfolio-sidebar nav {
+  display: grid;
+  gap: 7px;
+}
+
+.portfolio-sidebar__item {
+  position: relative;
+  min-width: 0;
+}
+
+.portfolio-sidebar__item > button:first-child {
+  display: flex;
+  width: 100%;
+  min-height: 55px;
+  padding: 10px 38px 10px 11px;
+  align-items: center;
+  gap: 10px;
+  color: #82978f;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.portfolio-sidebar__item > button:first-child:hover,
+.portfolio-sidebar__item > button:first-child.is-active {
+  color: var(--text);
+  background: rgb(111 157 125 / 8%);
+  border-color: rgb(111 157 125 / 17%);
+}
+
+.portfolio-sidebar__item > button:first-child > svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.portfolio-sidebar__item > button:first-child span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.portfolio-sidebar__item > button:first-child strong,
+.portfolio-sidebar__item > button:first-child small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-sidebar__item > button:first-child strong {
+  font-size: 11px;
+}
+
+.portfolio-sidebar__item > button:first-child small {
+  color: #62776f;
+  font-size: 8px;
+}
+
+.portfolio-sidebar__delete {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 27px;
+  height: 27px;
+  color: #5f746c;
+  background: transparent;
+  border-color: transparent;
+  transform: translateY(-50%);
+}
+
+.portfolio-sidebar__delete:hover {
+  color: var(--danger);
+  background: rgb(169 184 175 / 8%);
+}
+
+.portfolio-sidebar > p {
+  margin: 16px 2px 0;
+  color: #60746d;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
 .dashboard {
   position: relative;
   z-index: 1;
-  width: min(1240px, calc(100% - 48px));
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 70px 0 42px;
 }
 
@@ -247,6 +401,37 @@ input[type="number"] {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.18em;
+}
+
+.portfolio-name-field {
+  display: flex;
+  width: fit-content;
+  margin-bottom: 10px;
+  align-items: center;
+  gap: 8px;
+}
+
+.portfolio-name-field input {
+  width: min(330px, 58vw);
+  height: 35px;
+  padding: 0 10px;
+  color: #c6d5d0;
+  font-size: 14px;
+  font-weight: 720;
+  background: transparent;
+  border-color: transparent;
+}
+
+.portfolio-name-field input:hover,
+.portfolio-name-field input:focus {
+  background: rgb(111 157 125 / 5%);
+  border-color: var(--line-strong);
+}
+
+.portfolio-name-field small {
+  color: #5f756d;
+  font-size: 8px;
+  white-space: nowrap;
 }
 
 .intro-row h1 {
@@ -527,6 +712,74 @@ input[type="number"] {
   align-items: center;
 }
 
+.purchase-planner {
+  display: grid;
+  margin: -4px 0 24px;
+  padding: 16px;
+  align-items: center;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
+  gap: 20px;
+  background: rgb(111 157 125 / 5%);
+  border: 1px solid rgb(111 157 125 / 15%);
+  border-radius: 14px;
+}
+
+.purchase-planner > label {
+  display: grid;
+  align-items: center;
+  grid-template-columns: auto minmax(150px, 1fr);
+  gap: 14px;
+}
+
+.purchase-planner > label > span {
+  display: grid;
+  gap: 4px;
+}
+
+.purchase-planner > label strong {
+  font-size: 11px;
+}
+
+.purchase-planner > label small {
+  color: #687e76;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.purchase-planner .amount-input input {
+  height: 40px;
+}
+
+.purchase-planner__summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.purchase-planner__summary > span {
+  display: grid;
+  gap: 4px;
+  color: #71877f;
+  font-size: 8px;
+  text-align: right;
+}
+
+.purchase-planner__summary strong {
+  color: #c4d2cd;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.purchase-planner__summary p {
+  margin: 0;
+  color: #71877f;
+  font-size: 9px;
+  line-height: 1.5;
+  text-align: right;
+}
+
 .secondary-button,
 .primary-button,
 .icon-button {
@@ -576,7 +829,8 @@ input[type="number"] {
   grid-template-columns:
     minmax(128px, 1.42fr) minmax(54px, 0.5fr) minmax(66px, 0.62fr)
     minmax(62px, 0.58fr) minmax(76px, 0.7fr) minmax(74px, 0.68fr)
-    minmax(80px, 0.74fr) minmax(60px, 0.56fr) minmax(60px, 0.56fr) 32px;
+    minmax(80px, 0.74fr) minmax(60px, 0.56fr) minmax(60px, 0.56fr)
+    minmax(68px, 0.62fr) 32px;
   gap: 8px;
   align-items: center;
 }
@@ -707,6 +961,10 @@ input[type="number"] {
 
 .profit-value strong.profit-negative {
   color: var(--danger);
+}
+
+.planned-buy strong {
+  color: var(--accent);
 }
 
 .weight-value span {
@@ -1329,7 +1587,7 @@ input[type="number"] {
 
 footer {
   display: flex;
-  width: min(1240px, calc(100% - 48px));
+  width: 100%;
   min-height: 90px;
   margin: 0 auto;
   align-items: center;
@@ -1344,6 +1602,57 @@ footer {
 
 footer p {
   font-size: 9px;
+}
+
+@media (max-width: 1550px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rebalance-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 1250px) {
+  .portfolio-layout {
+    display: block;
+    width: 100%;
+    padding: 0 24px;
+  }
+
+  .portfolio-sidebar {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin: 26px 0 0;
+    overflow: hidden;
+  }
+
+  .portfolio-sidebar nav {
+    display: flex;
+    padding-bottom: 3px;
+    overflow-x: auto;
+  }
+
+  .portfolio-sidebar__item {
+    min-width: 190px;
+  }
+
+  .portfolio-sidebar > p {
+    display: none;
+  }
+
+  .dashboard,
+  footer {
+    width: 100%;
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  .dashboard {
+    padding-top: 38px;
+  }
 }
 
 @media (max-width: 1180px) {
@@ -1364,7 +1673,8 @@ footer p {
     grid-template-columns:
       minmax(145px, 1.42fr) minmax(58px, 0.52fr) minmax(72px, 0.64fr)
       minmax(68px, 0.6fr) minmax(82px, 0.72fr) minmax(80px, 0.7fr)
-      minmax(86px, 0.76fr) minmax(66px, 0.58fr) minmax(66px, 0.58fr) 34px;
+      minmax(86px, 0.76fr) minmax(66px, 0.58fr) minmax(66px, 0.58fr)
+      minmax(72px, 0.62fr) 34px;
   }
 }
 
@@ -1414,14 +1724,42 @@ footer p {
 }
 
 @media (max-width: 780px) {
-  .topbar,
-  .dashboard,
-  footer {
-    width: min(100% - 28px, 640px);
+  .portfolio-layout {
+    padding: 0 14px;
+  }
+
+  .portfolio-sidebar {
+    width: 100%;
+    margin-top: 18px;
+    padding: 14px;
+  }
+
+  .portfolio-sidebar__item {
+    min-width: 176px;
+  }
+
+  .topbar {
+    width: auto;
+    margin-right: 14px;
+    margin-left: 14px;
   }
 
   .dashboard {
     padding-top: 44px;
+  }
+
+  .purchase-planner {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
+  .purchase-planner__summary {
+    justify-content: flex-start;
+  }
+
+  .purchase-planner__summary > span,
+  .purchase-planner__summary p {
+    text-align: left;
   }
 
   .intro-row {
@@ -1519,6 +1857,34 @@ footer p {
 
   .dashboard {
     padding-top: 36px;
+  }
+
+  .portfolio-name-field {
+    display: grid;
+    gap: 2px;
+  }
+
+  .portfolio-name-field input {
+    width: min(100%, 290px);
+  }
+
+  .purchase-planner {
+    padding: 14px;
+  }
+
+  .purchase-planner > label {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .purchase-planner__summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .purchase-planner__summary p {
+    grid-column: 1 / -1;
   }
 
   .intro-row {

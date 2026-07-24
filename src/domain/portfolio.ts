@@ -2,6 +2,7 @@ import type {
   Holding,
   Portfolio,
   PortfolioSummary,
+  PurchasePlan,
   Quote,
   RebalanceAction,
   RebalancePreview,
@@ -14,6 +15,96 @@ const TARGET_WEIGHT_TOLERANCE = 0.01;
 
 export function normalizeTicker(ticker: string): string {
   return ticker.trim().toUpperCase();
+}
+
+function estimatedBuyCost(
+  holding: Holding,
+  quote: Quote,
+  quantity: number,
+): { grossValue: number; estimatedFee: number; totalCost: number } {
+  const grossValue = quantity * quote.close;
+  const estimatedFee = calculateKiwoomTradeFee({
+    country: holding.country,
+    assetType: holding.assetType,
+    action: "BUY",
+    grossValue,
+    quantity,
+    usEcnFeePerShare:
+      holding.country === "US" ? 0.003 * (quote.fxRate ?? 1) : undefined,
+  }).total;
+  return { grossValue, estimatedFee, totalCost: grossValue + estimatedFee };
+}
+
+function affordableQuantity(
+  holding: Holding,
+  quote: Quote,
+  allocatedAmount: number,
+): number {
+  let low = 0;
+  let high = Math.floor(allocatedAmount / quote.close);
+
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (estimatedBuyCost(holding, quote, middle).totalCost <= allocatedAmount) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+
+  return low;
+}
+
+/**
+ * Allocates a new investment amount by the configured target weights and
+ * returns affordable whole-share buy quantities including estimated buy fees.
+ */
+export function calculatePurchasePlan(
+  portfolio: Portfolio,
+  quotes: readonly Quote[],
+  investmentAmount: number,
+): PurchasePlan {
+  assertValidPortfolio(portfolio);
+  assertFiniteNonNegative(investmentAmount, "investmentAmount");
+  const targetValidation = validateTargetWeights(portfolio);
+  if (!targetValidation.valid) {
+    throw new Error(targetValidation.errors.join(" "));
+  }
+
+  const quoteMap = createQuoteMap(quotes);
+  const items = portfolio.holdings.map((holding) => {
+    const quote = quoteFor(quoteMap, holding);
+    const allocatedAmount =
+      investmentAmount * (holding.targetWeight / TARGET_WEIGHT_TOTAL);
+    const quantity = affordableQuantity(holding, quote, allocatedAmount);
+    const costs = estimatedBuyCost(holding, quote, quantity);
+    return {
+      ticker: normalizeTicker(holding.ticker),
+      name: holding.name,
+      targetWeight: holding.targetWeight,
+      allocatedAmount,
+      quantity,
+      ...costs,
+    };
+  });
+  const totalPurchaseValue = items.reduce(
+    (total, item) => total + item.grossValue,
+    0,
+  );
+  const estimatedFees = items.reduce(
+    (total, item) => total + item.estimatedFee,
+    0,
+  );
+
+  return {
+    investmentAmount,
+    targetCashAmount:
+      investmentAmount * (portfolio.targetCashWeight / TARGET_WEIGHT_TOTAL),
+    totalPurchaseValue,
+    estimatedFees,
+    remainingCash: investmentAmount - totalPurchaseValue - estimatedFees,
+    items,
+  };
 }
 
 function assertFiniteNonNegative(value: number, field: string): void {

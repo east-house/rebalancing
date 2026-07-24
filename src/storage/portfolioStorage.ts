@@ -1,14 +1,23 @@
 import type { Portfolio, Snapshot } from "../domain";
 
 export const PORTFOLIO_STORAGE_KEY = "balance.local-portfolio";
-export const PORTFOLIO_STORAGE_VERSION = 2;
+export const PORTFOLIO_STORAGE_VERSION = 3;
+export const DEFAULT_PORTFOLIO_ID = "portfolio-default";
 
 export type StoredPricePolicy = "auto";
 
-export interface LocalAppState {
+export interface PortfolioWorkspace {
+  id: string;
+  name: string;
   portfolio: Portfolio;
-  pricePolicy: StoredPricePolicy;
   snapshots: Snapshot[];
+  purchasePlanAmount: number;
+}
+
+export interface LocalAppState {
+  activePortfolioId: string;
+  portfolios: PortfolioWorkspace[];
+  pricePolicy: StoredPricePolicy;
 }
 
 interface StorageEnvelope {
@@ -30,6 +39,7 @@ export interface LoadLocalStateResult {
 
 const MAX_HOLDINGS = 500;
 const MAX_SNAPSHOTS = 5_000;
+const MAX_PORTFOLIOS = 20;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
 const LEGACY_SAMPLE_SNAPSHOTS = new Map<string, number>([
   ["2025-08-01", 76_800_000],
@@ -49,11 +59,14 @@ const LEGACY_SAMPLE_SNAPSHOTS = new Map<string, number>([
 function cloneState(state: LocalAppState): LocalAppState {
   return {
     ...state,
-    portfolio: {
-      ...state.portfolio,
-      holdings: state.portfolio.holdings.map((holding) => ({ ...holding })),
-    },
-    snapshots: state.snapshots.map((snapshot) => ({ ...snapshot })),
+    portfolios: state.portfolios.map((workspace) => ({
+      ...workspace,
+      portfolio: {
+        ...workspace.portfolio,
+        holdings: workspace.portfolio.holdings.map((holding) => ({ ...holding })),
+      },
+      snapshots: workspace.snapshots.map((snapshot) => ({ ...snapshot })),
+    })),
   };
 }
 
@@ -217,12 +230,41 @@ function removeLegacySampleSnapshots(snapshots: Snapshot[]): Snapshot[] {
   );
 }
 
+function parseWorkspace(value: unknown): PortfolioWorkspace | null {
+  if (!isRecord(value)) return null;
+  if (
+    !isSafeText(value.id, 80) ||
+    !/^[A-Za-z0-9_-]+$/.test(value.id) ||
+    !isSafeText(value.name, 40)
+  ) {
+    return null;
+  }
+  const portfolio = parsePortfolio(value.portfolio);
+  const snapshots = parseSnapshots(value.snapshots);
+  const purchasePlanAmount =
+    value.purchasePlanAmount === undefined ? 0 : value.purchasePlanAmount;
+  if (!portfolio || !snapshots || !isFiniteNumber(purchasePlanAmount)) {
+    return null;
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    portfolio,
+    snapshots,
+    purchasePlanAmount,
+  };
+}
+
 /** Parses the current schema and migrates the preceding browser-only schema. */
 export function parseLocalAppState(raw: string): LocalAppState | null {
   try {
     const envelope: unknown = JSON.parse(raw);
     if (!isRecord(envelope)) return null;
-    if (envelope.version !== 1 && envelope.version !== PORTFOLIO_STORAGE_VERSION) {
+    if (
+      envelope.version !== 1 &&
+      envelope.version !== 2 &&
+      envelope.version !== PORTFOLIO_STORAGE_VERSION
+    ) {
       return null;
     }
     if (
@@ -233,18 +275,7 @@ export function parseLocalAppState(raw: string): LocalAppState | null {
     }
     if (!isRecord(envelope.data)) return null;
 
-    const portfolio = parsePortfolio(envelope.data.portfolio);
-    const snapshots = parseSnapshots(envelope.data.snapshots);
     const storedPricePolicy = envelope.data.pricePolicy;
-
-    if (!portfolio || !snapshots) return null;
-    if (
-      envelope.version === 1 &&
-      envelope.data.allocationMode !== "current" &&
-      envelope.data.allocationMode !== "target"
-    ) {
-      return null;
-    }
     if (
       storedPricePolicy !== "auto" &&
       storedPricePolicy !== "previous" &&
@@ -253,12 +284,65 @@ export function parseLocalAppState(raw: string): LocalAppState | null {
       return null;
     }
 
+    if (envelope.version === PORTFOLIO_STORAGE_VERSION) {
+      if (
+        !isSafeText(envelope.data.activePortfolioId, 80) ||
+        !Array.isArray(envelope.data.portfolios) ||
+        envelope.data.portfolios.length === 0 ||
+        envelope.data.portfolios.length > MAX_PORTFOLIOS
+      ) {
+        return null;
+      }
+      const activePortfolioId = envelope.data.activePortfolioId;
+      const portfolios = envelope.data.portfolios.map(parseWorkspace);
+      if (portfolios.some((workspace) => workspace === null)) return null;
+      const validPortfolios = portfolios as PortfolioWorkspace[];
+      if (
+        new Set(validPortfolios.map((workspace) => workspace.id)).size !==
+        validPortfolios.length
+      ) {
+        return null;
+      }
+      if (
+        !validPortfolios.some(
+          (workspace) => workspace.id === activePortfolioId,
+        )
+      ) {
+        return null;
+      }
+
+      return {
+        activePortfolioId,
+        portfolios: validPortfolios,
+        pricePolicy: "auto",
+      };
+    }
+
+    const portfolio = parsePortfolio(envelope.data.portfolio);
+    const snapshots = parseSnapshots(envelope.data.snapshots);
+    if (!portfolio || !snapshots) return null;
+    if (
+      envelope.version === 1 &&
+      envelope.data.allocationMode !== "current" &&
+      envelope.data.allocationMode !== "target"
+    ) {
+      return null;
+    }
+
     return {
-      portfolio,
-      snapshots:
-        envelope.version === 1
-          ? removeLegacySampleSnapshots(snapshots)
-          : snapshots,
+      activePortfolioId: DEFAULT_PORTFOLIO_ID,
+      portfolios: [
+        {
+          id: DEFAULT_PORTFOLIO_ID,
+          name: "나의 포트폴리오",
+          portfolio,
+          snapshots:
+            envelope.version === 1
+              ? removeLegacySampleSnapshots(snapshots)
+              : snapshots,
+          purchasePlanAmount: 0,
+        },
+      ],
       pricePolicy: "auto",
     };
   } catch {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculatePortfolio,
+  calculatePurchasePlan,
   calculateRebalancePreview,
   validateTargetWeights,
 } from "./portfolio";
@@ -57,6 +58,37 @@ describe("calculatePortfolio", () => {
 
   it("fails explicitly when a holding has no closing price", () => {
     expect(() => calculatePortfolio(portfolio, quotes.slice(0, 1))).toThrow(
+      "Missing quote for ticker: BBB",
+    );
+  });
+});
+
+describe("calculatePurchasePlan", () => {
+  it("allocates a new investment by target weight without exceeding fee-inclusive budgets", () => {
+    const result = calculatePurchasePlan(portfolio, quotes, 10_000);
+
+    expect(result.items[0]).toMatchObject({
+      ticker: "AAA",
+      allocatedAmount: 5_000,
+      quantity: 49,
+      grossValue: 4_900,
+    });
+    expect(result.items[0].totalCost).toBeLessThanOrEqual(5_000);
+    expect(result.items[1]).toMatchObject({
+      ticker: "BBB",
+      allocatedAmount: 4_000,
+      quantity: 19,
+      grossValue: 3_800,
+    });
+    expect(result.targetCashAmount).toBe(1_000);
+    expect(result.remainingCash).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it("requires valid target weights and available closing prices", () => {
+    expect(() =>
+      calculatePurchasePlan({ ...portfolio, targetCashWeight: 0 }, quotes, 10_000),
+    ).toThrow("must add up to 100");
+    expect(() => calculatePurchasePlan(portfolio, quotes.slice(0, 1), 10_000)).toThrow(
       "Missing quote for ticker: BBB",
     );
   });

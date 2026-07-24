@@ -12,7 +12,6 @@ import App from "./App";
 import {
   parseLocalAppState,
   PORTFOLIO_STORAGE_KEY,
-  PORTFOLIO_STORAGE_VERSION,
 } from "./storage/portfolioStorage";
 
 const marketDataPayload = {
@@ -154,11 +153,54 @@ describe("App", () => {
     expect(screen.getAllByLabelText(/번째 종목 검색/)).toHaveLength(4);
   });
 
+  it("creates, renames and switches independent portfolio screens", async () => {
+    render(<App />);
+    await screen.findByText("R2 종가");
+
+    fireEvent.change(screen.getByLabelText("포트폴리오 이름"), {
+      target: { value: "연금 포트폴리오" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "새 포트폴리오 추가" }));
+
+    expect(screen.getByLabelText("포트폴리오 이름")).toHaveProperty(
+      "value",
+      "새 포트폴리오 2",
+    );
+    expect(screen.queryAllByLabelText(/번째 종목 검색/)).toHaveLength(0);
+
+    fireEvent.change(screen.getByLabelText("포트폴리오 이름"), {
+      target: { value: "ISA" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "연금 포트폴리오 화면 열기" }),
+    );
+
+    expect(screen.getByLabelText("포트폴리오 이름")).toHaveProperty(
+      "value",
+      "연금 포트폴리오",
+    );
+    expect(screen.getAllByLabelText(/번째 종목 검색/)).toHaveLength(3);
+  });
+
+  it("shows fee-inclusive whole-share buys for a target investment amount", async () => {
+    render(<App />);
+    await screen.findByText("R2 종가");
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "목표 매수 투자금액" }), {
+      target: { value: "100000000" },
+    });
+
+    expect(screen.getByText("50주")).toBeTruthy();
+    expect(screen.getByText("43주")).toBeTruthy();
+    expect(screen.getByText("94주")).toBeTruthy();
+    expect(screen.getByText("매수 수수료")).toBeTruthy();
+  });
+
   it("shows Korean holding names instead of stock codes in the allocation", async () => {
     localStorage.setItem(
       PORTFOLIO_STORAGE_KEY,
       JSON.stringify({
-        version: PORTFOLIO_STORAGE_VERSION,
+        version: 2,
         updatedAt: new Date().toISOString(),
         data: {
           portfolio: {
@@ -201,7 +243,7 @@ describe("App", () => {
     expect(screen.getByText("+10.6%")).toBeTruthy();
     expect(
       parseLocalAppState(localStorage.getItem(PORTFOLIO_STORAGE_KEY) ?? "")
-        ?.portfolio.holdings[0].averagePrice,
+        ?.portfolios[0].portfolio.holdings[0].averagePrice,
     ).toBe(450);
   });
 
@@ -286,7 +328,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("R2 종가");
 
-    const targetInputs = screen.getAllByLabelText(/목표 비중/);
+    const targetInputs = screen.getAllByLabelText(/ 목표 비중$/);
     fireEvent.change(targetInputs[0], { target: { value: "20" } });
 
     expect(screen.getByText("15%를 더 배분해 주세요.")).toBeTruthy();
@@ -307,7 +349,7 @@ describe("App", () => {
         localStorage.getItem(PORTFOLIO_STORAGE_KEY) ?? "",
       );
       expect(
-        storedState?.snapshots.find(
+        storedState?.portfolios[0].snapshots.find(
           (snapshot) => snapshot.date === "2026-07-17",
         )?.totalValue,
       ).toBe(139958000);

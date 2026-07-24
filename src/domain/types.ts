@@ -92,3 +92,23 @@ export interface RebalancePreview {
   projectedCashWeight: number;
   items: RebalanceItem[];
 }
+
+export interface PurchasePlanItem {
+  ticker: string;
+  name: string;
+  targetWeight: number;
+  allocatedAmount: number;
+  quantity: number;
+  grossValue: number;
+  estimatedFee: number;
+  totalCost: number;
+}
+
+export interface PurchasePlan {
+  investmentAmount: number;
+  targetCashAmount: number;
+  totalPurchaseValue: number;
+  estimatedFees: number;
+  remainingCash: number;
+  items: PurchasePlanItem[];
+}

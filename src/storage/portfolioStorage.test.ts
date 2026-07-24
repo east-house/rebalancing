@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { samplePortfolio, sampleSnapshots } from "../domain";
 import {
+  DEFAULT_PORTFOLIO_ID,
   deleteLocalAppState,
   loadLocalAppState,
   parseLocalAppState,
@@ -15,12 +16,20 @@ import {
 
 function createState(): LocalAppState {
   return {
-    portfolio: {
-      ...samplePortfolio,
-      holdings: samplePortfolio.holdings.map((holding) => ({ ...holding })),
-    },
+    activePortfolioId: DEFAULT_PORTFOLIO_ID,
+    portfolios: [
+      {
+        id: DEFAULT_PORTFOLIO_ID,
+        name: "나의 포트폴리오",
+        portfolio: {
+          ...samplePortfolio,
+          holdings: samplePortfolio.holdings.map((holding) => ({ ...holding })),
+        },
+        snapshots: [{ date: "2026-07-24", totalValue: 123_000_000 }],
+        purchasePlanAmount: 0,
+      },
+    ],
     pricePolicy: "auto",
-    snapshots: [{ date: "2026-07-24", totalValue: 123_000_000 }],
   };
 }
 
@@ -44,7 +53,8 @@ describe("portfolioStorage", () => {
 
   it("migrates saved holdings that predate purchase details", () => {
     const state = createState();
-    const legacyHoldings = state.portfolio.holdings.map(
+    const workspace = state.portfolios[0];
+    const legacyHoldings = workspace.portfolio.holdings.map(
       ({
         averagePrice: _averagePrice,
         country: _country,
@@ -56,13 +66,18 @@ describe("portfolioStorage", () => {
       updatedAt: new Date().toISOString(),
       data: {
         ...state,
-        portfolio: { ...state.portfolio, holdings: legacyHoldings },
+        portfolios: [
+          {
+            ...workspace,
+            portfolio: { ...workspace.portfolio, holdings: legacyHoldings },
+          },
+        ],
       },
     });
 
     const parsed = parseLocalAppState(raw);
 
-    expect(parsed?.portfolio.holdings[0]).toMatchObject({
+    expect(parsed?.portfolios[0].portfolio.holdings[0]).toMatchObject({
       country: "US",
       averagePrice: 0,
     });
@@ -81,27 +96,58 @@ describe("portfolioStorage", () => {
 
   it("removes prototype chart points while preserving real history from v1", () => {
     const state = createState();
+    const workspace = state.portfolios[0];
     const realSnapshot = { date: "2026-07-24", totalValue: 123_000_000 };
     const raw = JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
       data: {
-        ...state,
+        portfolio: workspace.portfolio,
+        pricePolicy: "auto",
         allocationMode: "target",
         snapshots: [...sampleSnapshots, realSnapshot],
       },
     });
 
-    expect(parseLocalAppState(raw)?.snapshots).toEqual([realSnapshot]);
+    expect(parseLocalAppState(raw)?.portfolios[0].snapshots).toEqual([realSnapshot]);
+  });
+
+  it("migrates the former single-portfolio schema into the first screen", () => {
+    const state = createState();
+    const workspace = state.portfolios[0];
+    const raw = JSON.stringify({
+      version: 2,
+      updatedAt: new Date().toISOString(),
+      data: {
+        portfolio: workspace.portfolio,
+        pricePolicy: "auto",
+        snapshots: workspace.snapshots,
+      },
+    });
+
+    expect(parseLocalAppState(raw)).toMatchObject({
+      activePortfolioId: DEFAULT_PORTFOLIO_ID,
+      portfolios: [
+        {
+          id: DEFAULT_PORTFOLIO_ID,
+          name: "나의 포트폴리오",
+          purchasePlanAmount: 0,
+        },
+      ],
+    });
   });
 
   it("accepts an empty chart history for a new device", () => {
-    const state = { ...createState(), snapshots: [] };
+    const original = createState();
+    const state = {
+      ...original,
+      portfolios: [{ ...original.portfolios[0], snapshots: [] }],
+    };
 
     expect(saveLocalAppState(state, localStorage)).toBe(true);
-    expect(loadLocalAppState(createState(), localStorage).state.snapshots).toEqual(
-      [],
-    );
+    expect(
+      loadLocalAppState(createState(), localStorage).state.portfolios[0].snapshots,
+    ).toEqual([]);
   });
 
   it("falls back safely when JSON is corrupt or fields are invalid", () => {
@@ -118,10 +164,17 @@ describe("portfolioStorage", () => {
       updatedAt: new Date().toISOString(),
       data: {
         ...defaults,
-        portfolio: {
-          ...defaults.portfolio,
-          holdings: [{ ...defaults.portfolio.holdings[0], quantity: -1 }],
-        },
+        portfolios: [
+          {
+            ...defaults.portfolios[0],
+            portfolio: {
+              ...defaults.portfolios[0].portfolio,
+              holdings: [
+                { ...defaults.portfolios[0].portfolio.holdings[0], quantity: -1 },
+              ],
+            },
+          },
+        ],
       },
     });
     expect(parseLocalAppState(invalidEnvelope)).toBeNull();

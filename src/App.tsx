@@ -30,6 +30,7 @@ import {
 import {
   calculateFixedHoldingsTrend,
   calculateKiwoomTradeFee,
+  calculatePurchasePlan,
   calculateRebalancePreview,
   kiwoomFeeRateLabel,
   normalizeTicker,
@@ -47,6 +48,7 @@ import type {
 } from "./types/instrument";
 import {
   deleteLocalAppState,
+  DEFAULT_PORTFOLIO_ID,
   loadLocalAppState,
   parseLocalAppState,
   PORTFOLIO_STORAGE_KEY,
@@ -54,6 +56,7 @@ import {
   upsertSnapshotForDate,
   type LocalAppState,
   type LocalStateSource,
+  type PortfolioWorkspace,
 } from "./storage/portfolioStorage";
 
 const FALLBACK_INSTRUMENTS: Instrument[] = [
@@ -181,10 +184,25 @@ function cloneSamplePortfolio(): Portfolio {
 
 function createDefaultLocalState(): LocalAppState {
   return {
-    portfolio: cloneSamplePortfolio(),
+    activePortfolioId: DEFAULT_PORTFOLIO_ID,
+    portfolios: [
+      {
+        id: DEFAULT_PORTFOLIO_ID,
+        name: "나의 포트폴리오",
+        portfolio: cloneSamplePortfolio(),
+        snapshots: [],
+        purchasePlanAmount: 0,
+      },
+    ],
     pricePolicy: "auto",
-    snapshots: [],
   };
+}
+
+function createPortfolioId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid
+    ? `portfolio-${uuid}`
+    : `portfolio-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function formatPercent(value: number) {
@@ -222,15 +240,47 @@ function App() {
   const [initialLocalState] = useState(() =>
     loadLocalAppState(createDefaultLocalState()),
   );
-  const [portfolio, setPortfolio] = useState<Portfolio>(
-    initialLocalState.state.portfolio,
+  const [localAppState, setLocalAppState] = useState<LocalAppState>(
+    initialLocalState.state,
   );
-  const [pricePolicy, setPricePolicy] = useState<LocalAppState["pricePolicy"]>(
-    initialLocalState.state.pricePolicy,
-  );
-  const [snapshots, setSnapshots] = useState(
-    initialLocalState.state.snapshots,
-  );
+  const activeWorkspace =
+    localAppState.portfolios.find(
+      (workspace) => workspace.id === localAppState.activePortfolioId,
+    ) ?? localAppState.portfolios[0]!;
+  const portfolio = activeWorkspace.portfolio;
+  const snapshots = activeWorkspace.snapshots;
+  const purchasePlanAmount = activeWorkspace.purchasePlanAmount;
+  const pricePolicy = localAppState.pricePolicy;
+
+  const updateActiveWorkspace = (
+    updater: (workspace: PortfolioWorkspace) => PortfolioWorkspace,
+  ) => {
+    setLocalAppState((current) => ({
+      ...current,
+      portfolios: current.portfolios.map((workspace) =>
+        workspace.id === current.activePortfolioId
+          ? updater(workspace)
+          : workspace,
+      ),
+    }));
+  };
+
+  const setActivePortfolio = (updater: (current: Portfolio) => Portfolio) => {
+    updateActiveWorkspace((workspace) => ({
+      ...workspace,
+      portfolio: updater(workspace.portfolio),
+    }));
+  };
+
+  const setActiveSnapshots = (
+    updater: (current: LocalAppState["portfolios"][number]["snapshots"]) =>
+      LocalAppState["portfolios"][number]["snapshots"],
+  ) => {
+    updateActiveWorkspace((workspace) => ({
+      ...workspace,
+      snapshots: updater(workspace.snapshots),
+    }));
+  };
   const [storageSource, setStorageSource] = useState<LocalStateSource>(
     initialLocalState.source,
   );
@@ -264,6 +314,7 @@ function App() {
   const [marketHistories, setMarketHistories] = useState<
     Map<string, HoldingPriceHistory>
   >(new Map());
+  const historyCacheRef = useRef(new Map<string, HoldingPriceHistory>());
   const [historyStatus, setHistoryStatus] = useState<
     "idle" | "loading" | "ready" | "partial"
   >("idle");
@@ -294,13 +345,19 @@ function App() {
         setInstruments(payload.instruments);
         setCatalogMeta(payload.meta);
         setCatalogStatus("ready");
-        setPortfolio((current) => ({
+        setLocalAppState((current) => ({
           ...current,
-          holdings: current.holdings.map((holding) => ({
-            ...holding,
-            country:
-              countryByTicker.get(normalizeTicker(holding.ticker)) ??
-              holding.country,
+          portfolios: current.portfolios.map((workspace) => ({
+            ...workspace,
+            portfolio: {
+              ...workspace.portfolio,
+              holdings: workspace.portfolio.holdings.map((holding) => ({
+                ...holding,
+                country:
+                  countryByTicker.get(normalizeTicker(holding.ticker)) ??
+                  holding.country,
+              })),
+            },
           })),
         }));
       })
@@ -338,14 +395,23 @@ function App() {
   useEffect(() => {
     const controller = new AbortController();
     if (historyTargets.length === 0) {
-      setMarketHistories(new Map());
+      setHistoryStatus("ready");
+      return () => controller.abort();
+    }
+
+    const missingTargets = historyTargets.filter(
+      ({ country, ticker }) =>
+        !historyCacheRef.current.has(holdingHistoryKey(country, ticker)),
+    );
+    if (missingTargets.length === 0) {
+      setMarketHistories(new Map(historyCacheRef.current));
       setHistoryStatus("ready");
       return () => controller.abort();
     }
 
     setHistoryStatus("loading");
     Promise.all(
-      historyTargets.map(async ({ country, ticker }) => {
+      missingTargets.map(async ({ country, ticker }) => {
         try {
           const response = await fetch(
             `${import.meta.env.BASE_URL}api/market-data/history/${country}/${encodeURIComponent(ticker)}`,
@@ -373,9 +439,16 @@ function App() {
       const available = results.filter(
         (result): result is NonNullable<typeof result> => result !== null,
       );
-      setMarketHistories(new Map(available));
+      for (const [key, history] of available) {
+        historyCacheRef.current.set(key, history);
+      }
+      setMarketHistories(new Map(historyCacheRef.current));
       setHistoryStatus(
-        available.length === historyTargets.length ? "ready" : "partial",
+        historyTargets.every(({ country, ticker }) =>
+          historyCacheRef.current.has(holdingHistoryKey(country, ticker)),
+        )
+          ? "ready"
+          : "partial",
       );
     });
 
@@ -562,6 +635,30 @@ function App() {
     .filter((holding) => !quoteMap.has(normalizeTicker(holding.ticker)))
     .map((holding) => normalizeTicker(holding.ticker) || "미입력 종목");
 
+  const purchasePlan = useMemo(() => {
+    if (
+      purchasePlanAmount <= 0 ||
+      !targetValidation.valid ||
+      duplicateTickers.size > 0 ||
+      missingPriceTickers.length > 0 ||
+      portfolio.holdings.length === 0
+    ) {
+      return null;
+    }
+    try {
+      return calculatePurchasePlan(portfolio, heldQuotes, purchasePlanAmount);
+    } catch {
+      return null;
+    }
+  }, [heldQuotes, portfolio, purchasePlanAmount]);
+  const purchasePlanByTicker = useMemo(
+    () =>
+      new Map(
+        purchasePlan?.items.map((item) => [normalizeTicker(item.ticker), item]) ?? [],
+      ),
+    [purchasePlan],
+  );
+
   const canRebalance =
     currentTotalAssets > 0 &&
     investmentShortfall === 0 &&
@@ -601,7 +698,7 @@ function App() {
       return;
     }
 
-    setSnapshots((current) => {
+    setActiveSnapshots((current) => {
       const next = upsertSnapshotForDate(
         current,
         currentTotalAssets,
@@ -627,13 +724,9 @@ function App() {
       return;
     }
 
-    const saved = saveLocalAppState({
-      portfolio,
-      pricePolicy,
-      snapshots,
-    });
+    const saved = saveLocalAppState(localAppState);
     setStorageSource(saved ? "saved" : "unavailable");
-  }, [portfolio, pricePolicy, snapshots]);
+  }, [localAppState]);
 
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
@@ -646,9 +739,7 @@ function App() {
       if (!nextState) return;
 
       skipNextSave.current = true;
-      setPortfolio(nextState.portfolio);
-      setPricePolicy(nextState.pricePolicy);
-      setSnapshots(nextState.snapshots);
+      setLocalAppState(nextState);
       setPreview(null);
       setCalculationMessage("");
       setStorageSource(event.newValue === null ? "default" : "saved");
@@ -689,7 +780,7 @@ function App() {
   };
 
   const updatePortfolio = (updater: (current: Portfolio) => Portfolio) => {
-    setPortfolio(updater);
+    setActivePortfolio(updater);
     clearResult();
   };
 
@@ -707,6 +798,68 @@ function App() {
       ...current,
       totalAssets,
     }));
+  };
+
+  const updatePurchasePlanAmount = (amount: number) => {
+    updateActiveWorkspace((workspace) => ({
+      ...workspace,
+      purchasePlanAmount: amount,
+    }));
+  };
+
+  const renameActivePortfolio = (name: string) => {
+    updateActiveWorkspace((workspace) => ({ ...workspace, name: name.slice(0, 40) }));
+  };
+
+  const selectPortfolio = (id: string) => {
+    if (id === localAppState.activePortfolioId) return;
+    setLocalAppState((current) => ({ ...current, activePortfolioId: id }));
+    clearResult();
+    setStorageMessage("");
+  };
+
+  const addPortfolio = () => {
+    if (localAppState.portfolios.length >= 20) {
+      setStorageMessage("포트폴리오 화면은 최대 20개까지 만들 수 있습니다.");
+      return;
+    }
+    const id = createPortfolioId();
+    const workspace: PortfolioWorkspace = {
+      id,
+      name: `새 포트폴리오 ${localAppState.portfolios.length + 1}`,
+      portfolio: { totalAssets: 0, targetCashWeight: 100, holdings: [] },
+      snapshots: [],
+      purchasePlanAmount: 0,
+    };
+    setLocalAppState((current) => ({
+      ...current,
+      activePortfolioId: id,
+      portfolios: [...current.portfolios, workspace],
+    }));
+    clearResult();
+    setStorageMessage("새 포트폴리오 화면을 만들었습니다.");
+  };
+
+  const removePortfolio = (id: string) => {
+    if (localAppState.portfolios.length <= 1) return;
+    const target = localAppState.portfolios.find((workspace) => workspace.id === id);
+    if (!target) return;
+    if (!window.confirm(`${target.name.trim() || "이름 없는 포트폴리오"} 화면을 삭제할까요?`)) {
+      return;
+    }
+    setLocalAppState((current) => {
+      const portfolios = current.portfolios.filter((workspace) => workspace.id !== id);
+      return {
+        ...current,
+        portfolios,
+        activePortfolioId:
+          current.activePortfolioId === id
+            ? (portfolios[0]?.id ?? DEFAULT_PORTFOLIO_ID)
+            : current.activePortfolioId,
+      };
+    });
+    clearResult();
+    setStorageMessage("포트폴리오 화면을 삭제했습니다.");
   };
 
   const handleInstrumentSelect = (index: number, instrument: Instrument) => {
@@ -783,9 +936,7 @@ function App() {
     skipNextSave.current = true;
     const defaults = createDefaultLocalState();
     const deleted = deleteLocalAppState();
-    setPortfolio(defaults.portfolio);
-    setPricePolicy(defaults.pricePolicy);
-    setSnapshots(defaults.snapshots);
+    setLocalAppState(defaults);
     setPreview(null);
     setCalculationMessage("");
     setStorageSource(deleted ? "default" : "unavailable");
@@ -825,9 +976,74 @@ function App() {
         </div>
       </header>
 
-      <main className="dashboard" id="top">
+      <div className="portfolio-layout">
+        <aside className="portfolio-sidebar" aria-label="포트폴리오 화면 목록">
+          <div className="portfolio-sidebar__header">
+            <div>
+              <span>MY SCREENS</span>
+              <strong>포트폴리오</strong>
+            </div>
+            <button
+              type="button"
+              aria-label="새 포트폴리오 추가"
+              onClick={addPortfolio}
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+          <nav>
+            {localAppState.portfolios.map((workspace) => {
+              const displayName = workspace.name.trim() || "이름 없는 포트폴리오";
+              const isActive = workspace.id === localAppState.activePortfolioId;
+              return (
+                <div className="portfolio-sidebar__item" key={workspace.id}>
+                  <button
+                    className={isActive ? "is-active" : ""}
+                    type="button"
+                    aria-label={`${displayName} 화면 열기`}
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => selectPortfolio(workspace.id)}
+                  >
+                    <WalletCards size={15} />
+                    <span>
+                      <strong>{displayName}</strong>
+                      <small>{NUMBER.format(workspace.portfolio.holdings.length)}개 종목</small>
+                    </span>
+                  </button>
+                  {localAppState.portfolios.length > 1 && (
+                    <button
+                      className="portfolio-sidebar__delete"
+                      type="button"
+                      aria-label={`${displayName} 삭제`}
+                      onClick={() => removePortfolio(workspace.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+          <p>화면별 보유자산과 목표비중은 이 브라우저에 따로 저장됩니다.</p>
+        </aside>
+
+        <div className="portfolio-page">
+          <main className="dashboard" id="top">
         <div className="intro-row">
           <div>
+            <label className="portfolio-name-field">
+              <span className="sr-only">포트폴리오 이름</span>
+              <input
+                aria-label="포트폴리오 이름"
+                value={activeWorkspace.name}
+                maxLength={40}
+                onChange={(event) => renameActivePortfolio(event.target.value)}
+                onBlur={() => {
+                  if (!activeWorkspace.name.trim()) renameActivePortfolio("나의 포트폴리오");
+                }}
+              />
+              <small>눌러서 이름 편집</small>
+            </label>
             <p className="eyebrow">MY PORTFOLIO</p>
             <h1>
               자산을 한눈에,
@@ -945,6 +1161,57 @@ function App() {
               </button>
             </div>
 
+            <div className="purchase-planner" aria-label="신규 투자금 매수 계산">
+              <label>
+                <span>
+                  <strong>투자금액</strong>
+                  <small>목표 비중별 신규 매수 계산</small>
+                </span>
+                <div className="amount-input">
+                  <input
+                    aria-label="목표 매수 투자금액"
+                    type="number"
+                    min="0"
+                    step="100000"
+                    inputMode="numeric"
+                    value={purchasePlanAmount || ""}
+                    placeholder="투자할 금액 입력"
+                    onChange={(event) =>
+                      updatePurchasePlanAmount(
+                        Math.max(0, Number(event.target.value) || 0),
+                      )
+                    }
+                  />
+                  <span>원</span>
+                </div>
+              </label>
+              <div className="purchase-planner__summary">
+                {purchasePlan ? (
+                  <>
+                    <span>
+                      예상 매수금액 <strong>{WON.format(purchasePlan.totalPurchaseValue)}</strong>
+                    </span>
+                    <span>
+                      매수 수수료 <strong>{WON.format(purchasePlan.estimatedFees)}</strong>
+                    </span>
+                    <span>
+                      매수 후 잔액 <strong>{WON.format(purchasePlan.remainingCash)}</strong>
+                    </span>
+                  </>
+                ) : (
+                  <p>
+                    {purchasePlanAmount <= 0
+                      ? "금액을 입력하면 종가와 목표 비중에 맞는 매수 수량을 표시합니다."
+                      : !targetValidation.valid
+                        ? "현금과 종목의 목표 비중 합계를 100%로 맞춰 주세요."
+                        : missingPriceTickers.length > 0
+                          ? "모든 종목의 종가가 연결되어야 매수 수량을 계산할 수 있습니다."
+                          : "보유 종목을 추가하면 예상 매수 수량을 계산합니다."}
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="holdings-table">
               <div className="holdings-head" aria-hidden="true">
                 <span>TICKER / NAME</span>
@@ -956,6 +1223,7 @@ function App() {
                 <span>현재금액</span>
                 <span>수익률</span>
                 <span>목표 비중</span>
+                <span>예상 매수</span>
                 <span />
               </div>
 
@@ -978,6 +1246,7 @@ function App() {
                   const ticker = normalizeTicker(holding.ticker);
                   const isDuplicate = duplicateTickers.has(ticker);
                   const averagePriceCountry = quote?.country ?? holding.country;
+                  const purchasePlanItem = purchasePlanByTicker.get(ticker);
                   return (
                   <div className="holding-row" key={`holding-${index}`}>
                     <div className="asset-field" data-label="Ticker / 종목명">
@@ -1154,6 +1423,23 @@ function App() {
                       />
                       <small>%</small>
                     </label>
+
+                    <div className="table-value planned-buy" data-label="예상 매수">
+                      <strong>
+                        {purchasePlanItem
+                          ? `${NUMBER.format(purchasePlanItem.quantity)}주`
+                          : "—"}
+                      </strong>
+                      <small>
+                        {purchasePlanItem
+                          ? `${WON.format(purchasePlanItem.totalCost)} · ${formatPercent(
+                              purchasePlanItem.targetWeight,
+                            )}`
+                          : purchasePlanAmount > 0
+                            ? "계산 조건 확인"
+                            : "금액 입력 필요"}
+                      </small>
+                    </div>
 
                     <button
                       className="icon-button"
@@ -1493,9 +1779,9 @@ function App() {
         <p className="live-region" aria-live="polite">
           {calculationMessage}
         </p>
-      </main>
+          </main>
 
-      <footer>
+          <footer>
         <div className="brand brand--footer" aria-hidden="true">
           <span className="brand-mark">
             <span />
@@ -1506,7 +1792,9 @@ function App() {
           <span className="brand-dot">.</span>
         </div>
         <p>R2 종가와 로컬 전용 자산 정보를 사용하는 포트폴리오 도구</p>
-      </footer>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }
