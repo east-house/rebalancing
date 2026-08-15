@@ -5,6 +5,9 @@ dist/
 coverage/
 artifacts/
 action-output/
+data/cache/market-report/
+data/raw/us_market/
+data/results/
 shard-output/
 shard-results/
 merged-output/

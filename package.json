@@ -12,6 +12,11 @@
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "catalog:update": "uv run --with finance-datareader python scripts/build_instrument_catalog.py",
     "research:update": "uv run --with finance-datareader --with beautifulsoup4 python scripts/build_etf_research_data.py",
+    "report:generate": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.us_market_report run --output action-output/market-report",
+    "report:publish-local": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.publish_market_report_web --source action-output/market-report --project-root .",
+    "report:publish-r2": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.publish_market_report_web --source action-output/market-report --project-root . --upload-r2",
+    "report:update": "npm run report:generate && npm run report:publish-local",
+    "report:test": "uv run --with-requirements requirements-market-report.txt python -m pytest tests/market_report_pipeline -q",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"

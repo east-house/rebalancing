@@ -1,0 +1,188 @@
+project:
+  random_state: 42
+
+data:
+  history_start: "2024-01-01"
+  request_workers: 8
+  request_timeout_seconds: 20
+  max_retries: 3
+  cache_overlap_days: 10
+
+indices:
+  "S&P 500": "^GSPC"
+  "Nasdaq 100": "^NDX"
+  "Dow Jones": "^DJI"
+  "Russell 2000": "^RUT"
+  "S&P 500 Equal Weight": "RSP"
+
+risk_assets:
+  "VIX": "^VIX"
+  "High Yield Bonds": "HYG"
+  "Investment Grade Bonds": "LQD"
+  "US Dollar ETF proxy": "UUP"
+  "WTI Crude Oil": "CL=F"
+  "Gold": "GC=F"
+
+sector_proxies:
+  "Communication Services": "XLC"
+  "Consumer Discretionary": "XLY"
+  "Consumer Staples": "XLP"
+  "Energy": "XLE"
+  "Financials": "XLF"
+  "Health Care": "XLV"
+  "Industrials": "XLI"
+  "Information Technology": "XLK"
+  "Materials": "XLB"
+  "Real Estate": "XLRE"
+  "Utilities": "XLU"
+
+themes:
+  "우주·위성":
+    proxy: "UFO"
+    members: [RKLB, ASTS, LUNR, RDW, PL, IRDM, VSAT, BA, LMT, NOC]
+  "AI 반도체":
+    proxy: "SMH"
+    members: [NVDA, AMD, AVGO, MRVL, MU, TSM, ASML, ARM]
+  "사이버보안":
+    proxy: "CIBR"
+    members: [PANW, CRWD, FTNT, ZS, OKTA, CHKP]
+  "원전·전력망":
+    proxy: "URA"
+    members: [CEG, VST, NRG, CCJ, BWXT, GEV, ETN, PWR]
+  "방산":
+    proxy: "ITA"
+    members: [RTX, LMT, NOC, GD, LHX, AVAV, KTOS]
+  "로봇·자동화":
+    proxy: "BOTZ"
+    members: [ISRG, ROK, TER, SYM, PATH]
+  "데이터센터":
+    proxy: "SRVR"
+    members: [EQIX, DLR, VRT, ANET, AVGO, CCI]
+  "바이오테크":
+    proxy: "IBB"
+    members: [REGN, VRTX, GILD, AMGN, BIIB, MRNA]
+
+symbol_names:
+  RKLB: "Rocket Lab USA"
+  ASTS: "AST SpaceMobile"
+  LUNR: "Intuitive Machines"
+  RDW: "Redwire"
+  PL: "Planet Labs"
+  IRDM: "Iridium Communications"
+  VSAT: "Viasat"
+  BA: "Boeing"
+  LMT: "Lockheed Martin"
+  NOC: "Northrop Grumman"
+  NVDA: "Nvidia"
+  AMD: "Advanced Micro Devices"
+  AVGO: "Broadcom"
+  MRVL: "Marvell Technology"
+  MU: "Micron Technology"
+  TSM: "Taiwan Semiconductor Manufacturing"
+  ASML: "ASML Holding"
+  ARM: "Arm Holdings"
+  PANW: "Palo Alto Networks"
+  CRWD: "CrowdStrike"
+  FTNT: "Fortinet"
+  ZS: "Zscaler"
+  OKTA: "Okta"
+  CHKP: "Check Point Software"
+  CEG: "Constellation Energy"
+  VST: "Vistra"
+  NRG: "NRG Energy"
+  CCJ: "Cameco"
+  BWXT: "BWX Technologies"
+  GEV: "GE Vernova"
+  ETN: "Eaton"
+  PWR: "Quanta Services"
+  RTX: "RTX"
+  GD: "General Dynamics"
+  LHX: "L3Harris Technologies"
+  AVAV: "AeroVironment"
+  KTOS: "Kratos Defense & Security Solutions"
+  ISRG: "Intuitive Surgical"
+  ROK: "Rockwell Automation"
+  TER: "Teradyne"
+  SYM: "Symbotic"
+  PATH: "UiPath"
+  ABB: "ABB"
+  EQIX: "Equinix"
+  DLR: "Digital Realty"
+  VRT: "Vertiv"
+  ANET: "Arista Networks"
+  CCI: "Crown Castle"
+  REGN: "Regeneron Pharmaceuticals"
+  VRTX: "Vertex Pharmaceuticals"
+  GILD: "Gilead Sciences"
+  AMGN: "Amgen"
+  BIIB: "Biogen"
+  MRNA: "Moderna"
+
+filters:
+  min_price: 10.0
+  min_average_dollar_volume_20: 20000000
+
+macro:
+  fred_series:
+    DGS10: "미국 10년물 국채금리"
+    DGS2: "미국 2년물 국채금리"
+    FEDFUNDS: "연방기금금리"
+    CPIAUCSL: "소비자물가지수"
+    CPILFESL: "근원 소비자물가지수"
+    PPIACO: "광범위 상품 생산자물가지수"
+    PCEPI: "PCE 물가지수"
+    UNRATE: "실업률"
+    PAYEMS: "비농업 고용"
+    RSAFS: "소매판매"
+    INDPRO: "산업생산"
+    BAMLH0A0HYM2: "하이일드 스프레드"
+  bls_calendar_url: "https://www.bls.gov/schedule/news_release/bls.ics"
+  bea_schedule_url: "https://www.bea.gov/news/schedule"
+  fed_press_feed_url: "https://www.federalreserve.gov/feeds/press_all.xml"
+  # BLS blocks this runtime's automated calendar download with HTTP 403. These
+  # dates are an explicit fallback transcribed from the official 2026 calendar.
+  bls_fallback_2026:
+    - ["2026-08-18 08:30", "U.S. Import and Export Price Indexes for July 2026"]
+    - ["2026-08-20 10:00", "Summer Youth Labor Force for Annual 2026"]
+    - ["2026-08-21 10:00", "State Employment and Unemployment for July 2026"]
+    - ["2026-09-01 10:00", "Job Openings and Labor Turnover Survey for July 2026"]
+    - ["2026-09-03 08:30", "Productivity and Costs for Second Quarter 2026"]
+    - ["2026-09-04 08:30", "Employment Situation for August 2026"]
+    - ["2026-09-10 08:30", "Producer Price Index for August 2026"]
+    - ["2026-09-11 08:30", "Consumer Price Index for August 2026"]
+    - ["2026-09-16 08:30", "U.S. Import and Export Price Indexes for August 2026"]
+    - ["2026-09-29 10:00", "Job Openings and Labor Turnover Survey for August 2026"]
+    - ["2026-10-02 08:30", "Employment Situation for September 2026"]
+    - ["2026-10-14 08:30", "Consumer Price Index for September 2026"]
+    - ["2026-10-15 08:30", "Producer Price Index for September 2026"]
+    - ["2026-10-16 08:30", "U.S. Import and Export Price Indexes for September 2026"]
+    - ["2026-10-30 08:30", "Employment Cost Index for Third Quarter 2026"]
+    - ["2026-11-03 10:00", "Job Openings and Labor Turnover Survey for September 2026"]
+    - ["2026-11-05 08:30", "Productivity and Costs for Third Quarter 2026"]
+    - ["2026-11-06 08:30", "Employment Situation for October 2026"]
+    - ["2026-11-10 08:30", "Consumer Price Index for October 2026"]
+    - ["2026-11-13 08:30", "Producer Price Index for October 2026"]
+    - ["2026-11-17 08:30", "U.S. Import and Export Price Indexes for October 2026"]
+    - ["2026-12-01 10:00", "Job Openings and Labor Turnover Survey for October 2026"]
+    - ["2026-12-04 08:30", "Employment Situation for November 2026"]
+    - ["2026-12-08 08:30", "Productivity and Costs for Third Quarter 2026"]
+    - ["2026-12-10 08:30", "Consumer Price Index for November 2026"]
+    - ["2026-12-15 08:30", "Producer Price Index for November 2026"]
+    - ["2026-12-17 08:30", "U.S. Import and Export Price Indexes for November 2026"]
+
+news:
+  google_rss_queries:
+    - "US stock market Federal Reserve inflation earnings when:1d"
+    - "S&P 500 sector rotation market news when:1d"
+    - "space satellite rocket stocks when:3d"
+    - "AI semiconductor cybersecurity nuclear power stocks when:1d"
+  max_items: 12
+  lookback_days: 3
+  llm_enabled: false
+  interpretation: "규칙 기반 1차 해석; 원문과 시장 반응을 사용자가 확인"
+
+schedule:
+  timezone: Asia/Seoul
+  run_time: "07:30"
+  days: [Tuesday, Wednesday, Thursday, Friday, Saturday]
+

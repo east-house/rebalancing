@@ -7,14 +7,32 @@
 미국 거래일 자료가 연결됩니다. 따라서 월요일 화면은 직전 금요일 미국장 자료를
 사용합니다. 토요일과 일요일에는 새 표시 날짜를 만들지 않습니다.
 
-리포트 데이터는 `stock_rank_prediction`의 Windows 예약 작업이 생성한 뒤 기존
-R2 버킷의 날짜별 JSON·시장 구조 PNG와 `market-reports/index.json`에
-게시합니다. Worker는 `GET /api/market-reports`,
+리포트 데이터는 이 저장소의 독립 패키지 `market_report_pipeline`이 수집·계산·생성한 뒤
+GitHub Actions가 기존 R2 버킷의 날짜별 JSON·HTML·시장 구조 PNG와
+`market-reports/index.json`에 게시합니다. 다른 로컬 저장소나 Windows 예약 작업은
+사용하지 않습니다. Worker는 `GET /api/market-reports`,
 `GET /api/market-reports/{YYYY-MM-DD}`, 날짜별 `/dashboard` 이미지 경로로
 이를 전달하며, R2가 비어 있는 로컬 개발 환경에서는
 `public/data/market-reports`의 검증된 스냅샷을 사용합니다.
 UI 코드 배포는 기존 Git/Cloudflare 연결을 그대로 사용하고, 매일의 데이터 갱신은
 사이트 전체 재빌드 없이 날짜별 리포트 묶음만 갱신합니다.
+
+일일 리포트 워크플로는 `.github/workflows/daily-market-report.yml`이며 한국시간
+화~토요일 07:30에 실행됩니다. GitHub의 새 실행 환경에서도 과거 날짜 목록을
+유지하도록 R2의 기존 index를 먼저 복원하고, 새 이미지·본문 업로드가 끝난 뒤 index를
+마지막에 갱신합니다. 수동 검증은 Actions의 `workflow_dispatch` 또는 다음 명령으로
+실행할 수 있습니다.
+
+```bash
+npm run report:test
+npm run report:generate
+npm run report:publish-local
+```
+
+R2 환경변수가 설정된 운영 환경에서는 `npm run report:publish-r2`로 같은 결과를
+게시할 수 있습니다. GitHub Actions는 기존 종가 수집 작업과 동일한
+`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`을
+사용합니다.
 
 ## 현재 범위
 
