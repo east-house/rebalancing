@@ -2,35 +2,35 @@
   font-family:
     Pretendard, "Pretendard Variable", Inter, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
-  color: #f4f8f7;
-  background: #07100f;
+  color: #10213b;
+  background: #ffffff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --bg: #07100f;
-  --surface: #0d1817;
-  --surface-strong: #101e1c;
-  --surface-soft: #132421;
-  --line: rgb(190 226 214 / 12%);
-  --line-strong: rgb(190 226 214 / 22%);
-  --text: #f4f8f7;
-  --muted: #8ca19b;
-  --accent: #6f9d7d;
-  --accent-strong: #3f7657;
-  --accent-ink: #07120c;
-  --danger: #a9b8af;
-  --warning: #87a392;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --surface-soft: #f2f6ff;
+  --line: rgb(15 76 150 / 12%);
+  --line-strong: rgb(15 76 150 / 24%);
+  --text: #10213b;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-ink: #ffffff;
+  --danger: #b42318;
+  --warning: #9a6700;
   --radius: 20px;
-  --text-primary: #f4f8f7;
-  --text-secondary: #b8c8c3;
-  --text-muted: #849a93;
-  --surface-elevated: #0d1918;
-  --surface-sunken: rgb(3 10 9 / 45%);
-  --border-subtle: rgb(190 226 214 / 12%);
-  --border-strong: rgb(190 226 214 / 23%);
-  --chart-grid: rgb(190 226 214 / 10%);
-  --tooltip-background: #07110f;
+  --text-primary: #10213b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #f3f6fa;
+  --border-subtle: rgb(15 76 150 / 12%);
+  --border-strong: rgb(15 76 150 / 24%);
+  --chart-grid: rgb(37 99 235 / 10%);
+  --tooltip-background: #0f172a;
   --radius-xl: 20px;
-  --shadow-card: 0 20px 70px rgb(0 0 0 / 18%);
+  --shadow-card: 0 18px 50px rgb(15 23 42 / 8%);
 }
 
 * {
@@ -48,9 +48,10 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
+  color: var(--text);
   background:
-    radial-gradient(circle at 50% -20%, rgb(39 99 79 / 22%), transparent 39rem),
-    linear-gradient(180deg, #081210 0%, #060d0c 72%, #07100f 100%);
+    radial-gradient(circle at 12% -12%, rgb(37 99 235 / 10%), transparent 34rem),
+    #ffffff;
 }
 
 button,
@@ -81,7 +82,7 @@ a:focus-visible {
 input,
 select {
   color: var(--text);
-  background: rgb(4 13 11 / 52%);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 10px;
 }
@@ -93,11 +94,11 @@ select:hover {
 
 input:focus,
 select:focus {
-  border-color: rgb(111 157 125 / 62%);
+  border-color: rgb(37 99 235 / 62%);
 }
 
 input:disabled {
-  color: #5d716b;
+  color: #64748b;
   cursor: not-allowed;
 }
 
@@ -187,13 +188,24 @@ input[type="number"] {
   gap: 8px;
 }
 
+.status-pill.status-pill--link {
+  border: 1px solid rgb(37 99 235 / 32%);
+  background: rgb(37 99 235 / 15%);
+  cursor: pointer;
+}
+
+.status-pill.status-pill--link:hover {
+  border-color: rgb(37 99 235 / 58%);
+  background: rgb(37 99 235 / 25%);
+}
+
 .status-pill {
   display: inline-flex;
   min-height: 30px;
   padding: 0 11px;
   align-items: center;
   gap: 6px;
-  color: #9eb2ac;
+  color: #475569;
   font-size: 12px;
   font-weight: 650;
   border: 1px solid var(--line);
@@ -201,15 +213,15 @@ input[type="number"] {
 }
 
 .status-pill--demo {
-  color: #c7d3cc;
-  background: rgb(111 157 125 / 7%);
-  border-color: rgb(111 157 125 / 18%);
+  color: #475569;
+  background: rgb(37 99 235 / 7%);
+  border-color: rgb(37 99 235 / 18%);
 }
 
 .status-pill--private {
-  color: #9fbaa9;
-  background: rgb(111 157 125 / 6%);
-  border-color: rgb(111 157 125 / 16%);
+  color: #475569;
+  background: rgb(37 99 235 / 6%);
+  border-color: rgb(37 99 235 / 16%);
 }
 
 .portfolio-layout {
@@ -233,7 +245,7 @@ input[type="number"] {
   margin-top: 70px;
   padding: 18px;
   overflow-y: auto;
-  background: rgb(13 24 23 / 92%);
+  background: rgb(255 255 255 / 96%);
   border: 1px solid var(--line);
   border-radius: 18px;
   box-shadow: var(--shadow-card);
@@ -271,9 +283,9 @@ input[type="number"] {
   height: 32px;
   flex: 0 0 auto;
   place-items: center;
-  color: #90a69f;
+  color: #64748b;
   cursor: pointer;
-  background: rgb(111 157 125 / 7%);
+  background: rgb(37 99 235 / 7%);
   border: 1px solid var(--line);
   border-radius: 9px;
 }
@@ -300,7 +312,7 @@ input[type="number"] {
   padding: 10px 38px 10px 11px;
   align-items: center;
   gap: 10px;
-  color: #82978f;
+  color: #64748b;
   text-align: left;
   cursor: pointer;
   background: transparent;
@@ -311,8 +323,8 @@ input[type="number"] {
 .portfolio-sidebar__item > button:first-child:hover,
 .portfolio-sidebar__item > button:first-child.is-active {
   color: var(--text);
-  background: rgb(111 157 125 / 8%);
-  border-color: rgb(111 157 125 / 17%);
+  background: rgb(37 99 235 / 8%);
+  border-color: rgb(37 99 235 / 17%);
 }
 
 .portfolio-sidebar__item > button:first-child > svg {
@@ -338,7 +350,7 @@ input[type="number"] {
 }
 
 .portfolio-sidebar__item > button:first-child small {
-  color: #62776f;
+  color: #64748b;
   font-size: 8px;
 }
 
@@ -348,7 +360,7 @@ input[type="number"] {
   right: 7px;
   width: 27px;
   height: 27px;
-  color: #5f746c;
+  color: #64748b;
   background: transparent;
   border-color: transparent;
   transform: translateY(-50%);
@@ -356,12 +368,12 @@ input[type="number"] {
 
 .portfolio-sidebar__delete:hover {
   color: var(--danger);
-  background: rgb(169 184 175 / 8%);
+  background: rgb(180 35 24 / 8%);
 }
 
 .portfolio-sidebar > p {
   margin: 16px 2px 0;
-  color: #60746d;
+  color: #64748b;
   font-size: 8px;
   line-height: 1.5;
 }
@@ -381,7 +393,7 @@ input[type="number"] {
   left: -26rem;
   width: 44rem;
   height: 44rem;
-  background: radial-gradient(circle, rgb(39 155 114 / 7%), transparent 65%);
+  background: radial-gradient(circle, rgb(37 99 235 / 7%), transparent 65%);
   content: "";
   pointer-events: none;
 }
@@ -415,7 +427,7 @@ input[type="number"] {
   width: min(330px, 58vw);
   height: 35px;
   padding: 0 10px;
-  color: #c6d5d0;
+  color: #475569;
   font-size: 14px;
   font-weight: 720;
   background: transparent;
@@ -424,12 +436,12 @@ input[type="number"] {
 
 .portfolio-name-field input:hover,
 .portfolio-name-field input:focus {
-  background: rgb(111 157 125 / 5%);
+  background: rgb(37 99 235 / 5%);
   border-color: var(--line-strong);
 }
 
 .portfolio-name-field small {
-  color: #5f756d;
+  color: #64748b;
   font-size: 8px;
   white-space: nowrap;
 }
@@ -458,8 +470,8 @@ input[type="number"] {
   align-items: center;
   gap: 11px;
   color: var(--accent);
-  background: rgb(111 157 125 / 6%);
-  border: 1px solid rgb(111 157 125 / 18%);
+  background: rgb(37 99 235 / 6%);
+  border: 1px solid rgb(37 99 235 / 18%);
   border-radius: 13px;
 }
 
@@ -487,11 +499,11 @@ input[type="number"] {
   overflow: hidden;
   grid-template-columns: 1.3fr 0.9fr;
   background:
-    radial-gradient(circle at 10% 0%, rgb(111 157 125 / 10%), transparent 27rem),
-    linear-gradient(135deg, #12241f 0%, #0e1d1a 53%, #0c1715 100%);
-  border: 1px solid rgb(172 224 204 / 15%);
+    radial-gradient(circle at 10% 0%, rgb(37 99 235 / 10%), transparent 27rem),
+    linear-gradient(135deg, #f5f8ff 0%, #ffffff 62%, #f8fbff 100%);
+  border: 1px solid rgb(37 99 235 / 15%);
   border-radius: 26px;
-  box-shadow: 0 28px 100px rgb(0 0 0 / 19%);
+  box-shadow: 0 24px 70px rgb(15 23 42 / 9%);
 }
 
 .summary-card::after {
@@ -500,7 +512,7 @@ input[type="number"] {
   right: -100px;
   width: 340px;
   height: 340px;
-  background: radial-gradient(circle, rgb(111 157 125 / 6%), transparent 66%);
+  background: radial-gradient(circle, rgb(37 99 235 / 7%), transparent 66%);
   content: "";
   pointer-events: none;
 }
@@ -516,7 +528,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #b8c8c3;
+  color: #475569;
   font-size: 13px;
   font-weight: 650;
 }
@@ -527,8 +539,8 @@ input[type="number"] {
   height: 34px;
   place-items: center;
   color: var(--accent);
-  background: rgb(111 157 125 / 10%);
-  border: 1px solid rgb(111 157 125 / 18%);
+  background: rgb(37 99 235 / 10%);
+  border: 1px solid rgb(37 99 235 / 18%);
   border-radius: 9px;
 }
 
@@ -591,7 +603,7 @@ input[type="number"] {
   padding: 28px;
   flex-direction: column;
   justify-content: center;
-  background: rgb(3 12 10 / 36%);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 19px;
 }
@@ -653,7 +665,7 @@ input[type="number"] {
 
 .allocation-legend span {
   overflow: hidden;
-  color: #9eb2ac;
+  color: #475569;
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -674,12 +686,10 @@ input[type="number"] {
 
 .panel {
   min-width: 0;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 1.4%), transparent 7rem),
-    var(--surface);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 22px 60px rgb(0 0 0 / 10%);
+  box-shadow: var(--shadow-card);
 }
 
 .holdings-panel {
@@ -719,8 +729,8 @@ input[type="number"] {
   align-items: center;
   grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
   gap: 20px;
-  background: rgb(111 157 125 / 5%);
-  border: 1px solid rgb(111 157 125 / 15%);
+  background: rgb(37 99 235 / 5%);
+  border: 1px solid rgb(37 99 235 / 15%);
   border-radius: 14px;
 }
 
@@ -741,7 +751,7 @@ input[type="number"] {
 }
 
 .purchase-planner > label small {
-  color: #687e76;
+  color: #64748b;
   font-size: 8px;
   white-space: nowrap;
 }
@@ -761,20 +771,20 @@ input[type="number"] {
 .purchase-planner__summary > span {
   display: grid;
   gap: 4px;
-  color: #71877f;
+  color: #64748b;
   font-size: 8px;
   text-align: right;
 }
 
 .purchase-planner__summary strong {
-  color: #c4d2cd;
+  color: #475569;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .purchase-planner__summary p {
   margin: 0;
-  color: #71877f;
+  color: #64748b;
   font-size: 9px;
   line-height: 1.5;
   text-align: right;
@@ -800,18 +810,18 @@ input[type="number"] {
   padding: 0 14px;
   flex: 0 0 auto;
   gap: 7px;
-  color: #b6c8c2;
+  color: #475569;
   font-size: 12px;
   font-weight: 700;
-  background: rgb(111 157 125 / 6%);
+  background: rgb(37 99 235 / 6%);
   border: 1px solid var(--line-strong);
   border-radius: 10px;
 }
 
 .secondary-button:hover {
   color: var(--text);
-  background: rgb(111 157 125 / 11%);
-  border-color: rgb(111 157 125 / 34%);
+  background: rgb(37 99 235 / 11%);
+  border-color: rgb(37 99 235 / 34%);
 }
 
 .secondary-button:active,
@@ -837,7 +847,7 @@ input[type="number"] {
 
 .holdings-head {
   padding: 0 8px 10px;
-  color: #70857e;
+  color: #64748b;
   font-size: 9px;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -846,11 +856,11 @@ input[type="number"] {
 .holding-row {
   min-height: 76px;
   padding: 13px 8px;
-  border-top: 1px solid rgb(190 226 214 / 8%);
+  border-top: 1px solid rgb(15 76 150 / 8%);
 }
 
 .holding-row:hover {
-  background: rgb(255 255 255 / 1.2%);
+  background: #f7faff;
 }
 
 .asset-field {
@@ -878,8 +888,8 @@ input[type="number"] {
   color: var(--accent);
   font-size: 8px;
   font-weight: 800;
-  background: rgb(111 157 125 / 8%);
-  border: 1px solid rgb(111 157 125 / 17%);
+  background: rgb(37 99 235 / 8%);
+  border: 1px solid rgb(37 99 235 / 17%);
   border-radius: 5px;
 }
 
@@ -888,19 +898,19 @@ input[type="number"] {
   display: block;
   margin-top: 6px;
   overflow: hidden;
-  color: #71877f;
+  color: #64748b;
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .asset-field small {
-  color: #8ba19a;
+  color: #64748b;
   font-size: 10px;
 }
 
 .input-error {
-  border-color: rgb(169 184 175 / 68%) !important;
+  border-color: rgb(180 35 24 / 68%) !important;
 }
 
 .asset-field:has(.input-error) small {
@@ -927,7 +937,7 @@ input[type="number"] {
 .target-field small {
   position: absolute;
   right: 9px;
-  color: #60756e;
+  color: #64748b;
   font-size: 9px;
   pointer-events: none;
 }
@@ -972,7 +982,7 @@ input[type="number"] {
   height: 3px;
   margin-top: 9px;
   overflow: hidden;
-  background: rgb(190 226 214 / 8%);
+  background: rgb(15 76 150 / 8%);
   border-radius: 20px;
 }
 
@@ -991,33 +1001,33 @@ input[type="number"] {
   width: 32px;
   height: 32px;
   justify-self: end;
-  color: #657a73;
+  color: #64748b;
   background: transparent;
   border-radius: 8px;
 }
 
 .icon-button:hover {
   color: var(--danger);
-  background: rgb(169 184 175 / 8%);
+  background: rgb(180 35 24 / 8%);
 }
 
 .panel-footnotes {
   margin-top: 19px;
   padding-top: 17px;
-  border-top: 1px solid rgb(190 226 214 / 8%);
+  border-top: 1px solid rgb(15 76 150 / 8%);
 }
 
 .panel-footnote {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #70857e;
+  color: #64748b;
   font-size: 10px;
 }
 
 .panel-footnote--secondary {
   margin-top: 7px;
-  color: #60756e;
+  color: #64748b;
 }
 
 .empty-state {
@@ -1058,7 +1068,7 @@ input[type="number"] {
   height: 35px;
   place-items: center;
   color: var(--accent);
-  background: rgb(111 157 125 / 9%);
+  background: rgb(37 99 235 / 9%);
   border-radius: 10px;
 }
 
@@ -1076,13 +1086,13 @@ input[type="number"] {
 }
 
 .setting-field > span > span {
-  color: #b9cac4;
+  color: #475569;
   font-size: 11px;
   font-weight: 650;
 }
 
 .setting-field > span > small {
-  color: #62766f;
+  color: #64748b;
   font-size: 9px;
 }
 
@@ -1101,8 +1111,8 @@ input[type="number"] {
   align-items: center;
   gap: 10px;
   color: var(--accent);
-  background: rgb(111 157 125 / 7%);
-  border: 1px solid rgb(111 157 125 / 17%);
+  background: rgb(37 99 235 / 7%);
+  border: 1px solid rgb(37 99 235 / 17%);
   border-radius: 10px;
 }
 
@@ -1113,12 +1123,12 @@ input[type="number"] {
 }
 
 .price-policy-auto strong {
-  color: #b9cac4;
+  color: #475569;
   font-size: 10px;
 }
 
 .price-policy-auto small {
-  color: #71867f;
+  color: #64748b;
   font-size: 8px;
   line-height: 1.45;
 }
@@ -1142,7 +1152,7 @@ input[type="number"] {
   position: absolute;
   top: 50%;
   right: 13px;
-  color: #789087;
+  color: #64748b;
   font-size: 10px;
   transform: translateY(-50%);
   pointer-events: none;
@@ -1159,7 +1169,7 @@ input[type="number"] {
 .setting-help {
   display: block;
   margin-top: 8px;
-  color: #62766f;
+  color: #64748b;
   font-size: 9px;
   line-height: 1.5;
 }
@@ -1167,7 +1177,7 @@ input[type="number"] {
 .target-summary {
   margin-top: 22px;
   padding: 16px;
-  background: rgb(3 12 10 / 35%);
+  background: #f7f9fc;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -1199,7 +1209,7 @@ input[type="number"] {
   height: 5px;
   margin: 11px 0 10px;
   overflow: hidden;
-  background: rgb(190 226 214 / 8%);
+  background: rgb(15 76 150 / 8%);
   border-radius: 99px;
 }
 
@@ -1222,7 +1232,7 @@ input[type="number"] {
   margin: 0;
   align-items: center;
   gap: 5px;
-  color: #738880;
+  color: #64748b;
   font-size: 9px;
   line-height: 1.45;
 }
@@ -1233,8 +1243,8 @@ input[type="number"] {
   padding: 15px;
   gap: 11px;
   color: var(--accent);
-  background: rgb(111 157 125 / 6%);
-  border: 1px solid rgb(111 157 125 / 15%);
+  background: rgb(37 99 235 / 6%);
+  border: 1px solid rgb(37 99 235 / 15%);
   border-radius: 12px;
 }
 
@@ -1261,11 +1271,11 @@ input[type="number"] {
   padding: 10px 11px;
   align-items: flex-start;
   gap: 7px;
-  color: #b9c6be;
+  color: #475569;
   font-size: 9px;
   line-height: 1.5;
-  background: rgb(169 184 175 / 7%);
-  border: 1px solid rgb(169 184 175 / 17%);
+  background: rgb(180 35 24 / 7%);
+  border: 1px solid rgb(180 35 24 / 17%);
   border-radius: 9px;
 }
 
@@ -1284,7 +1294,7 @@ input[type="number"] {
   font-weight: 800;
   background: var(--accent);
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgb(63 118 87 / 16%);
+  box-shadow: 0 12px 30px rgb(37 99 235 / 18%);
 }
 
 .primary-button svg:last-child {
@@ -1292,19 +1302,19 @@ input[type="number"] {
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #82aa91;
+  background: #1d4ed8;
 }
 
 .primary-button:disabled {
-  color: #60716c;
+  color: #94a3b8;
   cursor: not-allowed;
-  background: #1b2a27;
+  background: #e9eef5;
   box-shadow: none;
 }
 
 .estimate-note {
   margin: 11px 4px 0;
-  color: #647a72;
+  color: #64748b;
   font-size: 9px;
   line-height: 1.55;
   text-align: center;
@@ -1316,9 +1326,9 @@ input[type="number"] {
   padding-top: 17px;
   align-items: center;
   gap: 7px;
-  color: #769087;
+  color: #64748b;
   font-size: 9px;
-  border-top: 1px solid rgb(190 226 214 / 8%);
+  border-top: 1px solid rgb(15 76 150 / 8%);
 }
 
 .result-panel {
@@ -1356,8 +1366,8 @@ input[type="number"] {
   align-items: center;
   grid-template-columns: minmax(190px, 1.4fr) repeat(3, 1fr) auto;
   gap: 18px;
-  background: rgb(255 255 255 / 1.2%);
-  border: 1px solid rgb(190 226 214 / 8%);
+  background: #ffffff;
+  border: 1px solid rgb(15 76 150 / 8%);
   border-radius: 13px;
 }
 
@@ -1377,8 +1387,8 @@ input[type="number"] {
   color: var(--accent);
   font-size: 10px;
   font-weight: 800;
-  background: rgb(111 157 125 / 8%);
-  border: 1px solid rgb(111 157 125 / 17%);
+  background: rgb(37 99 235 / 8%);
+  border: 1px solid rgb(37 99 235 / 17%);
   border-radius: 11px;
 }
 
@@ -1410,7 +1420,7 @@ input[type="number"] {
 }
 
 .result-metric span {
-  color: #70857e;
+  color: #64748b;
   font-size: 8px;
 }
 
@@ -1423,13 +1433,13 @@ input[type="number"] {
 }
 
 .result-metric small {
-  color: #657a73;
+  color: #64748b;
   font-size: 8px;
   font-variant-numeric: tabular-nums;
 }
 
 .result-metric svg {
-  color: #5e746c;
+  color: #64748b;
 }
 
 .action-badge {
@@ -1445,20 +1455,20 @@ input[type="number"] {
 }
 
 .action-badge--buy {
-  color: #9fbaa9;
-  background: rgb(111 157 125 / 9%);
-  border: 1px solid rgb(111 157 125 / 19%);
+  color: #475569;
+  background: rgb(37 99 235 / 9%);
+  border: 1px solid rgb(37 99 235 / 19%);
 }
 
 .action-badge--sell {
-  color: #c2ccc6;
+  color: #475569;
   background: rgb(194 204 198 / 7%);
   border: 1px solid rgb(194 204 198 / 18%);
 }
 
 .action-badge--hold {
-  color: #9cafaa;
-  background: rgb(190 226 214 / 5%);
+  color: #475569;
+  background: rgb(15 76 150 / 5%);
   border: 1px solid var(--line);
 }
 
@@ -1471,7 +1481,7 @@ input[type="number"] {
   min-height: 438px;
   padding: 29px 30px 25px;
   background:
-    radial-gradient(circle at 88% 5%, rgb(111 157 125 / 6%), transparent 28%),
+    radial-gradient(circle at 88% 5%, rgb(37 99 235 / 6%), transparent 28%),
     var(--surface);
 }
 
@@ -1482,7 +1492,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #657a73;
+  color: #64748b;
   font-size: 9px;
   pointer-events: none;
 }
@@ -1493,8 +1503,8 @@ input[type="number"] {
   align-items: center;
   grid-template-columns: auto 1fr auto;
   gap: 16px;
-  background: rgb(111 157 125 / 5%);
-  border: 1px solid rgb(111 157 125 / 14%);
+  background: rgb(37 99 235 / 5%);
+  border: 1px solid rgb(37 99 235 / 14%);
   border-radius: 15px;
 }
 
@@ -1504,7 +1514,7 @@ input[type="number"] {
   height: 42px;
   place-items: center;
   color: var(--accent);
-  background: rgb(111 157 125 / 9%);
+  background: rgb(37 99 235 / 9%);
   border-radius: 12px;
 }
 
@@ -1535,8 +1545,8 @@ input[type="number"] {
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  background: rgb(111 157 125 / 7%);
-  border: 1px solid rgb(111 157 125 / 17%);
+  background: rgb(37 99 235 / 7%);
+  border: 1px solid rgb(37 99 235 / 17%);
   border-radius: 7px;
 }
 
@@ -1547,7 +1557,7 @@ input[type="number"] {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #8fa29b;
+  color: #64748b;
   font: inherit;
   font-size: 9px;
   font-weight: 700;
@@ -1559,8 +1569,8 @@ input[type="number"] {
 
 .delete-local-button:hover {
   color: var(--danger);
-  background: rgb(169 184 175 / 8%);
-  border-color: rgb(169 184 175 / 28%);
+  background: rgb(180 35 24 / 8%);
+  border-color: rgb(180 35 24 / 28%);
 }
 
 .live-region {
@@ -1592,8 +1602,8 @@ footer {
   margin: 0 auto;
   align-items: center;
   justify-content: space-between;
-  color: #50635d;
-  border-top: 1px solid rgb(190 226 214 / 8%);
+  color: #64748b;
+  border-top: 1px solid rgb(15 76 150 / 8%);
 }
 
 .brand--footer {
@@ -1699,7 +1709,7 @@ footer p {
   .holding-row > label::before {
     display: block;
     margin-bottom: 7px;
-    color: #60756e;
+    color: #64748b;
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -1803,7 +1813,7 @@ footer p {
   .holding-row > label::before {
     display: block;
     margin-bottom: 7px;
-    color: #60756e;
+    color: #64748b;
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.06em;

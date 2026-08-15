@@ -1,19 +1,19 @@
 .asset-chart {
-  --asset-chart-accent: #6f9d7d;
-  --asset-chart-accent-strong: #3f7657;
-  --asset-chart-positive: #87aa92;
-  --asset-chart-negative: #a9b4ad;
+  --asset-chart-accent: #2563eb;
+  --asset-chart-accent-strong: #1d4ed8;
+  --asset-chart-positive: #2563eb;
+  --asset-chart-negative: #b42318;
   position: relative;
   min-width: 0;
   padding: clamp(1.15rem, 2.5vw, 1.75rem);
   overflow: hidden;
-  color: var(--text-primary, #f4f7fb);
+  color: var(--text-primary, #10213b);
   background:
-    radial-gradient(circle at 88% 5%, rgb(63 118 87 / 8%), transparent 28%),
-    var(--surface-elevated, #101b2b);
+    radial-gradient(circle at 88% 5%, rgb(37 99 235 / 8%), transparent 28%),
+    var(--surface-elevated, #ffffff);
   border: 1px solid var(--border-subtle, rgb(148 163 184 / 14%));
   border-radius: var(--radius-xl, 1.25rem);
-  box-shadow: var(--shadow-card, 0 18px 48px rgb(2 8 23 / 16%));
+  box-shadow: var(--shadow-card, 0 18px 48px rgb(15 23 42 / 8%));
 }
 
 .asset-chart__header {
@@ -28,7 +28,7 @@
 
 .asset-chart__eyebrow {
   margin: 0 0 0.35rem;
-  color: var(--text-muted, #8290a5);
+  color: var(--text-muted, #64748b);
   font-size: 0.68rem;
   font-weight: 750;
   letter-spacing: 0.13em;
@@ -66,16 +66,16 @@
 
 .asset-chart__change--positive {
   color: var(--asset-chart-positive);
-  background: rgb(63 118 87 / 12%);
+  background: rgb(37 99 235 / 12%);
 }
 
 .asset-chart__change--negative {
   color: var(--asset-chart-negative);
-  background: rgb(169 180 173 / 11%);
+  background: rgb(180 35 24 / 11%);
 }
 
 .asset-chart__change--neutral {
-  color: var(--text-secondary, #b6c0ce);
+  color: var(--text-secondary, #475569);
   background: rgb(148 163 184 / 10%);
 }
 
@@ -84,7 +84,7 @@
   flex: 0 0 auto;
   gap: 0.18rem;
   padding: 0.22rem;
-  background: var(--surface-sunken, rgb(3 10 22 / 38%));
+  background: var(--surface-sunken, #f3f6fa);
   border: 1px solid var(--border-subtle, rgb(148 163 184 / 12%));
   border-radius: 0.72rem;
 }
@@ -93,7 +93,7 @@
   min-width: 2.45rem;
   min-height: 2rem;
   padding: 0.35rem 0.5rem;
-  color: var(--text-muted, #8290a5);
+  color: var(--text-muted, #64748b);
   font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
@@ -109,13 +109,13 @@
 }
 
 .asset-chart__period:hover {
-  color: var(--text-primary, #f4f7fb);
+  color: var(--text-primary, #10213b);
 }
 
 .asset-chart__period[aria-pressed='true'] {
-  color: #06241b;
+  color: #ffffff;
   background: var(--asset-chart-accent);
-  box-shadow: 0 4px 14px rgb(63 118 87 / 22%);
+  box-shadow: 0 4px 14px rgb(37 99 235 / 22%);
 }
 
 .asset-chart__period:focus-visible,
@@ -146,7 +146,7 @@
 
 .asset-chart__grid text,
 .asset-chart__axis-date {
-  fill: var(--text-muted, #8290a5);
+  fill: var(--text-muted, #64748b);
   font-family: inherit;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
@@ -163,11 +163,11 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.5;
-  filter: drop-shadow(0 4px 5px rgb(63 118 87 / 18%));
+  filter: drop-shadow(0 4px 5px rgb(37 99 235 / 18%));
 }
 
 .asset-chart__single-point {
-  fill: var(--surface-elevated, #101b2b);
+  fill: var(--surface-elevated, #ffffff);
   stroke: var(--asset-chart-accent);
   stroke-width: 2.5;
 }
@@ -177,22 +177,22 @@
 }
 
 .asset-chart__guide {
-  stroke: rgb(111 157 125 / 45%);
+  stroke: rgb(37 99 235 / 45%);
   stroke-dasharray: 3 4;
 }
 
 .asset-chart__point-halo {
-  fill: rgb(111 157 125 / 18%);
+  fill: rgb(37 99 235 / 18%);
 }
 
 .asset-chart__point {
-  fill: var(--surface-elevated, #101b2b);
+  fill: var(--surface-elevated, #ffffff);
   stroke: var(--asset-chart-accent);
   stroke-width: 2.5;
 }
 
 .asset-chart__tooltip rect {
-  fill: var(--tooltip-background, #07111f);
+  fill: var(--tooltip-background, #0f172a);
   stroke: var(--border-strong, rgb(148 163 184 / 25%));
   stroke-width: 1;
   filter: drop-shadow(0 8px 13px rgb(2 8 23 / 28%));
@@ -204,12 +204,12 @@
 }
 
 .asset-chart__tooltip-date {
-  fill: var(--text-muted, #8290a5);
+  fill: var(--text-muted, #64748b);
   font-size: 10px;
 }
 
 .asset-chart__tooltip-value {
-  fill: var(--text-primary, #f4f7fb);
+  fill: var(--text-primary, #10213b);
   font-size: 13px;
   font-weight: 700;
 }
@@ -234,7 +234,7 @@
   place-items: center;
   color: var(--asset-chart-accent);
   font-size: 1.2rem;
-  background: rgb(63 118 87 / 11%);
+  background: rgb(37 99 235 / 11%);
   border-radius: 0.85rem;
 }
 
@@ -245,7 +245,7 @@
 .asset-chart__empty p {
   max-width: 24rem;
   margin: 0.45rem 0 0;
-  color: var(--text-muted, #8290a5);
+  color: var(--text-muted, #64748b);
   font-size: 0.82rem;
   line-height: 1.55;
 }

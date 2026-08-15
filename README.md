@@ -2,6 +2,20 @@
 
 보유 자산, 매수 원금, 현재 평가액, 목표 비중과 총자산 추이를 한 화면에서 확인하는 리밸런싱 대시보드 프로토타입입니다.
 
+상단 `리포트` 버튼에서는 미국 시장 일일 리포트를 별도 화면으로 확인합니다.
+왼쪽 날짜 목록은 한국 기준 월요일부터 금요일만 사용하며, 각 화면에는 직전
+미국 거래일 자료가 연결됩니다. 따라서 월요일 화면은 직전 금요일 미국장 자료를
+사용합니다. 토요일과 일요일에는 새 표시 날짜를 만들지 않습니다.
+
+리포트 데이터는 `stock_rank_prediction`의 Windows 예약 작업이 생성한 뒤 기존
+R2 버킷의 날짜별 JSON·시장 구조 PNG와 `market-reports/index.json`에
+게시합니다. Worker는 `GET /api/market-reports`,
+`GET /api/market-reports/{YYYY-MM-DD}`, 날짜별 `/dashboard` 이미지 경로로
+이를 전달하며, R2가 비어 있는 로컬 개발 환경에서는
+`public/data/market-reports`의 검증된 스냅샷을 사용합니다.
+UI 코드 배포는 기존 Git/Cloudflare 연결을 그대로 사용하고, 매일의 데이터 갱신은
+사이트 전체 재빌드 없이 날짜별 리포트 묶음만 갱신합니다.
+
 ## 현재 범위
 
 - 한국·미국 주식 및 ETF 15,938개의 정적 종목 목록 검색
@@ -19,10 +33,17 @@
 - 보유정보와 총자산 시계열을 같은 브라우저 프로필의 로컬 저장소에 보관
 - 국내 전체와 미국 지정 100종목의 최근 1년 종가를 R2에 증분 수집하는 GitHub Actions
 - R2 최신 종가를 같은 출처의 Worker API로 전달하고 브라우저에서 원화 평가
+- 국내 상장 ETF 50개 관리형 카탈로그 검색·품질 비교·부분 구성 중복도 분석
+- 자산군 비중과 제약조건을 먼저 정하는 균형·저비용·저중복 포트폴리오 후보 생성
+- 미실행·분기·연간 리밸런싱 위험지표와 가격수익률 백테스트
+- 주간 ETF 연구 데이터 생성, R2 버전 게시, 정적 스냅샷 fallback과 IndexedDB 캐시
 
 GitHub Actions가 만든 R2 종가 묶음을 Worker API가 그대로 전달합니다. 한국
 종목은 원화 종가, 미국 종목은 같은 수집 작업의 USD/KRW 종가로 환산합니다.
 증권사 주문 실행 기능은 포함하지 않습니다.
+
+ETF 연구 기능의 상세 구현, 무료 운영 판단, 데이터 한계와 배포 전 확인사항은
+[SERVICE_IMPLEMENTATION_STATUS.md](./SERVICE_IMPLEMENTATION_STATUS.md)에 정리했습니다.
 
 ## 사용자 데이터 보관
 
@@ -106,6 +127,7 @@ python -m unittest \
 
 ```bash
 npm run catalog:update
+npm run research:update
 ```
 
 생성 스크립트는 한국거래소 목록을 제공하는 FinanceDataReader의 `KRX`, `ETF/KR` 목록과 Nasdaq Trader의 Nasdaq-listed/Other-listed 심볼 디렉터리를 사용합니다. 상장·상장폐지에 따라 목록은 달라지므로 필요할 때 위 명령으로 갱신해야 합니다. 공개 서비스나 상업 서비스에 사용할 때는 각 거래소의 데이터 이용·재배포 조건도 별도로 확인해야 합니다.
@@ -175,6 +197,9 @@ Cloudflare 배포 설정:
 - 정적 자산 디렉터리: `dist`
 - Worker API: `GET /api/market-data/latest`
 - 종목 이력 API: `GET /api/market-data/history/{country}/{ticker}`
+- ETF 연구 manifest: `GET /api/etf-research/manifest`
+- ETF 분석 묶음: `GET /api/etf-research/versions/{version}/analysis`
+- ETF 가격 이력 묶음: `GET /api/etf-research/versions/{version}/returns`
 - R2 객체: `market-data/latest/quotes/all.json.gz`
 - 로컬 Workers 실행: `wrangler dev`
 - 배포: `wrangler deploy`

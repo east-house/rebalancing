@@ -10,7 +10,9 @@ import {
   CircleDollarSign,
   Database,
   Info,
+  LineChart,
   LockKeyhole,
+  Newspaper,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -161,7 +163,7 @@ const COMPACT_WON = new Intl.NumberFormat("ko-KR", {
 
 const NUMBER = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 
-const ALLOCATION_COLORS = ["#3f7657", "#56866a", "#6d967c", "#84a68e", "#9bb5a2"];
+const ALLOCATION_COLORS = ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"];
 
 const USD = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -236,7 +238,12 @@ function holdingHistoryKey(country: "KR" | "US", ticker: string) {
   return `${country}:${normalizeTicker(ticker)}`;
 }
 
-function App() {
+interface AppProps {
+  onOpenResearch?: () => void;
+  onOpenReport?: () => void;
+}
+
+function App({ onOpenResearch, onOpenReport }: AppProps) {
   const [initialLocalState] = useState(() =>
     loadLocalAppState(createDefaultLocalState()),
   );
@@ -770,7 +777,7 @@ function App() {
       key: "cash",
       label: "현금",
       value: Math.max(0, cashWeight),
-      color: "#c4cec8",
+      color: "#cbd5e1",
     },
   ];
 
@@ -961,6 +968,18 @@ function App() {
         </a>
 
         <div className="topbar-meta">
+          {onOpenReport ? (
+            <button className="status-pill status-pill--link" type="button" onClick={onOpenReport}>
+              <Newspaper size={14} />
+              리포트
+            </button>
+          ) : null}
+          {onOpenResearch ? (
+            <button className="status-pill status-pill--link" type="button" onClick={onOpenResearch}>
+              <LineChart size={14} />
+              ETF 연구소
+            </button>
+          ) : null}
           <span className="status-pill status-pill--demo">
             <Database size={14} />
             {marketStatus === "loading"

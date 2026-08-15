@@ -3,3 +3,7 @@ export * from "./portfolio";
 export * from "./fees";
 export * from "./history";
 export * from "./sampleData";
+export * from "./etfResearchTypes";
+export * from "./etfAnalytics";
+export * from "./portfolioGenerator";
+export * from "./etfBacktest";

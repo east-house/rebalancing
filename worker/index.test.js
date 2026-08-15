@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
 
-import { handleHistory, handleLatestQuotes } from "./index.js";
+import { handleEtfResearch, handleHistory, handleLatestQuotes } from "./index.js";
 
 function request() {
   return new Request("https://portfolio.example/api/market-data/latest");
@@ -98,5 +98,109 @@ describe("closing-price history Worker API", () => {
 
     expect(response.status).toBe(400);
     expect(get).not.toHaveBeenCalled();
+  });
+});
+
+describe("ETF research Worker API", () => {
+  it("serves and decodes an immutable version bundle from R2", async () => {
+    const payload = { schemaVersion: 1, dataVersion: "20260724.test", profiles: [] };
+    const env = {
+      MARKET_DATA: {
+        get: vi.fn().mockResolvedValue({ body: gzipSync(JSON.stringify(payload)) }),
+      },
+      ASSETS: { fetch: vi.fn() },
+    };
+    const response = await handleEtfResearch(
+      new Request("https://portfolio.example/api/etf-research/versions/20260724.test/analysis"),
+      env,
+      { waitUntil: vi.fn() },
+      "etf-research/versions/20260724.test/analysis.json.gz",
+      "/data/etf-research-analysis.json",
+      true,
+      true,
+      { match: vi.fn(), put: vi.fn() },
+    );
+    await expect(response.json()).resolves.toEqual(payload);
+    expect(response.headers.get("cache-control")).toContain("immutable");
+  });
+
+  it("falls back to the bundled static snapshot when R2 is empty", async () => {
+    const fallback = new Response(JSON.stringify({ dataVersion: "static" }));
+    const env = {
+      MARKET_DATA: { get: vi.fn().mockResolvedValue(null) },
+      ASSETS: { fetch: vi.fn().mockResolvedValue(fallback) },
+    };
+    const response = await handleEtfResearch(
+      new Request("https://portfolio.example/api/etf-research/manifest"),
+      env,
+      {},
+      "etf-research/latest/manifest.json",
+      "/data/etf-research-manifest.json",
+      false,
+      false,
+      { match: vi.fn(), put: vi.fn() },
+    );
+    await expect(response.json()).resolves.toEqual({ dataVersion: "static" });
+    expect(env.ASSETS.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("market report Worker API", () => {
+  it("serves the dated market report from R2", async () => {
+    const payload = {
+      schemaVersion: 1,
+      displayDate: "2026-08-17",
+      marketDate: "2026-08-14",
+    };
+    const env = {
+      MARKET_DATA: {
+        get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }),
+      },
+      ASSETS: { fetch: vi.fn() },
+    };
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/market-reports/2026-08-17"),
+      env,
+      { waitUntil: vi.fn() },
+    );
+
+    await expect(response.json()).resolves.toEqual(payload);
+    expect(env.MARKET_DATA.get).toHaveBeenCalledWith(
+      "market-reports/2026-08-17.json",
+    );
+  });
+
+  it("rejects an invalid report date before reading R2", async () => {
+    const get = vi.fn();
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/market-reports/not-a-date"),
+      { MARKET_DATA: { get } },
+      {},
+    );
+
+    expect(response.status).toBe(400);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("serves the market dashboard image from R2", async () => {
+    const image = new Uint8Array([137, 80, 78, 71]);
+    const env = {
+      MARKET_DATA: {
+        get: vi.fn().mockResolvedValue({ body: image }),
+      },
+      ASSETS: { fetch: vi.fn() },
+    };
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/market-reports/2026-08-17/dashboard"),
+      env,
+      {},
+    );
+
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(env.MARKET_DATA.get).toHaveBeenCalledWith("market-reports/2026-08-17.png");
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(Array.from(image));
   });
 });

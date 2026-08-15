@@ -14,13 +14,13 @@
   z-index: 1;
   top: 50%;
   left: 9px;
-  color: #718078;
+  color: #64748b;
   pointer-events: none;
   transform: translateY(-50%);
 }
 
 .instrument-search:focus-within .instrument-search__icon {
-  color: #2f6748;
+  color: #1d4ed8;
 }
 
 .instrument-search__results {
@@ -33,7 +33,7 @@
   padding: 6px;
   overflow-y: auto;
   background: #ffffff;
-  border: 1px solid #d5ddd8;
+  border: 1px solid #d9e2ef;
   border-radius: 13px;
   box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
 }
@@ -42,7 +42,7 @@
   display: grid;
   width: 100%;
   padding: 10px 11px;
-  color: #111713;
+  color: #10213b;
   text-align: left;
   cursor: pointer;
   background: transparent;
@@ -54,12 +54,12 @@
 
 .instrument-search__results button:hover,
 .instrument-search__results button.active {
-  background: #e8f0eb;
-  box-shadow: inset 3px 0 #2f6748;
+  background: #eef4ff;
+  box-shadow: inset 3px 0 #1d4ed8;
 }
 
 .instrument-search__ticker {
-  color: #245c40;
+  color: #1d4ed8;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -67,7 +67,7 @@
 
 .instrument-search__name {
   overflow: hidden;
-  color: #111713;
+  color: #10213b;
   font-size: 11px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -76,13 +76,13 @@
 
 .instrument-search__meta {
   grid-column: 2;
-  color: #5f6d64;
+  color: #64748b;
   font-size: 9px;
 }
 
 .instrument-search__empty {
   padding: 22px 12px;
-  color: #5f6d64;
+  color: #64748b;
   font-size: 10px;
   text-align: center;
 }
