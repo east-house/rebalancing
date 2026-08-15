@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowDown,
@@ -105,6 +105,20 @@ function koreanDate(value: string): string {
   return `${year}.${month}.${day}`;
 }
 
+function useStaticDashboardFallback(
+  event: SyntheticEvent<HTMLImageElement>,
+  displayDate: string,
+) {
+  const image = event.currentTarget;
+  const fallback = `/data/market-reports/${displayDate}.png`;
+  if (image.dataset.fallback !== "true") {
+    image.dataset.fallback = "true";
+    image.src = fallback;
+  } else {
+    image.hidden = true;
+  }
+}
+
 function phaseClass(phase: string): string {
   if (phase.includes("과열") || phase.includes("하락")) return "is-caution";
   if (phase.includes("돌파") || phase.includes("진행") || phase.includes("전환")) {
@@ -207,6 +221,15 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
   const eventSummary = report?.todayEvents.length
     ? report.todayEvents.slice(0, 2).map((row) => text(row, "event")).join(" · ")
     : "정기 발표 없음";
+  const breadthAuditValue = report?.quality.ma50_breadth;
+  const breadthAudit = breadthAuditValue && typeof breadthAuditValue === "object" && !Array.isArray(breadthAuditValue)
+    ? breadthAuditValue as Record<string, unknown>
+    : null;
+  const breadthWindowStart = typeof breadthAudit?.window_start === "string" ? breadthAudit.window_start : "";
+  const breadthWindowEnd = typeof breadthAudit?.window_end === "string" ? breadthAudit.window_end : "";
+  const breadthEligible = typeof breadthAudit?.eligible_count === "number" ? breadthAudit.eligible_count : null;
+  const breadthUniverse = typeof breadthAudit?.universe_count === "number" ? breadthAudit.universe_count : null;
+  const breadthVerified = breadthAudit?.passed === true;
 
   return (
     <div className="market-report-shell">
@@ -326,19 +349,25 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
                       key={report.displayDate}
                       src={report.dashboardImage ?? `/api/market-reports/${report.displayDate}/dashboard`}
                       alt={`${koreanDate(report.displayDate)} 미국 시장 구조 대시보드`}
-                      onError={(event) => {
-                        const fallback = `/data/market-reports/${report.displayDate}.png`;
-                        if (event.currentTarget.dataset.fallback !== "true") {
-                          event.currentTarget.dataset.fallback = "true";
-                          event.currentTarget.src = fallback;
-                        } else {
-                          event.currentTarget.hidden = true;
-                        }
-                      }}
+                      onError={(event) => useStaticDashboardFallback(event, report.displayDate)}
                     />
                     <span><Maximize2 size={14} /> 눌러서 확대</span>
                   </button>
-                  <figcaption>최근 60거래일 지수, 섹터·테마 상대수익률, 50일선 상회 비율</figcaption>
+                  <figcaption>네 그래프는 위치별로 아래처럼 읽습니다.</figcaption>
+                  <div className="report-dashboard-guide" aria-label="시장 구조 그래프 읽는 법">
+                    <article><strong>왼쪽 위 · 주요 지수</strong><span>S&amp;P 500의 최근 60거래일에 모든 지수 날짜를 맞춘 누적 등락률입니다. 값이 없는 날짜는 앞뒤 선을 연결하지 않습니다.</span></article>
+                    <article><strong>오른쪽 위 · 섹터</strong><span>S&amp;P 500보다 최근 한 달간 얼마나 더 오르거나 덜 올랐는지 비교합니다.</span></article>
+                    <article><strong>왼쪽 아래 · 테마</strong><span>테마 ETF의 최근 한 달 성과를 S&amp;P 500과 비교합니다.</span></article>
+                    <article>
+                      <strong>오른쪽 아래 · 상승 참여도</strong>
+                      <span>기준일 종가가 최근 50거래일 평균보다 높은 종목 비율입니다. 50% 점선보다 높으면 과반 종목이 참여한 상태입니다.</span>
+                      {breadthWindowStart && breadthWindowEnd ? (
+                        <small className="report-dashboard-guide__audit">
+                          현재 계산 {koreanDate(breadthWindowStart)}~{koreanDate(breadthWindowEnd)} · {breadthEligible ?? "—"}/{breadthUniverse ?? "—"}종목 · 원자료 검증 {breadthVerified ? "통과" : "확인 필요"}
+                        </small>
+                      ) : null}
+                    </article>
+                  </div>
                 </figure>
               </section>
 
@@ -356,8 +385,10 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
                       <button type="button" aria-label="확대 화면 닫기" onClick={() => setDashboardExpanded(false)}><X size={20} /></button>
                     </div>
                     <img
+                      key={report.displayDate}
                       src={report.dashboardImage ?? `/api/market-reports/${report.displayDate}/dashboard`}
                       alt={`${koreanDate(report.displayDate)} 미국 시장 구조 대시보드 확대 이미지`}
+                      onError={(event) => useStaticDashboardFallback(event, report.displayDate)}
                     />
                   </div>
                 </div>

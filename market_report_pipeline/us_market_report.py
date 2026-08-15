@@ -309,6 +309,9 @@ def instrument_snapshot(frame: pd.DataFrame, symbol: str, name: str) -> dict[str
     close = group["close"]
     volume = group["volume"]
     returns = close.pct_change(fill_method=None)
+    ma20 = close.rolling(20).mean().iloc[-1]
+    ma50 = close.rolling(50).mean().iloc[-1]
+    ma200 = close.rolling(200).mean().iloc[-1]
     row: dict[str, Any] = {
         "name": name,
         "ticker": symbol,
@@ -319,12 +322,15 @@ def instrument_snapshot(frame: pd.DataFrame, symbol: str, name: str) -> dict[str
         "return_20d": close.pct_change(20, fill_method=None).iloc[-1],
         "return_60d": close.pct_change(60, fill_method=None).iloc[-1],
         "volatility_20d": returns.rolling(20).std().iloc[-1] * math.sqrt(252),
-        "ma20_gap": close.iloc[-1] / close.rolling(20).mean().iloc[-1] - 1,
-        "ma50_gap": close.iloc[-1] / close.rolling(50).mean().iloc[-1] - 1,
-        "ma200_gap": close.iloc[-1] / close.rolling(200).mean().iloc[-1] - 1,
-        "above_ma20": close.iloc[-1] > close.rolling(20).mean().iloc[-1],
-        "above_ma50": close.iloc[-1] > close.rolling(50).mean().iloc[-1],
-        "above_ma200": close.iloc[-1] > close.rolling(200).mean().iloc[-1],
+        "ma20_gap": close.iloc[-1] / ma20 - 1,
+        "ma50_gap": close.iloc[-1] / ma50 - 1,
+        "ma200_gap": close.iloc[-1] / ma200 - 1,
+        "above_ma20": bool(close.iloc[-1] > ma20) if pd.notna(ma20) else np.nan,
+        "above_ma50": bool(close.iloc[-1] > ma50) if pd.notna(ma50) else np.nan,
+        "above_ma200": bool(close.iloc[-1] > ma200) if pd.notna(ma200) else np.nan,
+        "ma50_observations": min(len(close), 50),
+        "ma50_window_start": group["date"].iloc[-50] if len(group) >= 50 else pd.NaT,
+        "ma50_window_end": group["date"].iloc[-1],
         "rsi14": _rsi(close),
         "volume_ratio_20": (
             volume.iloc[-1] / volume.rolling(20).mean().iloc[-1]
@@ -351,6 +357,120 @@ def build_stock_snapshots(prices: pd.DataFrame, universe: pd.DataFrame) -> pd.Da
         except (ValueError, IndexError):
             continue
     return pd.DataFrame(rows)
+
+
+def audit_ma50_breadth(
+    prices: pd.DataFrame,
+    universe: pd.DataFrame,
+    market_date: pd.Timestamp,
+    sectors: pd.DataFrame,
+    benchmark_ticker: str,
+    periods: int = 50,
+) -> dict[str, Any]:
+    """Recompute sector breadth from raw closes and report its exact time window."""
+
+    normalized_market_date = pd.Timestamp(market_date).normalize()
+    universe_tickers = set(universe["ticker"].astype(str))
+    history = prices.loc[
+        prices["ticker"].isin(universe_tickers),
+        ["date", "ticker", "close"],
+    ].copy()
+    history["date"] = pd.to_datetime(history["date"])
+    history = history.loc[history["date"].le(normalized_market_date)]
+    histories = {
+        str(ticker): group.sort_values("date").dropna(subset=["close"])
+        for ticker, group in history.groupby("ticker", observed=True)
+    }
+    rows: list[dict[str, Any]] = []
+    for item in universe[["ticker", "sector"]].itertuples(index=False):
+        group = histories.get(str(item.ticker), pd.DataFrame(columns=["date", "close"])).tail(periods)
+        complete = len(group) == periods
+        window_end = pd.to_datetime(group["date"]).max() if not group.empty else pd.NaT
+        current = pd.notna(window_end) and pd.Timestamp(window_end).normalize() == normalized_market_date
+        rows.append(
+            {
+                "ticker": str(item.ticker),
+                "sector": str(item.sector),
+                "observations": len(group),
+                "window_start": pd.to_datetime(group["date"]).min() if complete else pd.NaT,
+                "window_end": window_end,
+                "eligible": complete and current,
+                "above_ma50": (
+                    bool(group["close"].iloc[-1] > group["close"].mean())
+                    if complete and current
+                    else np.nan
+                ),
+            }
+        )
+
+    audit_rows = pd.DataFrame(rows)
+    eligible = audit_rows.loc[audit_rows["eligible"]].copy()
+    recomputed = eligible.groupby("sector", observed=True)["above_ma50"].mean()
+    published = sectors.set_index("sector")["above_ma50_breadth"]
+    comparison = pd.concat(
+        [recomputed.rename("recomputed"), published.rename("published")],
+        axis=1,
+    )
+    comparison["difference"] = comparison["recomputed"] - comparison["published"]
+
+    benchmark_history = prices.loc[
+        prices["ticker"].eq(str(benchmark_ticker)),
+        ["date", "close"],
+    ].copy()
+    benchmark_history["date"] = pd.to_datetime(benchmark_history["date"])
+    benchmark = (
+        benchmark_history.loc[benchmark_history["date"].le(normalized_market_date)]
+        .sort_values("date")
+        .dropna(subset=["close"])
+        .tail(periods)
+    )
+    benchmark_complete = len(benchmark) == periods
+    window_start = pd.to_datetime(benchmark["date"]).min() if benchmark_complete else pd.NaT
+    window_end = pd.to_datetime(benchmark["date"]).max() if benchmark_complete else pd.NaT
+    max_difference = comparison["difference"].abs().max()
+    max_difference = None if pd.isna(max_difference) else float(max_difference)
+    required_eligible = min(490, len(universe))
+    passed = (
+        benchmark_complete
+        and len(eligible) >= required_eligible
+        and max_difference is not None
+        and max_difference <= 1e-12
+    )
+    return {
+        "definition": "기준일 종가가 최근 50거래일 종가 평균보다 높은 종목의 비율",
+        "periods": periods,
+        "benchmark_ticker": str(benchmark_ticker),
+        "window_start": window_start,
+        "window_end": window_end,
+        "calendar_days": (
+            int((pd.Timestamp(window_end) - pd.Timestamp(window_start)).days + 1)
+            if pd.notna(window_start) and pd.notna(window_end)
+            else None
+        ),
+        "universe_count": len(universe),
+        "price_series_count": len(audit_rows),
+        "eligible_count": len(eligible),
+        "required_eligible_count": required_eligible,
+        "incomplete_count": int(audit_rows["observations"].lt(periods).sum()),
+        "incomplete_tickers": audit_rows.loc[
+            audit_rows["observations"].lt(periods),
+            "ticker",
+        ].tolist(),
+        "stale_count": int(
+            pd.to_datetime(audit_rows["window_end"], errors="coerce")
+            .dt.normalize()
+            .ne(normalized_market_date)
+            .sum()
+        ),
+        "stale_tickers": audit_rows.loc[
+            pd.to_datetime(audit_rows["window_end"], errors="coerce")
+            .dt.normalize()
+            .ne(normalized_market_date),
+            "ticker",
+        ].tolist(),
+        "sector_max_abs_difference": max_difference,
+        "passed": passed,
+    }
 
 
 def build_index_overview(
@@ -417,6 +537,7 @@ def build_sector_leadership(
             "sector": sector,
             "sector_display": SECTOR_DISPLAY_NAMES.get(str(sector), str(sector)),
             "constituents": len(group),
+            "ma50_constituents": int(group["above_ma50"].notna().sum()),
             "return_1d": group["return_1d"].mean(),
             "return_5d": group["return_5d"].mean(),
             "return_20d": group["return_20d"].mean(),
@@ -1125,6 +1246,37 @@ def _num(value: Any, digits: int = 2) -> str:
     return "N/A" if value is None or pd.isna(value) else f"{float(value):.{digits}f}"
 
 
+def _align_index_closes(
+    prices: pd.DataFrame,
+    tickers: list[str],
+    benchmark_ticker: str,
+    periods: int = 60,
+) -> pd.DataFrame:
+    """Align index closes to one benchmark trading calendar without filling gaps."""
+
+    selected = prices.loc[
+        prices["ticker"].isin(tickers),
+        ["date", "ticker", "close"],
+    ].copy()
+    selected["date"] = pd.to_datetime(selected["date"])
+    pivot = (
+        selected.sort_values("date")
+        .drop_duplicates(["date", "ticker"], keep="last")
+        .pivot(index="date", columns="ticker", values="close")
+        .sort_index()
+        .reindex(columns=tickers)
+    )
+    if benchmark_ticker not in pivot or pivot[benchmark_ticker].dropna().empty:
+        return pd.DataFrame(columns=tickers, dtype=float)
+
+    benchmark_dates = pivot[benchmark_ticker].dropna().tail(periods).index
+    aligned = pivot.reindex(benchmark_dates)
+    complete_rows = aligned.notna().all(axis=1).to_numpy()
+    if complete_rows.any():
+        aligned = aligned.iloc[int(np.flatnonzero(complete_rows)[0]) :]
+    return aligned
+
+
 def plot_market_dashboard(
     prices: pd.DataFrame,
     index_overview: pd.DataFrame,
@@ -1139,42 +1291,96 @@ def plot_market_dashboard(
             plt.rcParams["font.family"] = preferred_font
             break
     plt.rcParams["axes.unicode_minus"] = False
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    index_symbols = {value: key for key, value in config["indices"].items()}
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), layout="constrained")
+    index_symbols = {str(value).upper(): key for key, value in config["indices"].items()}
+    benchmark_ticker = str(config["indices"]["S&P 500"]).upper()
+    aligned_closes = _align_index_closes(
+        prices,
+        list(index_symbols),
+        benchmark_ticker,
+        periods=60,
+    )
     for ticker, name in index_symbols.items():
-        group = prices.loc[prices["ticker"].eq(ticker)].sort_values("date").tail(65)
-        if group.empty:
+        if aligned_closes.empty or aligned_closes[ticker].dropna().empty:
             continue
-        normalized = group["close"] / group["close"].iloc[0]
-        axes[0, 0].plot(group["date"], normalized, label=name, linewidth=1.4)
-    axes[0, 0].set_title("최근 60거래일 주요 지수")
-    axes[0, 0].legend(fontsize=8)
+        cumulative_return = (aligned_closes[ticker] / aligned_closes[ticker].iloc[0] - 1) * 100
+        axes[0, 0].plot(aligned_closes.index, cumulative_return, label=name, linewidth=1.7)
+    axes[0, 0].axhline(0, color="#64748b", linewidth=0.8)
+    axes[0, 0].set_title("주요 지수 누적 등락률 · S&P 500 공통 60거래일", loc="left")
+    axes[0, 0].set_ylabel("시작일 대비 등락률 (%)")
+    axes[0, 0].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.16),
+        ncol=3,
+        fontsize=7,
+        frameon=False,
+    )
     axes[0, 0].grid(alpha=0.25)
 
     sector_plot = sectors.sort_values("relative_20d")
     colors = ["tab:blue" if value >= 0 else "tab:red" for value in sector_plot["relative_20d"]]
     axes[0, 1].barh(sector_plot["sector"], sector_plot["relative_20d"] * 100, color=colors)
     axes[0, 1].axvline(0, color="black", linewidth=0.8)
-    axes[0, 1].set_title("섹터 최근 1개월 S&P 500 대비 성과")
-    axes[0, 1].set_xlabel("%p")
+    axes[0, 1].set_title("섹터 상대성과 · 최근 1개월", loc="left")
+    axes[0, 1].set_xlabel("S&P 500 대비 초과·부진 폭 (%p)")
     axes[0, 1].grid(axis="x", alpha=0.25)
 
     theme_plot = themes.sort_values("relative_20d")
     colors = ["tab:green" if value >= 0 else "tab:orange" for value in theme_plot["relative_20d"]]
     axes[1, 0].barh(theme_plot["theme"], theme_plot["relative_20d"] * 100, color=colors)
     axes[1, 0].axvline(0, color="black", linewidth=0.8)
-    axes[1, 0].set_title("테마 최근 1개월 S&P 500 대비 성과")
-    axes[1, 0].set_xlabel("%p")
+    axes[1, 0].set_title("테마 상대성과 · 최근 1개월", loc="left")
+    axes[1, 0].set_xlabel("S&P 500 대비 초과·부진 폭 (%p)")
     axes[1, 0].grid(axis="x", alpha=0.25)
 
     breadth_plot = sectors.sort_values("above_ma50_breadth")
-    axes[1, 1].barh(breadth_plot["sector"], breadth_plot["above_ma50_breadth"] * 100, color="tab:purple")
-    axes[1, 1].axvline(50, color="black", linestyle="--", linewidth=0.8)
-    axes[1, 1].set_title("섹터별 중기 상승 참여 종목 비율")
-    axes[1, 1].set_xlabel("%")
+    axes[1, 1].barh(
+        breadth_plot["sector"],
+        breadth_plot["above_ma50_breadth"] * 100,
+        color="#4f83df",
+    )
+    axes[1, 1].axvline(50, color="#334155", linestyle="--", linewidth=1.0)
+    axes[1, 1].annotate(
+        "과반 참여 기준 50%",
+        xy=(50, 1),
+        xycoords=("data", "axes fraction"),
+        xytext=(5, -8),
+        textcoords="offset points",
+        fontsize=8,
+        color="#334155",
+        ha="left",
+        va="top",
+    )
+    axes[1, 1].set_xlim(0, 100)
+    sp500_rows = index_overview.loc[index_overview["name"].eq("S&P 500")]
+    breadth_title = "섹터별 상승 참여도 · 50일 이동평균선 기준"
+    if not sp500_rows.empty:
+        breadth_end = pd.Timestamp(sp500_rows.iloc[0]["date"])
+        breadth_history = (
+            prices.loc[
+                prices["ticker"].eq(benchmark_ticker)
+                & pd.to_datetime(prices["date"]).le(breadth_end),
+                ["date", "close"],
+            ]
+            .sort_values("date")
+            .dropna(subset=["close"])
+            .tail(50)
+        )
+        if len(breadth_history) == 50:
+            breadth_start = pd.Timestamp(breadth_history["date"].iloc[0])
+            breadth_eligible = int(
+                breadth_plot.get("ma50_constituents", breadth_plot["constituents"]).sum()
+            )
+            breadth_total = int(breadth_plot["constituents"].sum())
+            breadth_title = (
+                f"섹터별 상승 참여도 · {breadth_end:%Y-%m-%d} 기준\n"
+                f"50거래일 평균 {breadth_start:%Y-%m-%d}~{breadth_end:%Y-%m-%d}"
+                f" · 데이터 {breadth_eligible}/{breadth_total}종목"
+            )
+    axes[1, 1].set_title(breadth_title, loc="left")
+    axes[1, 1].set_xlabel("50일선 위에 있는 구성 종목 비율 (%)")
     axes[1, 1].grid(axis="x", alpha=0.25)
     fig.suptitle("미국 시장 구조 대시보드")
-    fig.tight_layout()
     fig.savefig(output / "market_dashboard.png", dpi=160, bbox_inches="tight")
     plt.close(fig)
 
@@ -1419,6 +1625,13 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
     sectors, sector_leaders = build_sector_leadership(stocks, benchmark)
     themes, theme_leaders = build_theme_leadership(prices, universe, benchmark, config)
     leaders = pd.concat([sector_leaders, theme_leaders], ignore_index=True)
+    breadth_audit = audit_ma50_breadth(
+        prices,
+        universe,
+        market_date,
+        sectors,
+        str(config["indices"]["S&P 500"]),
+    )
 
     LOGGER.info("5/10 Calculating prior-session and five-session rotation changes")
     sectors, themes, rotation_audit = enrich_rotation_history(
@@ -1456,6 +1669,7 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
         "news_cluster_rows": len(news_clusters),
         "transmission_rows": len(transmissions),
         "missing_sector_leaders": int(sectors["leader"].isna().sum()),
+        "ma50_breadth_passed": breadth_audit["passed"],
     }
     violations = [
         validation["price_duplicates"] > 0,
@@ -1468,6 +1682,7 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
         validation["news_cluster_rows"] < 1,
         validation["transmission_rows"] < 3,
         validation["missing_sector_leaders"] > 0,
+        not validation["ma50_breadth_passed"],
     ]
     validation["passed"] = not any(violations)
     quality = {
@@ -1478,6 +1693,7 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
         "calendars": {"bls": bls_audit, "bea": bea_audit},
         "news": news_audit,
         "rotation_history": rotation_audit,
+        "ma50_breadth": breadth_audit,
         "stock_snapshot_rows": len(stocks),
         "sector_rows": len(sectors),
         "theme_rows": len(themes),

@@ -6,11 +6,69 @@ import pandas as pd
 
 from market_report_pipeline.us_market_report import (
     SECTOR_DISPLAY_NAMES,
+    _align_index_closes,
     _event_latest_value,
+    audit_ma50_breadth,
     archive_legacy_reports,
     build_macro_dashboard,
     classify_market_state,
 )
+
+
+def test_index_chart_uses_one_timeline_and_preserves_missing_dates() -> None:
+    dates = pd.date_range("2026-08-10", periods=4, freq="D")
+    prices = pd.DataFrame(
+        [
+            *({"date": date, "ticker": "^GSPC", "close": 100 + position} for position, date in enumerate(dates)),
+            {"date": dates[0], "ticker": "^NDX", "close": 200},
+            {"date": dates[1], "ticker": "^NDX", "close": 202},
+            {"date": dates[3], "ticker": "^NDX", "close": 206},
+        ]
+    )
+
+    aligned = _align_index_closes(prices, ["^GSPC", "^NDX"], "^GSPC", periods=4)
+
+    assert aligned.index.tolist() == dates.tolist()
+    assert pd.isna(aligned.loc[dates[2], "^NDX"])
+    assert aligned.loc[dates[3], "^NDX"] == 206
+
+
+def test_ma50_breadth_audit_recomputes_raw_closes_and_reports_window() -> None:
+    dates = pd.bdate_range("2026-08-10", periods=3)
+    prices = pd.DataFrame(
+        [
+            *({"date": date, "ticker": "^GSPC", "close": 100 + position} for position, date in enumerate(dates)),
+            *({"date": date, "ticker": "AAA", "close": value} for date, value in zip(dates, [10, 11, 13])),
+            *({"date": date, "ticker": "BBB", "close": value} for date, value in zip(dates, [13, 12, 10])),
+        ]
+    )
+    universe = pd.DataFrame(
+        [
+            {"ticker": "AAA", "sector": "Technology"},
+            {"ticker": "BBB", "sector": "Utilities"},
+        ]
+    )
+    sectors = pd.DataFrame(
+        [
+            {"sector": "Technology", "above_ma50_breadth": 1.0},
+            {"sector": "Utilities", "above_ma50_breadth": 0.0},
+        ]
+    )
+
+    result = audit_ma50_breadth(
+        prices,
+        universe,
+        dates[-1],
+        sectors,
+        "^GSPC",
+        periods=3,
+    )
+
+    assert result["window_start"] == dates[0]
+    assert result["window_end"] == dates[-1]
+    assert result["eligible_count"] == 2
+    assert result["sector_max_abs_difference"] == 0
+    assert result["passed"] is True
 
 
 def test_market_state_detects_broad_advance() -> None:
@@ -82,5 +140,3 @@ def test_legacy_reports_move_to_old_locations(tmp_path: Path) -> None:
     assert not latest.exists()
     assert (tmp_path / "LATEST_REPORT_old.md").read_text(encoding="utf-8") == "legacy"
     assert (dated / "_old" / "DAILY_REPORT.md").read_text(encoding="utf-8") == "legacy daily"
-
-
