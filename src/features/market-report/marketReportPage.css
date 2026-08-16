@@ -727,7 +727,7 @@
 .report-price-check { padding: 8px 9px; color: var(--accent-strong) !important; background: #f7faff; border-radius: 8px; }
 
 .report-empty { padding: 28px !important; color: var(--muted); text-align: center; }
-.report-footer { padding: 18px 4px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.report-footer { padding-right: 4px; padding-left: 4px; }
 .report-state-card { margin-top: 70px; padding: 30px; color: var(--muted); text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
 .report-state-card.is-error { color: #b42318; border-color: rgb(180 35 24 / 22%); }
 

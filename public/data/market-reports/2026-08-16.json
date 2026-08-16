@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "displayDate": "2026-08-17",
+  "displayDate": "2026-08-16",
   "marketDate": "2026-08-14",
   "generatedAt": "2026-08-16 02:52:46.149860+09:00",
   "purpose": "market intelligence only; no portfolio or orders",
-  "dashboardImage": "/api/market-reports/2026-08-17/dashboard",
+  "dashboardImage": "/api/market-reports/2026-08-16/dashboard",
   "summary": {
     "state": {
       "market_date": "2026-08-14 00:00:00",

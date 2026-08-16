@@ -2,7 +2,7 @@ name: Generate and publish daily US market report
 
 on:
   schedule:
-    - cron: "30 7 * * 2-6"
+    - cron: "30 7 * * *"
       timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:

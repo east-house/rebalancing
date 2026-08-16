@@ -22,6 +22,7 @@ import {
 
 import AssetChart from "./components/AssetChart";
 import InstrumentSearch from "./components/InstrumentSearch";
+import SiteFooter from "./components/SiteFooter";
 import { parseMarketHistoryPayload } from "./api/marketHistory";
 import {
   latestQuoteDate,
@@ -1800,18 +1801,10 @@ function App({ onOpenResearch, onOpenReport }: AppProps) {
         </p>
           </main>
 
-          <footer>
-        <div className="brand brand--footer" aria-hidden="true">
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span className="brand-word">balance</span>
-          <span className="brand-dot">.</span>
-        </div>
-        <p>R2 종가와 로컬 전용 자산 정보를 사용하는 포트폴리오 도구</p>
-          </footer>
+          <SiteFooter
+            className="portfolio-footer"
+            note="R2의 공개 종가와 브라우저 로컬 전용 자산 정보를 사용하는 포트폴리오 도구"
+          />
         </div>
       </div>
     </div>

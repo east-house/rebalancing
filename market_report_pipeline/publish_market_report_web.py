@@ -18,13 +18,16 @@ SCHEMA_VERSION = 2
 MAX_INDEX_REPORTS = 520
 
 
-def next_korean_weekday(market_date: pd.Timestamp) -> pd.Timestamp:
-    """Map a US market date to the next Korean weekday display date."""
+def report_display_date(manifest: dict[str, Any]) -> pd.Timestamp:
+    """Use the requested Korean run date as the report's display date."""
 
-    result = pd.Timestamp(market_date).normalize() + pd.Timedelta(days=1)
-    while result.weekday() >= 5:
-        result += pd.Timedelta(days=1)
-    return result
+    value = manifest.get("as_of")
+    if value is None:
+        raise ValueError("market_report_manifest.json is missing as_of")
+    result = pd.Timestamp(value)
+    if pd.isna(result):
+        raise ValueError("market_report_manifest.json has an invalid as_of")
+    return result.normalize()
 
 
 def _clean(value: Any) -> Any:
@@ -108,7 +111,7 @@ def build_web_bundle(source: Path) -> dict[str, Any]:
     transmissions = _records(source / "transmission_signals.csv")
 
     market_date = pd.Timestamp(state["market_date"]).normalize()
-    display_date = next_korean_weekday(market_date)
+    display_date = report_display_date(manifest)
     indices = [row for row in overview if row.get("category") == "주가지수"]
     risks = [row for row in overview if row.get("category") == "위험·자산"]
     top_sector = sectors[0] if sectors else None
@@ -155,6 +158,17 @@ def update_index(target_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
     existing = index.get("reports", [])
     if not isinstance(existing, list):
         existing = []
+    valid_existing = []
+    for item in existing:
+        display_date = str(item.get("displayDate", ""))
+        generated_at = item.get("generatedAt")
+        if display_date and generated_at:
+            generated = pd.Timestamp(generated_at)
+            if generated.tzinfo is not None:
+                generated = generated.tz_convert("Asia/Seoul")
+            if generated.strftime("%Y-%m-%d") < display_date:
+                continue
+        valid_existing.append(item)
     state = bundle["summary"]["state"]
     top_sector = bundle["summary"].get("topSector") or {}
     top_theme = bundle["summary"].get("topTheme") or {}
@@ -167,7 +181,9 @@ def update_index(target_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
         "topSector": top_sector.get("sector_display") or top_sector.get("sector"),
         "topTheme": top_theme.get("theme"),
     }
-    reports = [item for item in existing if item.get("displayDate") != bundle["displayDate"]]
+    reports = [
+        item for item in valid_existing if item.get("displayDate") != bundle["displayDate"]
+    ]
     reports.append(entry)
     reports = sorted(reports, key=lambda item: str(item.get("displayDate", "")), reverse=True)[
         :MAX_INDEX_REPORTS

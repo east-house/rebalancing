@@ -122,8 +122,29 @@ export function selectReportForKoreaDate(
   reports: readonly MarketReportIndexItem[],
   now = new Date(),
 ): MarketReportIndexItem | undefined {
-  const today = koreaCalendarDate(now);
+  return reportsAvailableForKoreaDate(reports, now)[0];
+}
+
+function isReportAvailable(report: MarketReportIndexItem, now: Date): boolean {
+  const releaseTime = Date.parse(`${report.displayDate}T07:30:00+09:00`);
+  if (!Number.isFinite(releaseTime) || releaseTime > now.getTime()) return false;
+
+  const normalizedGeneratedAt = report.generatedAt.includes("T")
+    ? report.generatedAt
+    : report.generatedAt.replace(" ", "T");
+  const generatedAt = new Date(normalizedGeneratedAt);
+  if (!Number.isNaN(generatedAt.getTime())) {
+    const generatedDate = koreaCalendarDate(generatedAt);
+    if (generatedDate < report.displayDate) return false;
+  }
+  return true;
+}
+
+export function reportsAvailableForKoreaDate(
+  reports: readonly MarketReportIndexItem[],
+  now = new Date(),
+): MarketReportIndexItem[] {
   return [...reports]
-    .filter((report) => report.displayDate <= today)
-    .sort((left, right) => right.displayDate.localeCompare(left.displayDate))[0] ?? reports[0];
+    .filter((report) => isReportAvailable(report, now))
+    .sort((left, right) => right.displayDate.localeCompare(left.displayDate));
 }

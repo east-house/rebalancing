@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import reportJson from "../../../public/data/market-reports/2026-08-17.json";
+import reportJson from "../../../public/data/market-reports/2026-08-16.json";
 import indexJson from "../../../public/data/market-reports/index.json";
 import type { MarketReportBundle, MarketReportIndex } from "../../api/marketReports";
 import MarketReportPage from "./MarketReportPage";
@@ -25,7 +25,7 @@ describe("시장 리포트 화면", () => {
   });
 
   it("오늘의 결론과 시장 구조 대시보드를 함께 표시한다", async () => {
-    render(<MarketReportPage onBack={vi.fn()} />);
+    render(<MarketReportPage onBack={vi.fn()} now={new Date("2026-08-17T01:00:00Z")} />);
 
     expect(await screen.findByRole("heading", { name: "오늘의 결론" })).toBeTruthy();
     expect(screen.getByText("직전 거래일·발표와 비교")).toBeTruthy();
@@ -40,7 +40,7 @@ describe("시장 리포트 화면", () => {
     expect(screen.getByRole("dialog", { name: "시장 구조 대시보드 확대 보기" })).toBeTruthy();
     const expandedImage = screen.getByAltText(/시장 구조 대시보드 확대 이미지/);
     fireEvent.error(expandedImage);
-    expect(expandedImage.getAttribute("src")).toBe("/data/market-reports/2026-08-17.png");
+    expect(expandedImage.getAttribute("src")).toBe("/data/market-reports/2026-08-16.png");
     expect(screen.getByRole("heading", { name: "성장·물가·금리·위험선호" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "거시 변화가 가격으로 전달됐는가" })).toBeTruthy();
   });

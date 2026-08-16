@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { loadEtfResearch, loadEtfReturns } from "../../api/etfResearch";
+import SiteFooter from "../../components/SiteFooter";
 import {
   calculateHoldingOverlap,
   calculateReturnCorrelation,
@@ -350,6 +351,7 @@ export default function EtfResearchLab({ onBack }: EtfResearchLabProps) {
             </>}
           </section>
         ) : null}
+        <SiteFooter note="공개 자료를 비교하고 브라우저에서 계산하는 ETF 연구 도구" />
       </main>
     </div>
   );

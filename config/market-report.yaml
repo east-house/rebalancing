@@ -184,5 +184,4 @@ news:
 schedule:
   timezone: Asia/Seoul
   run_time: "07:30"
-  days: [Tuesday, Wednesday, Thursday, Friday, Saturday]
-
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]

@@ -22,15 +22,18 @@ import {
 import {
   loadMarketReport,
   loadMarketReportIndex,
+  reportsAvailableForKoreaDate,
   selectReportForKoreaDate,
   type MarketReportBundle,
   type MarketReportIndex,
   type MarketReportRow,
 } from "../../api/marketReports";
+import SiteFooter from "../../components/SiteFooter";
 import "./marketReportPage.css";
 
 interface MarketReportPageProps {
   onBack: () => void;
+  now?: Date;
 }
 
 const CHART_PHASES = [
@@ -145,7 +148,8 @@ function EmptyRow({ columns, children }: { columns: number; children: string }) 
   );
 }
 
-export default function MarketReportPage({ onBack }: MarketReportPageProps) {
+export default function MarketReportPage({ onBack, now }: MarketReportPageProps) {
+  const [currentTime] = useState(() => now ?? new Date());
   const [index, setIndex] = useState<MarketReportIndex | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [report, setReport] = useState<MarketReportBundle | null>(null);
@@ -158,9 +162,9 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
     loadMarketReportIndex()
       .then((value) => {
         if (!active) return;
-        const initial = selectReportForKoreaDate(value.reports);
+        const initial = selectReportForKoreaDate(value.reports, currentTime);
         setIndex(value);
-        setSelectedDate(initial?.displayDate ?? value.latestDisplayDate);
+        setSelectedDate(initial?.displayDate ?? "");
       })
       .catch((reason: unknown) => {
         if (active) {
@@ -171,7 +175,7 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [currentTime]);
 
   useEffect(() => {
     if (!selectedDate) return;
@@ -211,6 +215,10 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
     () => index?.reports.find((item) => item.displayDate === selectedDate),
     [index, selectedDate],
   );
+  const availableReports = useMemo(
+    () => reportsAvailableForKoreaDate(index?.reports ?? [], currentTime),
+    [currentTime, index],
+  );
 
   const state = report?.summary.state;
   const topSector = report?.summary.topSector;
@@ -249,10 +257,10 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
           <div className="report-sidebar__head">
             <span>REPORT ARCHIVE</span>
             <strong>날짜별 리포트</strong>
-            <p>한국 평일에 확인하는 전 거래일 정보</p>
+            <p>매일 오전 7시 30분에 생성되는 최신 미국장 정보</p>
           </div>
           <nav>
-            {index?.reports.map((item) => (
+            {availableReports.map((item) => (
               <button
                 key={item.displayDate}
                 type="button"
@@ -274,6 +282,7 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
         <main className="market-report-main">
           {loading && !report ? <div className="report-state-card">시장 리포트를 불러오는 중입니다.</div> : null}
           {error ? <div className="report-state-card is-error">{error}</div> : null}
+          {!loading && !error && !report ? <div className="report-state-card">오늘 표시할 시장 리포트가 아직 없습니다.</div> : null}
           {report ? (
             <>
               <section className="report-hero">
@@ -396,7 +405,7 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
 
               <div className="report-notice">
                 <Clock3 size={16} />
-                <span>월요일 화면은 직전 금요일 미국장 정보를 사용합니다. 토·일은 새 날짜를 만들지 않으며 마지막 평일 리포트를 유지합니다.</span>
+                <span>리포트는 매일 한국시간 오전 7시 30분에 당일 날짜로 생성됩니다. 주말·미국 휴장일에는 가장 최근 미국 거래일 자료를 사용합니다.</span>
               </div>
 
               <section className="report-kpis" aria-label="시장 핵심 지표">
@@ -501,9 +510,14 @@ export default function MarketReportPage({ onBack }: MarketReportPageProps) {
                 </div>
               </section>
 
-              <footer className="report-footer">이 화면은 시장 판단 자료이며 매수·매도 주문이나 포트폴리오 비중을 자동으로 결정하지 않습니다. 표시 기준 {selectedMeta ? koreanDate(selectedMeta.displayDate) : koreanDate(report.displayDate)}.</footer>
             </>
           ) : null}
+          <SiteFooter
+            className="report-footer"
+            note={report
+              ? `시장 판단을 돕는 정보 자료 · 표시 기준 ${selectedMeta ? koreanDate(selectedMeta.displayDate) : koreanDate(report.displayDate)}`
+              : "미국 시장의 흐름과 위험 요인을 정리하는 정보 자료"}
+          />
         </main>
       </div>
     </div>
