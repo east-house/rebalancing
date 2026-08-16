@@ -1735,10 +1735,19 @@ input[type="number"] {
   }
 
   .topbar {
+    display: block;
     width: auto;
+    height: auto;
+    min-height: 58px;
     margin-right: 14px;
     margin-left: 14px;
+    padding: 10px 0;
   }
+
+  .topbar > .brand,
+  .topbar-meta > .status-pill { display: none; }
+  .topbar-meta { width: 100%; min-width: 0; }
+  .topbar-meta .product-tabs { width: 100%; }
 
   .dashboard {
     padding-top: 44px;
@@ -1839,7 +1848,7 @@ input[type="number"] {
 
 @media (max-width: 560px) {
   .topbar {
-    height: 66px;
+    height: auto;
   }
 
   .topbar-meta .status-pill--private {

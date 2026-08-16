@@ -7,6 +7,7 @@ const RESEARCH_MANIFEST_PATH = "/api/etf-research/manifest";
 const RESEARCH_VERSION_PREFIX = "/api/etf-research/versions/";
 const MARKET_REPORT_INDEX_PATH = "/api/market-reports";
 const MARKET_REPORT_VERSION_PREFIX = "/api/market-reports/";
+const PORTFOLIO_REPORT_PATH = "/api/portfolio-reports/latest";
 
 function jsonError(message, status) {
   return new Response(
@@ -192,6 +193,7 @@ export async function handleEtfResearch(
   compressed,
   immutable = false,
   cache = globalThis.caches?.default,
+  cacheControlOverride = null,
 ) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response(null, {
@@ -226,9 +228,9 @@ export async function handleEtfResearch(
   const headers = quoteHeaders(object);
   headers.set(
     "cache-control",
-    immutable
+    cacheControlOverride ?? (immutable
       ? "public, max-age=31536000, immutable"
-      : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+      : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"),
   );
   const response = new Response(
     request.method === "HEAD"
@@ -337,6 +339,19 @@ export default {
         "market-reports/index.json",
         "/data/market-reports/index.json",
         false,
+      );
+    }
+    if (url.pathname === PORTFOLIO_REPORT_PATH) {
+      return handleEtfResearch(
+        request,
+        env,
+        context,
+        "portfolio-reports/latest.json",
+        "/data/portfolio-reports/latest.json",
+        false,
+        false,
+        globalThis.caches?.default,
+        "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
       );
     }
     if (url.pathname.startsWith(MARKET_REPORT_VERSION_PREFIX)) {

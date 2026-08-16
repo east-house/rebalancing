@@ -126,6 +126,8 @@ export function selectReportForKoreaDate(
 }
 
 function isReportAvailable(report: MarketReportIndexItem, now: Date): boolean {
+  const displayDay = new Date(`${report.displayDate}T12:00:00+09:00`).getUTCDay();
+  if (displayDay === 0 || displayDay === 6) return false;
   const releaseTime = Date.parse(`${report.displayDate}T07:30:00+09:00`);
   if (!Number.isFinite(releaseTime) || releaseTime > now.getTime()) return false;
 

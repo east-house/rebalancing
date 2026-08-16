@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import App from "./App";
 import EtfResearchLab from "./features/etf-research/EtfResearchLab";
 import MarketReportPage from "./features/market-report/MarketReportPage";
+import PortfolioReportPage from "./features/portfolio-report/PortfolioReportPage";
 import SiteInfoPage, { type SiteInfoKind } from "./features/site-info/SiteInfoPage";
 
-type Screen = "portfolio" | "research" | "report" | SiteInfoKind;
+type Screen = "portfolio" | "portfolioReport" | "research" | "report" | SiteInfoKind;
 
 const SCREEN_PATHS: Record<Screen, string> = {
   portfolio: "/rebalancing",
+  portfolioReport: "/portfolio-report",
   research: "/etf-research",
   report: "/",
   about: "/about",
@@ -23,11 +25,15 @@ const SCREEN_META: Record<Screen, { title: string; description: string }> = {
     description: "미국 시장의 흐름, 위험자산, 섹터·테마 리더십과 경제 일정을 한눈에 확인합니다.",
   },
   portfolio: {
-    title: "TM Reports — 자산 리밸런싱",
+    title: "TM Reports — 포트폴리오 관리",
     description: "보유 자산을 한눈에 확인하고 목표 비중에 맞춰 리밸런싱을 계산합니다.",
   },
+  portfolioReport: {
+    title: "TM Reports — 포트폴리오 보고서",
+    description: "미국 5종목 모델의 매수·매도와 월간 리밸런싱 점검 결과를 확인합니다.",
+  },
   research: {
-    title: "TM Reports — ETF 연구소",
+    title: "TM Reports — ETF비교",
     description: "국내 상장 ETF의 비용, 성과, 위험과 구성 중복도를 비교합니다.",
   },
   about: {
@@ -52,6 +58,7 @@ function screenFromPath(pathname: string): Screen {
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
   if (normalizedPath === SCREEN_PATHS.report || normalizedPath === "/report") return "report";
   if (normalizedPath === SCREEN_PATHS.portfolio) return "portfolio";
+  if (normalizedPath === SCREEN_PATHS.portfolioReport) return "portfolioReport";
   if (normalizedPath === SCREEN_PATHS.research) return "research";
   if (normalizedPath === SCREEN_PATHS.about) return "about";
   if (normalizedPath === SCREEN_PATHS.privacy) return "privacy";
@@ -113,17 +120,23 @@ export default function RootApp() {
     setScreen(nextScreen);
   };
 
-  if (screen === "research") return <EtfResearchLab onBack={() => navigate("portfolio")} />;
+  const productNavigation = {
+    onOpenPortfolio: () => navigate("portfolio"),
+    onOpenPortfolioReport: () => navigate("portfolioReport"),
+    onOpenEtfCompare: () => navigate("research"),
+  };
+
+  if (screen === "research") return <EtfResearchLab {...productNavigation} />;
+  if (screen === "portfolioReport") return <PortfolioReportPage {...productNavigation} />;
   if (screen === "about" || screen === "privacy" || screen === "terms" || screen === "contact") {
     return <SiteInfoPage kind={screen} />;
   }
   if (screen === "report") {
-    return <MarketReportPage onBack={() => navigate("portfolio")} />;
+    return <MarketReportPage {...productNavigation} />;
   }
   return (
     <App
-      onOpenResearch={() => navigate("research")}
-      onOpenReport={() => navigate("report")}
+      {...productNavigation}
     />
   );
 }

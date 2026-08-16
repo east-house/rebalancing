@@ -73,4 +73,14 @@ describe("market report Korea-date selection", () => {
     expect(selectReportForKoreaDate(premature, new Date("2026-08-17T01:00:00Z")))
       .toBeUndefined();
   });
+
+  it("does not expose weekend report dates", () => {
+    const weekend = [{
+      ...reports[0],
+      displayDate: "2026-08-16",
+      generatedAt: "2026-08-16T07:40:00+09:00",
+    }];
+    expect(selectReportForKoreaDate(weekend, new Date("2026-08-16T02:00:00Z")))
+      .toBeUndefined();
+  });
 });

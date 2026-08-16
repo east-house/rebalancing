@@ -10,9 +10,7 @@ import {
   CircleDollarSign,
   Database,
   Info,
-  LineChart,
   LockKeyhole,
-  Newspaper,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -22,6 +20,7 @@ import {
 
 import AssetChart from "./components/AssetChart";
 import InstrumentSearch from "./components/InstrumentSearch";
+import ProductTabs from "./components/ProductTabs";
 import SiteFooter from "./components/SiteFooter";
 import { parseMarketHistoryPayload } from "./api/marketHistory";
 import {
@@ -240,11 +239,12 @@ function holdingHistoryKey(country: "KR" | "US", ticker: string) {
 }
 
 interface AppProps {
-  onOpenResearch?: () => void;
-  onOpenReport?: () => void;
+  onOpenPortfolio?: () => void;
+  onOpenPortfolioReport?: () => void;
+  onOpenEtfCompare?: () => void;
 }
 
-function App({ onOpenResearch, onOpenReport }: AppProps) {
+function App({ onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCompare }: AppProps) {
   const [initialLocalState] = useState(() =>
     loadLocalAppState(createDefaultLocalState()),
   );
@@ -969,17 +969,13 @@ function App({ onOpenResearch, onOpenReport }: AppProps) {
         </a>
 
         <div className="topbar-meta">
-          {onOpenReport ? (
-            <button className="status-pill status-pill--link" type="button" onClick={onOpenReport}>
-              <Newspaper size={14} />
-              리포트
-            </button>
-          ) : null}
-          {onOpenResearch ? (
-            <button className="status-pill status-pill--link" type="button" onClick={onOpenResearch}>
-              <LineChart size={14} />
-              ETF 연구소
-            </button>
+          {onOpenPortfolio && onOpenPortfolioReport && onOpenEtfCompare ? (
+            <ProductTabs
+              current="portfolio"
+              onOpenPortfolio={onOpenPortfolio}
+              onOpenPortfolioReport={onOpenPortfolioReport}
+              onOpenEtfCompare={onOpenEtfCompare}
+            />
           ) : null}
           <span className="status-pill status-pill--demo">
             <Database size={14} />

@@ -5,6 +5,7 @@ from html.parser import HTMLParser
 import pandas as pd
 
 from market_report_pipeline.us_market_html_report import (
+    _confirmation,
     build_macro_axes,
     build_news_clusters,
     render_market_html,
@@ -37,6 +38,13 @@ def test_macro_axes_cover_growth_inflation_liquidity_and_risk() -> None:
 
     assert result["axis"].tolist() == ["성장", "물가", "금리·유동성", "위험선호"]
     assert result["status"].tolist() == ["개선", "완화", "완화 방향", "위험선호"]
+
+
+def test_transmission_confirmation_distinguishes_missing_and_flat_price_data() -> None:
+    assert _confirmation(expected_positive=True, observed=float("nan")) == "자료 부족"
+    assert _confirmation(expected_positive=True, observed=0.0009) == "가격 반응 미약"
+    assert _confirmation(expected_positive=True, observed=0.002) == "일치"
+    assert _confirmation(expected_positive=True, observed=-0.002) == "반대 반응"
 
 
 def test_news_clusters_prefer_trusted_source_and_add_price_confirmation() -> None:
@@ -206,7 +214,7 @@ def test_rendered_html_is_parseable_and_escapes_dynamic_text() -> None:
     assert "미국 거래일 2026-08-14" in rendered
     assert "TODAY'S CONCLUSION" in rendered
     assert "어제와 달라진 핵심" in rendered
-    assert "거시 변화가 실제 가격으로 이어졌는가" in rendered
+    assert "거시 변화의 가격 반영" in rendered
     assert "다음 거래일에 확인할 것" in rendered
     assert "가장 강한 섹터 · 독립 순위" in rendered
     assert "가장 강한 테마 · 독립 순위" in rendered
@@ -220,5 +228,3 @@ def test_rendered_html_is_parseable_and_escapes_dynamic_text() -> None:
     assert rendered.count("<details>") == 4
     assert "Chip &lt;script&gt;alert(1)&lt;/script&gt;" in rendered
     assert "Chip <script>" not in rendered
-
-

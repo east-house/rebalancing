@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   BarChart3,
   CheckCircle2,
   Database,
@@ -9,7 +8,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
   TriangleAlert,
   Upload,
@@ -17,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { loadEtfResearch, loadEtfReturns } from "../../api/etfResearch";
+import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import {
   calculateHoldingOverlap,
@@ -38,7 +37,9 @@ import type {
 import "./etfResearchLab.css";
 
 interface EtfResearchLabProps {
-  onBack: () => void;
+  onOpenPortfolio: () => void;
+  onOpenPortfolioReport: () => void;
+  onOpenEtfCompare: () => void;
 }
 
 type Tab = "explorer" | "generator" | "backtest";
@@ -112,7 +113,11 @@ function CurveChart({ results }: { results: readonly BacktestResult[] }) {
   );
 }
 
-export default function EtfResearchLab({ onBack }: EtfResearchLabProps) {
+export default function EtfResearchLab({
+  onOpenPortfolio,
+  onOpenPortfolioReport,
+  onOpenEtfCompare,
+}: EtfResearchLabProps) {
   const [tab, setTab] = useState<Tab>("explorer");
   const [manifest, setManifest] = useState<EtfResearchManifest | null>(null);
   const [analysis, setAnalysis] = useState<EtfAnalysisBundle | null>(null);
@@ -274,9 +279,13 @@ export default function EtfResearchLab({ onBack }: EtfResearchLabProps) {
   return (
     <div className="research-shell">
       <header className="research-topbar">
-        <button type="button" className="research-back" onClick={onBack}><ArrowLeft size={17} /> 포트폴리오로</button>
-        <div className="research-brand"><FlaskConical size={20} /><strong>ETF 연구소</strong><span>관리형 카탈로그 · 로컬 계산</span></div>
-        <div className="research-status"><ShieldCheck size={15} /> 계좌 연결·자동주문 없음</div>
+        <div className="research-brand"><FlaskConical size={20} /><strong>ETF비교</strong><span>관리형 카탈로그 · 로컬 계산</span></div>
+        <ProductTabs
+          current="etf-compare"
+          onOpenPortfolio={onOpenPortfolio}
+          onOpenPortfolioReport={onOpenPortfolioReport}
+          onOpenEtfCompare={onOpenEtfCompare}
+        />
       </header>
 
       <main className="research-main">

@@ -1,16 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-16 02:52:46.149860+09:00",
-  "latestDisplayDate": "2026-08-16",
-  "reports": [
-    {
-      "displayDate": "2026-08-16",
-      "marketDate": "2026-08-14",
-      "generatedAt": "2026-08-16 02:52:46.149860+09:00",
-      "state": "상승 확산",
-      "riskLevel": "낮음",
-      "topSector": "건강관리 (Health Care)",
-      "topTheme": "사이버보안"
-    }
-  ]
+  "updatedAt": "",
+  "latestDisplayDate": "",
+  "reports": []
 }

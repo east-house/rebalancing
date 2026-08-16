@@ -264,8 +264,10 @@ def build_news_clusters(
 
 
 def _confirmation(expected_positive: bool, observed: float) -> str:
-    if pd.isna(observed) or abs(observed) < 0.001:
-        return "미확인"
+    if pd.isna(observed):
+        return "자료 부족"
+    if abs(observed) < 0.001:
+        return "가격 반응 미약"
     return "일치" if (observed > 0) == expected_positive else "반대 반응"
 
 
@@ -316,7 +318,7 @@ def build_transmission_signals(
                 "change": f"시장 불안지수(VIX) {_num(market_state['vix'])}, 중기 상승 참여도 {_pct(breadth, signed=False)}",
                 "expected": "상승에 참여하는 종목이 늘면 소형주·경기민감주도 동참",
                 "observed": f"Russell 2000의 S&P 500 대비 1일 {_pct(small_gap)}",
-                "confirmation": "일치" if breadth >= 0.55 and small_gap > 0 else ("부분 확인" if breadth >= 0.55 or small_gap > 0 else "미확인"),
+                "confirmation": "일치" if breadth >= 0.55 and small_gap > 0 else ("부분 확인" if breadth >= 0.55 or small_gap > 0 else "확산 없음"),
             },
         ]
     )
@@ -525,7 +527,7 @@ def render_market_html(
 </style></head><body><header><div class="wrap"><div class="eyebrow">US MARKET CHANGE REPORT</div><h1>무엇이 바뀌었고,<br>어디로 전파되는가.</h1><p>{_safe(market_state['interpretation'])} 단순 순위보다 거시 변화, 교차자산 반응, 섹터·테마 확산을 함께 읽는다.</p><div class="meta"><b>생성 기준 {as_of:%Y-%m-%d}</b><b>미국 거래일 {market_date:%Y-%m-%d}</b><b>시장 {_safe(market_state['state'])}</b><b>위험 {_safe(market_state['risk_level'])}</b><b>자동매매 없음</b></div></div></header>
 <main class="wrap"><section class="changes"><article class="change-card"><span>시장 구조</span><b>{_safe(market_state['state'])}</b><small>S&P 20일 {_pct(market_state['sp500_return_20d'])} · 50일선 상회 {_pct(market_state['breadth_above_ma50'], signed=False)} · VIX {_num(market_state['vix'])}</small></article><article class="change-card"><span>섹터 순위 변화</span><b>{_safe(sector_mover.sector_display)}</b><small>전일 대비 {_rank_delta(sector_mover.rank_change_1d)} · 종합 1위 {_safe(top_sector.sector_display)} · 대장 {_safe(top_sector.leader)}</small></article><article class="change-card"><span>테마 순위 변화</span><b>{_safe(theme_mover.theme)}</b><small>전일 대비 {_rank_delta(theme_mover.rank_change_1d)} · 종합 1위 {_safe(top_theme.theme)} · 대장 {_safe(top_theme.leader)}</small></article></section>
 <section class="section"><div class="section-title"><div><span>MACRO REGIME</span><h2>성장·물가·금리·위험선호</h2></div><p>수준보다 최근 변화 방향을 우선한다. 월간 지표는 발표 시차가 있다.</p></div><div class="axes">{axis_cards}</div></section>
-<section class="section"><div class="section-title"><div><span>TRANSMISSION</span><h2>거시 변화가 가격으로 전달됐는가</h2></div><p>고정된 인과관계가 아니라 기본 가설과 실제 상대수익률의 일치 여부다.</p></div><div class="transmissions">{transmission_cards}</div></section>
+<section class="section"><div class="section-title"><div><h2>거시 변화의 가격 반영</h2></div><p>각 카드에서 거시 변수의 변화와 일반적 예상, 실제 가격 반응을 비교한다. 가격 반응 미약은 실제 수익률 변화가 ±0.1% 미만이라는 뜻이다.</p></div><div class="transmissions">{transmission_cards}</div></section>
 <section class="section"><div class="section-title"><div><span>CROSS ASSET</span><h2>전체 시장과 교차자산</h2></div></div><div class="table-wrap"><table><thead><tr><th>지수·자산</th><th>1일</th><th>5일</th><th>20일</th><th>200일선 괴리</th><th>차트 단계</th></tr></thead><tbody>{market_rows}</tbody></table></div></section>
 <section class="section"><div class="section-title"><div><span>SECTOR ROTATION</span><h2>섹터 순위와 변화</h2></div><p>순위 상승은 양수 화살표로 표시한다. 종합점수와 단기 상승폭은 같은 뜻이 아니다.</p></div><div class="table-wrap"><table><thead><tr><th>순위</th><th>섹터·대장주</th><th>전일</th><th>5일</th><th>점수</th><th>5일 상대</th><th>20일 상대</th><th>60일 상대</th><th>50일선 상회</th><th>단계</th></tr></thead><tbody>{sector_rows}</tbody></table></div></section>
 <section class="section"><div class="section-title"><div><span>THEME ROTATION</span><h2>테마 순위와 변화</h2></div><p>단기 급부상과 장기 추세를 분리해 본다.</p></div><div class="table-wrap"><table><thead><tr><th>순위</th><th>테마·대장주</th><th>전일</th><th>5일</th><th>점수</th><th>5일 상대</th><th>20일 상대</th><th>60일 상대</th><th>50일선 상회</th><th>단계</th></tr></thead><tbody>{theme_rows}</tbody></table></div></section>
@@ -534,4 +536,3 @@ def render_market_html(
 <section class="section"><div class="section-title"><div><span>NEWS CLUSTERS</span><h2>기사 목록이 아닌 사건 단위 뉴스</h2></div><p>출처 등급·중복 건수·관련 가격 반응을 함께 표시한다.</p></div><div class="news-grid">{news_cards}</div></section>
 <section class="section"><div class="section-title"><div><span>RAW MACRO</span><h2>금리·물가·경기 원자료</h2></div></div><div class="table-wrap"><table><thead><tr><th>지표</th><th>최신값</th><th>직전 변화</th><th>관측일</th><th>의미</th></tr></thead><tbody>{macro_rows}</tbody></table></div></section>
 <footer>가격 심볼 {quality['prices']['successful']}/{quality['prices']['requested']} · S&P 500 스냅샷 {quality['stock_snapshot_rows']}개 · 런타임 검증 {'통과' if quality['validation']['passed'] else '실패'}<br>이 문서는 시장 관찰 자료이며 매수·매도·보유 또는 목표 비중을 자동으로 결정하지 않는다. 뉴스 해석과 거시 전파 규칙은 1차 가설이므로 원문과 실제 가격 반응을 함께 확인해야 한다.</footer></main></body></html>"""
-

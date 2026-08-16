@@ -8,6 +8,9 @@ data:
   max_retries: 3
   cache_overlap_days: 10
 
+portfolio_report:
+  benchmark: "IVV"
+
 indices:
   "S&P 500": "^GSPC"
   "Nasdaq 100": "^NDX"
@@ -184,4 +187,4 @@ news:
 schedule:
   timezone: Asia/Seoul
   run_time: "07:30"
-  days: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]

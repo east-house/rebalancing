@@ -16,6 +16,7 @@
     "report:publish-local": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.publish_market_report_web --source action-output/market-report --project-root .",
     "report:publish-r2": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.publish_market_report_web --source action-output/market-report --project-root . --upload-r2",
     "report:update": "npm run report:generate && npm run report:publish-local",
+    "portfolio-report:update": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.us_daily_portfolio_report --as-of today --output public/data/portfolio-reports/latest.json --allow-stale-preview",
     "report:test": "uv run --with-requirements requirements-market-report.txt python -m pytest tests/market_report_pipeline -q",
     "typecheck": "tsc -b",
     "test": "vitest run",

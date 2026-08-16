@@ -5,15 +5,21 @@ from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 
 from market_report_pipeline import publish_market_report_web as MODULE
 
 
-def test_report_display_date_uses_run_date_including_weekend() -> None:
-    assert MODULE.report_display_date({"as_of": "2026-08-16 00:00:00"}) == pd.Timestamp(
-        "2026-08-16"
+def test_report_display_date_uses_weekday_run_date() -> None:
+    assert MODULE.report_display_date({"as_of": "2026-08-17 00:00:00"}) == pd.Timestamp(
+        "2026-08-17"
     )
+
+
+def test_report_display_date_rejects_weekend() -> None:
+    with pytest.raises(ValueError, match="Weekend reports are not published"):
+        MODULE.report_display_date({"as_of": "2026-08-16 00:00:00"})
 
 
 def test_update_index_replaces_same_display_date_and_sorts(tmp_path: Path) -> None:

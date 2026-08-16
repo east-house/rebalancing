@@ -2,7 +2,7 @@ name: Generate and publish daily US market report
 
 on:
   schedule:
-    - cron: "30 7 * * *"
+    - cron: "30 7 * * 1-5"
       timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
@@ -75,6 +75,11 @@ jobs:
             echo "::error::Invalid as_of date: ${run_date}"
             exit 1
           fi
+          day_of_week="$(date -d "${run_date}" +%u)"
+          if (( day_of_week >= 6 )); then
+            echo "::error::Weekend reports are not published: ${run_date}"
+            exit 1
+          fi
           echo "RUN_DATE=${run_date}" >> "${GITHUB_ENV}"
           echo "REPORT_OUTPUT=action-output/market-report/${run_date}" >> "${GITHUB_ENV}"
 
@@ -96,6 +101,14 @@ jobs:
           --as-of "${{ env.RUN_DATE }}"
           --output "${{ env.REPORT_OUTPUT }}"
 
+      - name: Build and publish portfolio decision report
+        run: >-
+          python -m market_report_pipeline.us_daily_portfolio_report
+          --as-of "${{ env.RUN_DATE }}"
+          --output "action-output/portfolio-report/latest.json"
+          --allow-stale-preview
+          --upload-r2
+
       - name: Build web bundle and publish to R2
         run: >-
           python -m market_report_pipeline.publish_market_report_web
@@ -108,6 +121,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: market-report-${{ github.run_id }}
-          path: action-output/market-report/
+          path: |
+            action-output/market-report/
+            action-output/portfolio-report/
           if-no-files-found: warn
           retention-days: 7

@@ -27,7 +27,10 @@ def report_display_date(manifest: dict[str, Any]) -> pd.Timestamp:
     result = pd.Timestamp(value)
     if pd.isna(result):
         raise ValueError("market_report_manifest.json has an invalid as_of")
-    return result.normalize()
+    result = result.normalize()
+    if result.weekday() >= 5:
+        raise ValueError(f"Weekend reports are not published: {result:%Y-%m-%d}")
+    return result
 
 
 def _clean(value: Any) -> Any:

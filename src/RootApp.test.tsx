@@ -5,34 +5,43 @@ import RootApp from "./RootApp";
 
 vi.mock("./App", () => ({
   default: ({
-    onOpenResearch,
-    onOpenReport,
+    onOpenPortfolioReport,
+    onOpenEtfCompare,
   }: {
-    onOpenResearch: () => void;
-    onOpenReport: () => void;
+    onOpenPortfolioReport: () => void;
+    onOpenEtfCompare: () => void;
   }) => (
     <main>
       <h1>Portfolio</h1>
-      <button type="button" onClick={onOpenReport}>Open report</button>
-      <button type="button" onClick={onOpenResearch}>Open research</button>
+      <button type="button" onClick={onOpenPortfolioReport}>Open portfolio report</button>
+      <button type="button" onClick={onOpenEtfCompare}>Open research</button>
     </main>
   ),
 }));
 
 vi.mock("./features/market-report/MarketReportPage", () => ({
-  default: ({ onBack }: { onBack: () => void }) => (
+  default: ({ onOpenPortfolio }: { onOpenPortfolio: () => void }) => (
     <main>
       <h1>Market report</h1>
-      <button type="button" onClick={onBack}>Open portfolio</button>
+      <button type="button" onClick={onOpenPortfolio}>Open portfolio</button>
     </main>
   ),
 }));
 
 vi.mock("./features/etf-research/EtfResearchLab", () => ({
-  default: ({ onBack }: { onBack: () => void }) => (
+  default: ({ onOpenPortfolio }: { onOpenPortfolio: () => void }) => (
     <main>
       <h1>ETF research</h1>
-      <button type="button" onClick={onBack}>Back</button>
+      <button type="button" onClick={onOpenPortfolio}>Back</button>
+    </main>
+  ),
+}));
+
+vi.mock("./features/portfolio-report/PortfolioReportPage", () => ({
+  default: ({ onOpenPortfolio }: { onOpenPortfolio: () => void }) => (
+    <main>
+      <h1>Portfolio report</h1>
+      <button type="button" onClick={onOpenPortfolio}>Back to portfolio</button>
     </main>
   ),
 }));
@@ -59,9 +68,18 @@ describe("RootApp routes", () => {
     expect(window.location.pathname).toBe("/rebalancing");
     expect(screen.getByRole("heading", { name: "Portfolio" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open report" }));
-    expect(window.location.pathname).toBe("/");
-    expect(screen.getByRole("heading", { name: "Market report" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open portfolio report" }));
+    expect(window.location.pathname).toBe("/portfolio-report");
+    expect(screen.getByRole("heading", { name: "Portfolio report" })).toBeTruthy();
+  });
+
+  it("opens the integrated portfolio report at its own URL", () => {
+    window.history.replaceState({}, "", "/portfolio-report");
+
+    render(<RootApp />);
+
+    expect(screen.getByRole("heading", { name: "Portfolio report" })).toBeTruthy();
+    expect(document.title).toBe("TM Reports — 포트폴리오 보고서");
   });
 
   it("follows browser history changes", () => {

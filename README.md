@@ -2,10 +2,12 @@
 
 보유 자산, 매수 원금, 현재 평가액, 목표 비중과 총자산 추이를 한 화면에서 확인하는 리밸런싱 대시보드 프로토타입입니다.
 
-상단 `리포트` 버튼에서는 미국 시장 일일 리포트를 별도 화면으로 확인합니다.
-왼쪽 날짜 목록에는 매일 한국시간 07:30에 생성한 날짜가 하나씩 추가되며, 각
-화면에는 가장 최근 미국 거래일 자료가 연결됩니다. 주말과 미국 휴장일에도 실행
-당일 날짜로 생성하되 분석 자료의 미국 거래일은 화면에 별도로 표시합니다.
+상단에는 `포트폴리오 관리`, `포트폴리오 보고서`, `ETF비교` 탭이 공통으로 표시됩니다.
+`포트폴리오 보고서`는 미국 5종목 모델의 초기 매수안과 매일의 유지·추가 매수·
+일부 매도·전량 매도·교체 검토 결과를 보여줍니다.
+왼쪽 날짜 목록에는 한국 평일 07:30에 생성한 날짜가 하나씩 추가되며, 각 화면에는
+가장 최근 미국 거래일 자료가 연결됩니다. 주말에는 새 리포트를 만들지 않고,
+월요일과 미국 휴장일 다음 평일에는 가장 최근 미국장 자료를 사용합니다.
 
 리포트 데이터는 이 저장소의 독립 패키지 `market_report_pipeline`이 수집·계산·생성한 뒤
 GitHub Actions가 기존 R2 버킷의 날짜별 JSON·HTML·시장 구조 PNG와
@@ -14,11 +16,15 @@ GitHub Actions가 기존 R2 버킷의 날짜별 JSON·HTML·시장 구조 PNG와
 `GET /api/market-reports/{YYYY-MM-DD}`, 날짜별 `/dashboard` 이미지 경로로
 이를 전달하며, R2가 비어 있는 로컬 개발 환경에서는
 `public/data/market-reports`의 검증된 스냅샷을 사용합니다.
+같은 워크플로가 현재 저장소의 `market_report_pipeline.us_daily_portfolio_report`를
+실행해 `portfolio-reports/latest.json`을 R2에 게시합니다. 종목 추천 계산과 화면은
+다른 로컬 저장소를 참조하지 않습니다. 이용자의 투자금·수량·반영 기록은
+`stock_strategy.us_portfolio.device.v1` 키로 브라우저에만 보관됩니다.
 UI 코드 배포는 기존 Git/Cloudflare 연결을 그대로 사용하고, 매일의 데이터 갱신은
 사이트 전체 재빌드 없이 날짜별 리포트 묶음만 갱신합니다.
 
 일일 리포트 워크플로는 `.github/workflows/daily-market-report.yml`이며 한국시간
-매일 07:30에 실행됩니다. GitHub의 새 실행 환경에서도 과거 날짜 목록을
+월~금요일 07:30에 실행됩니다. GitHub의 새 실행 환경에서도 과거 날짜 목록을
 유지하도록 R2의 기존 index를 먼저 복원하고, 새 이미지·본문 업로드가 끝난 뒤 index를
 마지막에 갱신합니다. 수동 검증은 Actions의 `workflow_dispatch` 또는 다음 명령으로
 실행할 수 있습니다.
@@ -27,6 +33,7 @@ UI 코드 배포는 기존 Git/Cloudflare 연결을 그대로 사용하고, 매�
 npm run report:test
 npm run report:generate
 npm run report:publish-local
+npm run portfolio-report:update
 ```
 
 R2 환경변수가 설정된 운영 환경에서는 `npm run report:publish-r2`로 같은 결과를
@@ -55,6 +62,7 @@ R2 환경변수가 설정된 운영 환경에서는 `npm run report:publish-r2`�
 - 자산군 비중과 제약조건을 먼저 정하는 균형·저비용·저중복 포트폴리오 후보 생성
 - 미실행·분기·연간 리밸런싱 위험지표와 가격수익률 백테스트
 - 주간 ETF 연구 데이터 생성, R2 버전 게시, 정적 스냅샷 fallback과 IndexedDB 캐시
+- 미국 5종목 안정 모멘텀 모델의 평일 07:30 매수·매도·월간 리밸런싱 보고서
 
 GitHub Actions가 만든 R2 종가 묶음을 Worker API가 그대로 전달합니다. 한국
 종목은 원화 종가, 미국 종목은 같은 수집 작업의 USD/KRW 종가로 환산합니다.

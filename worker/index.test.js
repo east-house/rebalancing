@@ -204,3 +204,25 @@ describe("market report Worker API", () => {
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(Array.from(image));
   });
 });
+
+describe("portfolio report Worker API", () => {
+  it("serves the latest portfolio decision payload from R2", async () => {
+    const payload = { schema_version: 1, report_date_kst: "2026-08-17" };
+    const env = {
+      MARKET_DATA: {
+        get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }),
+      },
+      ASSETS: { fetch: vi.fn() },
+    };
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/portfolio-reports/latest"),
+      env,
+      { waitUntil: vi.fn() },
+    );
+
+    await expect(response.json()).resolves.toEqual(payload);
+    expect(response.headers.get("cache-control")).toContain("s-maxage=60");
+    expect(env.MARKET_DATA.get).toHaveBeenCalledWith("portfolio-reports/latest.json");
+  });
+});

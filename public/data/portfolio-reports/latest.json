@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-17T07:30:00+09:00",
+  "report_date_kst": "2026-08-17",
+  "report_time_kst": "07:30",
+  "signal_market_date": "2026-08-14",
+  "proposed_execution_date": "2026-08-17",
+  "stale_preview": true,
+  "default_capital": 2819,
+  "default_fractional_shares": true,
+  "fractional_precision": 3,
+  "selection": [
+    { "ticker": "VLO", "name": "Valero Energy", "sector": "Energy", "weight": 0.2, "reference_close": 341.6700134277344, "rank": 1, "trend_200": 0.523056191603281 },
+    { "ticker": "BNY", "name": "BNY Mellon", "sector": "Financials", "weight": 0.2, "reference_close": 163.24000549316406, "rank": 2, "trend_200": 0.274842585165584 },
+    { "ticker": "AMD", "name": "Advanced Micro Devices", "sector": "Information Technology", "weight": 0.2, "reference_close": 514.3900146484375, "rank": 3, "trend_200": 0.5860061661531242 },
+    { "ticker": "FTNT", "name": "Fortinet", "sector": "Information Technology", "weight": 0.2, "reference_close": 160.00999450683594, "rank": 5, "trend_200": 0.5316900729303493 },
+    { "ticker": "UNH", "name": "UnitedHealth Group", "sector": "Health Care", "weight": 0.2, "reference_close": 401.7300109863281, "rank": 12, "trend_200": 0.16752214792957343 }
+  ],
+  "candidates": [
+    { "ticker": "VLO", "name": "Valero Energy", "sector": "Energy", "rank": 1, "score": 0.98, "close": 341.6700134277344, "trend_200": 0.523056191603281 },
+    { "ticker": "BNY", "name": "BNY Mellon", "sector": "Financials", "rank": 2, "score": 0.96, "close": 163.24000549316406, "trend_200": 0.274842585165584 },
+    { "ticker": "AMD", "name": "Advanced Micro Devices", "sector": "Information Technology", "rank": 3, "score": 0.94, "close": 514.3900146484375, "trend_200": 0.5860061661531242 },
+    { "ticker": "FTNT", "name": "Fortinet", "sector": "Information Technology", "rank": 5, "score": 0.91, "close": 160.00999450683594, "trend_200": 0.5316900729303493 },
+    { "ticker": "UNH", "name": "UnitedHealth Group", "sector": "Health Care", "rank": 12, "score": 0.86, "close": 401.7300109863281, "trend_200": 0.16752214792957343 }
+  ],
+  "quotes": {
+    "VLO": { "ticker": "VLO", "name": "Valero Energy", "sector": "Energy", "close": 341.6700134277344, "rank": 1, "trend_200": 0.523056191603281 },
+    "BNY": { "ticker": "BNY", "name": "BNY Mellon", "sector": "Financials", "close": 163.24000549316406, "rank": 2, "trend_200": 0.274842585165584 },
+    "AMD": { "ticker": "AMD", "name": "Advanced Micro Devices", "sector": "Information Technology", "close": 514.3900146484375, "rank": 3, "trend_200": 0.5860061661531242 },
+    "FTNT": { "ticker": "FTNT", "name": "Fortinet", "sector": "Information Technology", "close": 160.00999450683594, "rank": 5, "trend_200": 0.5316900729303493 },
+    "UNH": { "ticker": "UNH", "name": "UnitedHealth Group", "sector": "Health Care", "close": 401.7300109863281, "rank": 12, "trend_200": 0.16752214792957343 }
+  },
+  "market": { "state": "강세", "ivv_close": 780.0399780273438, "ivv_vs_sma_200": 0.10506280722638373 },
+  "policy": {
+    "maximum_positions": 5,
+    "hold_rank": 10,
+    "stop_loss": 0.12,
+    "trailing_stop": 0.15,
+    "drift_threshold": 0.03,
+    "review_frequency": "first KST weekday report of each month",
+    "automatic_trading": false
+  },
+  "privacy": {
+    "storage": "browser localStorage only",
+    "server_user_state": false,
+    "cross_device_sync": false,
+    "analytics": false
+  },
+  "data_snapshot": "sp500_20260816.parquet"
+}

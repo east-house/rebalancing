@@ -7,8 +7,9 @@ interface SiteFooterProps {
 
 const FOOTER_LINKS = [
   { href: "/", label: "시장 리포트" },
-  { href: "/rebalancing", label: "리밸런싱" },
-  { href: "/etf-research", label: "ETF 연구소" },
+  { href: "/rebalancing", label: "포트폴리오 관리" },
+  { href: "/portfolio-report", label: "포트폴리오 보고서" },
+  { href: "/etf-research", label: "ETF비교" },
   { href: "/about", label: "사이트 소개" },
   { href: "/privacy", label: "개인정보처리방침" },
   { href: "/terms", label: "이용약관·투자 유의사항" },

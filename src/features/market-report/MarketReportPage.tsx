@@ -2,7 +2,6 @@ import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   BarChart3,
   CalendarDays,
@@ -13,7 +12,6 @@ import {
   Maximize2,
   Minus,
   Newspaper,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
   X,
@@ -29,10 +27,13 @@ import {
   type MarketReportRow,
 } from "../../api/marketReports";
 import SiteFooter from "../../components/SiteFooter";
+import ProductTabs from "../../components/ProductTabs";
 import "./marketReportPage.css";
 
 interface MarketReportPageProps {
-  onBack: () => void;
+  onOpenPortfolio: () => void;
+  onOpenPortfolioReport: () => void;
+  onOpenEtfCompare: () => void;
   now?: Date;
 }
 
@@ -55,6 +56,12 @@ function number(row: MarketReportRow | null | undefined, key: string): number | 
 function text(row: MarketReportRow | null | undefined, key: string, fallback = "—"): string {
   const value = row?.[key];
   return typeof value === "string" && value ? value : fallback;
+}
+
+function transmissionConfirmation(row: MarketReportRow): string {
+  const confirmation = text(row, "confirmation");
+  if (confirmation !== "미확인") return confirmation;
+  return text(row, "driver") === "위험선호 확산" ? "확산 없음" : "가격 반응 미약";
 }
 
 function pct(value: number | null, digits = 1): string {
@@ -148,7 +155,12 @@ function EmptyRow({ columns, children }: { columns: number; children: string }) 
   );
 }
 
-export default function MarketReportPage({ onBack, now }: MarketReportPageProps) {
+export default function MarketReportPage({
+  onOpenPortfolio,
+  onOpenPortfolioReport,
+  onOpenEtfCompare,
+  now,
+}: MarketReportPageProps) {
   const [currentTime] = useState(() => now ?? new Date());
   const [index, setIndex] = useState<MarketReportIndex | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -242,14 +254,15 @@ export default function MarketReportPage({ onBack, now }: MarketReportPageProps)
   return (
     <div className="market-report-shell">
       <header className="report-topbar">
-        <button type="button" className="report-back" onClick={onBack}>
-          <ArrowLeft size={16} /> 포트폴리오
-        </button>
         <div className="report-brand">
           <Newspaper size={18} />
           <div><strong>시장 리포트</strong><span>US MARKET INTELLIGENCE</span></div>
         </div>
-        <span className="report-status"><ShieldCheck size={14} /> 자동매매 없음</span>
+        <ProductTabs
+          onOpenPortfolio={onOpenPortfolio}
+          onOpenPortfolioReport={onOpenPortfolioReport}
+          onOpenEtfCompare={onOpenEtfCompare}
+        />
       </header>
 
       <div className="market-report-layout">
@@ -257,7 +270,7 @@ export default function MarketReportPage({ onBack, now }: MarketReportPageProps)
           <div className="report-sidebar__head">
             <span>REPORT ARCHIVE</span>
             <strong>날짜별 리포트</strong>
-            <p>매일 오전 7시 30분에 생성되는 최신 미국장 정보</p>
+            <p>한국 평일 오전 7시 30분에 생성되는 최신 미국장 정보</p>
           </div>
           <nav>
             {availableReports.map((item) => (
@@ -292,8 +305,6 @@ export default function MarketReportPage({ onBack, now }: MarketReportPageProps)
                   <p>{text(state, "interpretation")}</p>
                 </div>
                 <dl className="report-date-card">
-                  <div><dt>화면 기준일</dt><dd>{koreanDate(report.displayDate)}</dd></div>
-                  <div><dt>미국 거래일</dt><dd>{koreanDate(report.marketDate)}</dd></div>
                   <div><dt>시장 상태</dt><dd>{text(state, "state")}</dd></div>
                   <div><dt>위험 수준</dt><dd>{text(state, "risk_level")}</dd></div>
                 </dl>
@@ -405,7 +416,7 @@ export default function MarketReportPage({ onBack, now }: MarketReportPageProps)
 
               <div className="report-notice">
                 <Clock3 size={16} />
-                <span>리포트는 매일 한국시간 오전 7시 30분에 당일 날짜로 생성됩니다. 주말·미국 휴장일에는 가장 최근 미국 거래일 자료를 사용합니다.</span>
+                <span>리포트는 한국 평일 오전 7시 30분에 당일 날짜로 생성됩니다. 월요일과 미국 휴장일 다음 평일에는 가장 최근 미국 거래일 자료를 사용합니다.</span>
               </div>
 
               <section className="report-kpis" aria-label="시장 핵심 지표">
@@ -432,14 +443,14 @@ export default function MarketReportPage({ onBack, now }: MarketReportPageProps)
 
               {report.transmissions?.length ? (
                 <section className="report-section">
-                  <div className="report-section__head"><div><span>TRANSMISSION</span><h2>거시 변화가 가격으로 전달됐는가</h2><p className="report-section-help">‘변화’ 뒤에 예상한 시장 반응과 실제 반응이 일치할수록 신호가 강합니다. 어긋나면 뉴스보다 가격을 우선해 보세요.</p></div><TrendingUp size={19} /></div>
+                  <div className="report-section__head"><div><h2>거시 변화의 가격 반영</h2><p className="report-section-help">각 카드에서 거시 변수의 ‘변화’를 먼저 보고, 아래 ‘일반적 예상’과 ‘실제 가격’을 비교합니다. ‘가격 반응 미약’은 실제 수익률 변화가 ±0.1% 미만이라는 뜻입니다.</p></div><TrendingUp size={19} /></div>
                   <div className="report-transmission-grid">
                     {report.transmissions.map((row) => (
                       <article key={text(row, "driver")}>
-                        <div><span>{text(row, "driver")}</span><b>{text(row, "confirmation")}</b></div>
+                        <div><span>{text(row, "driver")}</span><b>{transmissionConfirmation(row)}</b></div>
                         <strong>{text(row, "change")}</strong>
-                        <p>{text(row, "expected")}</p>
-                        <small>{text(row, "observed")}</small>
+                        <p><em>일반적 예상</em>{text(row, "expected")}</p>
+                        <small><em>실제 가격</em>{text(row, "observed")}</small>
                       </article>
                     ))}
                   </div>

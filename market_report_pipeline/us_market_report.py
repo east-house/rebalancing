@@ -1606,6 +1606,7 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
     for definition in config["themes"].values():
         symbols.add(str(definition["proxy"]))
         symbols.update(str(value) for value in definition["members"])
+    symbols.add(str(config.get("portfolio_report", {}).get("benchmark", "IVV")))
 
     LOGGER.info("2/10 Collecting post-close market prices for %d symbols", len(symbols))
     prices, price_audit = collect_context_prices(sorted(symbols), settings, config)

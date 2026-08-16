@@ -1,0 +1,45 @@
+.product-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.product-tabs button {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 8px 11px;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.product-tabs button:hover {
+  color: var(--accent-strong);
+  background: var(--surface-soft);
+}
+
+.product-tabs button.is-active {
+  color: var(--accent-strong);
+  background: #eff5ff;
+  border-color: var(--line-strong);
+}
+
+@media (max-width: 760px) {
+  .product-tabs {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .product-tabs::-webkit-scrollbar { display: none; }
+  .product-tabs button { flex: 0 0 auto; }
+}
