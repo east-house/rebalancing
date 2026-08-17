@@ -37,6 +37,7 @@ import type {
 import "./etfResearchLab.css";
 
 interface EtfResearchLabProps {
+  onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
   onOpenEtfCompare: () => void;
@@ -114,6 +115,7 @@ function CurveChart({ results }: { results: readonly BacktestResult[] }) {
 }
 
 export default function EtfResearchLab({
+  onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
   onOpenEtfCompare,
@@ -282,6 +284,7 @@ export default function EtfResearchLab({
         <div className="research-brand"><FlaskConical size={20} /><strong>ETF비교</strong><span>관리형 카탈로그 · 로컬 계산</span></div>
         <ProductTabs
           current="etf-compare"
+          onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
           onOpenEtfCompare={onOpenEtfCompare}

@@ -121,6 +121,7 @@ export default function RootApp() {
   };
 
   const productNavigation = {
+    onOpenReport: () => navigate("report"),
     onOpenPortfolio: () => navigate("portfolio"),
     onOpenPortfolioReport: () => navigate("portfolioReport"),
     onOpenEtfCompare: () => navigate("research"),

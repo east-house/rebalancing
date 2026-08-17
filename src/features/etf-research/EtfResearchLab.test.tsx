@@ -26,7 +26,7 @@ describe("ETF 연구소 화면", () => {
   });
 
   it("스냅샷을 불러와 50개 관리형 ETF와 세 기능을 표시한다", async () => {
-    render(<EtfResearchLab onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} />);
+    render(<EtfResearchLab onOpenReport={vi.fn()} onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} />);
     expect(await screen.findByText("KODEX 200")).toBeTruthy();
     expect(screen.getByText("50개")).toBeTruthy();
     expect(screen.getByRole("button", { name: /3\. ETF 분석/ })).toBeTruthy();
@@ -36,7 +36,7 @@ describe("ETF 연구소 화면", () => {
 
   it("균형 프리셋에서 포트폴리오 후보 3개를 만든다", async () => {
     const user = userEvent.setup();
-    render(<EtfResearchLab onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} />);
+    render(<EtfResearchLab onOpenReport={vi.fn()} onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} />);
     await screen.findByText("KODEX 200");
     await user.click(screen.getByRole("button", { name: /4\. 포트폴리오 생성/ }));
     await user.click(screen.getByRole("button", { name: "조건으로 3개 후보 만들기" }));

@@ -38,9 +38,16 @@ vi.mock("./features/etf-research/EtfResearchLab", () => ({
 }));
 
 vi.mock("./features/portfolio-report/PortfolioReportPage", () => ({
-  default: ({ onOpenPortfolio }: { onOpenPortfolio: () => void }) => (
+  default: ({
+    onOpenReport,
+    onOpenPortfolio,
+  }: {
+    onOpenReport: () => void;
+    onOpenPortfolio: () => void;
+  }) => (
     <main>
       <h1>Portfolio report</h1>
+      <button type="button" onClick={onOpenReport}>Open market report</button>
       <button type="button" onClick={onOpenPortfolio}>Back to portfolio</button>
     </main>
   ),
@@ -80,6 +87,10 @@ describe("RootApp routes", () => {
 
     expect(screen.getByRole("heading", { name: "Portfolio report" })).toBeTruthy();
     expect(document.title).toBe("TM Reports — 포트폴리오 보고서");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open market report" }));
+    expect(window.location.pathname).toBe("/");
+    expect(screen.getByRole("heading", { name: "Market report" })).toBeTruthy();
   });
 
   it("follows browser history changes", () => {

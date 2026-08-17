@@ -10,6 +10,7 @@ vi.mock("../../api/portfolioReport", () => ({
 }));
 
 const navigation = {
+  onOpenReport: vi.fn(),
   onOpenPortfolio: vi.fn(),
   onOpenPortfolioReport: vi.fn(),
   onOpenEtfCompare: vi.fn(),
@@ -21,14 +22,18 @@ describe("포트폴리오 보고서 화면", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the three product tabs and creates a device-local initial report", async () => {
+  it("shows the four product tabs and creates a device-local initial report", async () => {
     render(<PortfolioReportPage {...navigation} />);
 
     expect(await screen.findByRole("heading", { name: "초기 포트폴리오 매수안" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "리포트" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "포트폴리오 관리" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "포트폴리오 보고서" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("button", { name: "ETF비교" })).toBeTruthy();
     expect(screen.getAllByText("매수")).toHaveLength(5);
+
+    fireEvent.click(screen.getByRole("button", { name: "리포트" }));
+    expect(navigation.onOpenReport).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: "초기 리포트 저장" }));
 

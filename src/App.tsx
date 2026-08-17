@@ -239,12 +239,13 @@ function holdingHistoryKey(country: "KR" | "US", ticker: string) {
 }
 
 interface AppProps {
+  onOpenReport?: () => void;
   onOpenPortfolio?: () => void;
   onOpenPortfolioReport?: () => void;
   onOpenEtfCompare?: () => void;
 }
 
-function App({ onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCompare }: AppProps) {
+function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCompare }: AppProps) {
   const [initialLocalState] = useState(() =>
     loadLocalAppState(createDefaultLocalState()),
   );
@@ -969,9 +970,10 @@ function App({ onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCompare }: AppPr
         </a>
 
         <div className="topbar-meta">
-          {onOpenPortfolio && onOpenPortfolioReport && onOpenEtfCompare ? (
+          {onOpenReport && onOpenPortfolio && onOpenPortfolioReport && onOpenEtfCompare ? (
             <ProductTabs
               current="portfolio"
+              onOpenReport={onOpenReport}
               onOpenPortfolio={onOpenPortfolio}
               onOpenPortfolioReport={onOpenPortfolioReport}
               onOpenEtfCompare={onOpenEtfCompare}

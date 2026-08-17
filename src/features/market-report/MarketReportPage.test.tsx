@@ -131,7 +131,7 @@ describe("시장 리포트 화면", () => {
   });
 
   it("오늘의 결론과 시장 구조 대시보드를 함께 표시한다", async () => {
-    render(<MarketReportPage onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} now={new Date("2026-08-17T01:00:00Z")} />);
+    render(<MarketReportPage onOpenReport={vi.fn()} onOpenPortfolio={vi.fn()} onOpenPortfolioReport={vi.fn()} onOpenEtfCompare={vi.fn()} now={new Date("2026-08-17T01:00:00Z")} />);
 
     expect(await screen.findByRole("heading", { name: "오늘의 결론" })).toBeTruthy();
     expect(screen.getByText("직전 거래일·발표와 비교")).toBeTruthy();
@@ -154,6 +154,7 @@ describe("시장 리포트 화면", () => {
     expect(screen.getByText("실제 가격")).toBeTruthy();
     expect(screen.queryByText("화면 기준일")).toBeNull();
     expect(screen.queryByText("미국 거래일")).toBeNull();
+    expect(screen.getByRole("button", { name: "리포트" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("button", { name: "포트폴리오 관리" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "포트폴리오 보고서" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "ETF비교" })).toBeTruthy();

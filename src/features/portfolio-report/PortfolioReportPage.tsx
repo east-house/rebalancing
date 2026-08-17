@@ -25,6 +25,7 @@ import "./portfolioReportPage.css";
 const STORAGE_KEY = "stock_strategy.us_portfolio.device.v1";
 
 interface PortfolioReportPageProps {
+  onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
   onOpenEtfCompare: () => void;
@@ -80,6 +81,7 @@ function historyItem(
 }
 
 export default function PortfolioReportPage({
+  onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
   onOpenEtfCompare,
@@ -208,6 +210,7 @@ export default function PortfolioReportPage({
         <div className="portfolio-report-brand"><WalletCards size={19} /><div><strong>포트폴리오 보고서</strong><span>MODEL DECISION REPORT</span></div></div>
         <ProductTabs
           current="portfolio-report"
+          onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
           onOpenEtfCompare={onOpenEtfCompare}

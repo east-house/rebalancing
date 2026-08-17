@@ -31,6 +31,7 @@ import ProductTabs from "../../components/ProductTabs";
 import "./marketReportPage.css";
 
 interface MarketReportPageProps {
+  onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
   onOpenEtfCompare: () => void;
@@ -156,6 +157,7 @@ function EmptyRow({ columns, children }: { columns: number; children: string }) 
 }
 
 export default function MarketReportPage({
+  onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
   onOpenEtfCompare,
@@ -259,6 +261,8 @@ export default function MarketReportPage({
           <div><strong>시장 리포트</strong><span>US MARKET INTELLIGENCE</span></div>
         </div>
         <ProductTabs
+          current="report"
+          onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
           onOpenEtfCompare={onOpenEtfCompare}
