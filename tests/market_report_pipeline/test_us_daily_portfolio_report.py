@@ -24,6 +24,13 @@ def _market_data() -> report.MarketData:
     benchmark = pd.Series(
         100 * np.cumprod(1 + rng.normal(0.0003, 0.006, len(dates))), index=dates
     )
+    theme_proxy_close = pd.DataFrame(
+        {
+            "STRONG": 100 * np.cumprod(1 + np.linspace(0.0001, 0.0020, len(dates))),
+            "WEAK": 100 * np.cumprod(1 + np.linspace(0.0001, -0.0005, len(dates))),
+        },
+        index=dates,
+    )
     universe = pd.DataFrame(
         {
             "ticker": tickers,
@@ -39,6 +46,11 @@ def _market_data() -> report.MarketData:
         universe=universe,
         benchmark=benchmark,
         snapshot_path=report.Path("synthetic.parquet"),
+        theme_proxy_close=theme_proxy_close,
+        theme_definitions={
+            "강한 테마": {"proxy": "STRONG", "members": ["A"]},
+            "약한 테마": {"proxy": "WEAK", "members": ["B"]},
+        },
     )
 
 
@@ -72,6 +84,36 @@ def test_daily_ranking_does_not_use_future_prices() -> None:
     pd.testing.assert_series_equal(before, after)
 
 
+def test_hybrid_ranking_uses_85_percent_base_and_15_percent_theme() -> None:
+    data = _market_data()
+    signal = data.calendar[-5]
+
+    ranked = report.build_daily_ranking(data, signal).set_index("ticker")
+
+    np.testing.assert_allclose(
+        ranked["score"],
+        report.BASE_WEIGHT * ranked["base_score"]
+        + report.THEME_WEIGHT * ranked["theme_strength"],
+    )
+    assert ranked.loc["A", "theme_strength"] > ranked.loc["B", "theme_strength"]
+    assert ranked.loc["A", "themes"] == "강한 테마"
+    assert ranked.loc["C", "theme_strength"] == report.UNMAPPED_THEME_SCORE
+
+
+def test_hybrid_ranking_does_not_use_future_theme_prices() -> None:
+    data = _market_data()
+    signal = data.calendar[-5]
+    before = report.build_daily_ranking(data, signal).set_index("ticker")["score"]
+    changed = copy.deepcopy(data)
+    changed.theme_proxy_close.loc[
+        changed.theme_proxy_close.index > signal, "WEAK"
+    ] *= 100
+
+    after = report.build_daily_ranking(changed, signal).set_index("ticker")["score"]
+
+    pd.testing.assert_series_equal(before, after)
+
+
 def test_device_payload_keeps_user_state_out_of_the_server_artifact() -> None:
     data = _market_data()
     report_date = data.calendar[-1]
@@ -79,8 +121,21 @@ def test_device_payload_keeps_user_state_out_of_the_server_artifact() -> None:
     payload = report.build_device_payload(data, report_date)
 
     assert payload["default_capital"] == 2_819.0
+    assert payload["schema_version"] == 2
+    assert payload["strategy"] == {
+        "id": "us_theme_hybrid_v1",
+        "name": "안정 모멘텀·테마 혼합",
+        "status": "production_baseline",
+        "base_weight": 0.85,
+        "theme_weight": 0.15,
+        "benchmark": "IVV",
+    }
     assert len(payload["selection"]) == 5
     assert np.isclose(sum(item["weight"] for item in payload["selection"]), 1.0)
+    assert all(
+        "themes" in item and "base_score" in item and "theme_strength" in item
+        for item in payload["selection"]
+    )
     assert payload["privacy"] == {
         "storage": "browser localStorage only",
         "server_user_state": False,

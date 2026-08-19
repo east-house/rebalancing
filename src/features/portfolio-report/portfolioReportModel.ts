@@ -9,6 +9,7 @@ export interface DevicePosition {
   ticker: string;
   name: string;
   sector: string;
+  themes: string;
   weight: number;
   shares: number;
   entryPrice: number;
@@ -24,7 +25,8 @@ export interface DeviceHistory {
 }
 
 export interface PortfolioDeviceState {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  strategyId: string;
   capital: number;
   fractional: boolean;
   cash: number;
@@ -32,6 +34,7 @@ export interface PortfolioDeviceState {
   initialReport: {
     reportDate: string;
     marketDate: string;
+    strategyId: string;
   };
   lastReviewMonth: string;
   history: DeviceHistory[];
@@ -82,6 +85,7 @@ export function allocatePortfolio(
       ticker: item.ticker,
       name: item.name,
       sector: item.sector,
+      themes: item.themes,
       weight: item.weight,
       shares,
       entryPrice: price,
@@ -195,6 +199,7 @@ export function applyActions(
         ticker: action.ticker,
         name: action.name,
         sector: action.sector,
+        themes: action.themes,
         weight: action.weight,
         shares: targetShares,
         entryPrice: action.entryPrice,
@@ -205,6 +210,7 @@ export function applyActions(
       ticker: action.ticker,
       name: action.name,
       sector: action.sector,
+      themes: action.themes,
       weight: action.weight,
       shares: action.shares,
       entryPrice: action.entryPrice,

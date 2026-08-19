@@ -55,7 +55,11 @@ function pct(value: number | null, digits = 1): string {
 function loadDeviceState(): PortfolioDeviceState | null {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as PortfolioDeviceState | null;
-    return value?.schemaVersion === 1 && Array.isArray(value.positions) ? value : null;
+    return value?.schemaVersion === 2
+      && typeof value.strategyId === "string"
+      && Array.isArray(value.positions)
+      ? value
+      : null;
   } catch {
     return null;
   }
@@ -134,7 +138,8 @@ export default function PortfolioReportPage({
   const saveInitial = () => {
     if (!payload || !initialPlan) return;
     const state: PortfolioDeviceState = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      strategyId: payload.strategy.id,
       capital: Math.max(100, capital),
       fractional,
       cash: initialPlan.cash,
@@ -142,9 +147,10 @@ export default function PortfolioReportPage({
       initialReport: {
         reportDate: payload.report_date_kst,
         marketDate: payload.signal_market_date,
+        strategyId: payload.strategy.id,
       },
       lastReviewMonth: payload.report_date_kst.slice(0, 7),
-      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · 5종목 각 20% 매수안`) ],
+      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · 5종목 각 20% · ${payload.strategy.name}`) ],
     };
     saveDeviceState(state);
     setDeviceState(state);
@@ -169,6 +175,7 @@ export default function PortfolioReportPage({
       ticker: position.ticker,
       name: position.name,
       sector: position.sector,
+      themes: position.themes,
       weight: position.weight,
       reference_close: payload.quotes[position.ticker]?.close ?? position.entryPrice,
       close: payload.quotes[position.ticker]?.close ?? position.entryPrice,
@@ -221,7 +228,7 @@ export default function PortfolioReportPage({
         {error || !payload ? <div className="portfolio-report-alert"><CircleAlert size={18} />{error || "표시할 포트폴리오 보고서가 없습니다."}</div> : (
           <>
             <section className="portfolio-report-hero">
-              <div><span className="portfolio-report-eyebrow">{payload.report_date_kst} · 07:30 KST</span><h1>오늘 확인할 매수·매도와<br />리밸런싱 제안</h1><p>미국 {payload.signal_market_date} 종가까지 반영한 5종목 모델입니다. 실제 주문은 실행하지 않습니다.</p></div>
+              <div><span className="portfolio-report-eyebrow">{payload.report_date_kst} · 07:30 KST</span><h1>오늘 확인할 매수·매도와<br />리밸런싱 제안</h1><p>{payload.strategy.name} · 미국 {payload.signal_market_date} 종가까지 반영한 5종목 모델입니다. 실제 주문은 실행하지 않습니다.</p></div>
               <dl><div><dt>시장 상태</dt><dd>{payload.market.state}</dd></div><div><dt>IVV 장기선</dt><dd>{pct(payload.market.ivv_vs_sma_200)}</dd></div><div><dt>정기 점검</dt><dd>월 1회</dd></div><div><dt>자동매매</dt><dd>없음</dd></div></dl>
             </section>
 
@@ -231,7 +238,7 @@ export default function PortfolioReportPage({
               <section className="portfolio-report-card">
                 <div className="portfolio-report-card__head"><div><span>INITIAL BUY PLAN</span><h2>초기 포트폴리오 매수안</h2><p>투자금을 5종목에 각 20%씩 배정합니다. 금액과 소수점 거래 여부를 바꾸면 수량을 다시 계산합니다.</p></div><TrendingUp size={20} /></div>
                 <div className="portfolio-report-controls"><label>투자금액(USD)<input type="number" min="100" step="1" value={capital} onChange={(event) => setCapital(Number(event.target.value))} /></label><label className="portfolio-report-check"><input type="checkbox" checked={fractional} onChange={(event) => setFractional(event.target.checked)} /> 소수점 주식 사용</label><button type="button" onClick={saveInitial}>초기 리포트 저장</button></div>
-                <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>제안</th><th>목표비중</th><th>배정금액</th><th>기준 종가</th><th>계산 수량</th><th>후보 순위</th></tr></thead><tbody>{initialPlan.positions.map((position) => { const quote = payload.quotes[position.ticker]; return <tr key={position.ticker}><td><strong>{position.name}</strong><small>{position.ticker} · {position.sector}</small></td><td><span className="portfolio-action buy">매수</span></td><td>{(position.weight * 100).toFixed(0)}%</td><td>{money(capital * position.weight)}</td><td>{money(quote?.close ?? position.entryPrice)}</td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{quote?.rank ?? "—"}</td></tr>; })}</tbody></table></div>
+                <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>연결 테마</th><th>제안</th><th>목표비중</th><th>배정금액</th><th>기준 종가</th><th>계산 수량</th><th>후보 순위</th></tr></thead><tbody>{initialPlan.positions.map((position) => { const quote = payload.quotes[position.ticker]; return <tr key={position.ticker}><td><strong>{position.name}</strong><small>{position.ticker} · {position.sector}</small></td><td>{position.themes}</td><td><span className="portfolio-action buy">매수</span></td><td>{(position.weight * 100).toFixed(0)}%</td><td>{money(capital * position.weight)}</td><td>{money(quote?.close ?? position.entryPrice)}</td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{quote?.rank ?? "—"}</td></tr>; })}</tbody></table></div>
                 <p className="portfolio-report-cash">계산 후 예상 현금 {money(initialPlan.cash)} · 실제 체결가격과 수수료에 따라 달라질 수 있습니다.</p>
               </section>
             ) : null}
@@ -266,7 +273,7 @@ export default function PortfolioReportPage({
 
             <section className="portfolio-report-method">
               <h2>추천 기준과 한계</h2>
-              <ol><li>S&amp;P 500 종목 중 가격·유동성·변동성 조건을 통과한 상위 200개를 계산합니다.</li><li>12개월·6개월 모멘텀, 200일 추세와 낮은 변동성을 합산하고 섹터·종목 간 상관 제한으로 5개를 선택합니다.</li><li>매입가 대비 -12% 또는 보유 후 고점 대비 -15%면 전량 매도를 제안합니다.</li><li>매월 첫 평일에는 10위 유지구간과 목표 20%에서 3%p 이상 벗어났는지 점검합니다.</li></ol>
+              <ol><li>S&amp;P 500 종목 중 가격·유동성·변동성 조건을 통과한 상위 200개를 계산합니다.</li><li>안정 모멘텀 점수 85%에 시장 리포트의 테마 강도 15%를 결합합니다.</li><li>섹터당 최대 2종목과 종목 간 상관 0.80 제한을 적용해 최종 5종목을 선택합니다.</li><li>매입가 대비 -12% 또는 보유 후 고점 대비 -15%면 전량 매도를 제안하고, 매월 첫 평일에는 순위와 목표비중을 점검합니다.</li></ol>
               <p><CircleAlert size={16} /> 본 보고서는 규칙 기반 모델의 정보 제공 결과이며 개인의 재무상황을 반영한 투자자문이 아닙니다. 실제 투자 판단과 주문 책임은 이용자에게 있습니다.</p>
             </section>
           </>

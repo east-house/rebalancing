@@ -11,31 +11,65 @@ import argparse
 import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from .io_utils import write_json
-from .support import STOCK_CACHE, UNIVERSE_CACHE, safe_symbol
+from .support import PROJECT_ROOT, STOCK_CACHE, UNIVERSE_CACHE, safe_symbol
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_USER_CAPITAL = 2_819.0
-MAX_POSITIONS = 5
-HOLD_RANK = 10
-MAX_NAMES_PER_SECTOR = 2
-MAX_PAIRWISE_CORRELATION = 0.80
-MINIMUM_PRICE = 10.0
-MINIMUM_DOLLAR_VOLUME = 25_000_000.0
-MAXIMUM_ANNUALIZED_VOLATILITY = 0.80
-TOP_LIQUID_NAMES = 200
-STOP_LOSS = 0.12
-TRAILING_STOP = 0.15
-DRIFT_THRESHOLD = 0.03
-BENCHMARK_TICKER = "IVV"
+STRATEGY_CONFIG_PATH = PROJECT_ROOT / "config" / "portfolio-report.yaml"
+MARKET_CONFIG_PATH = PROJECT_ROOT / "config" / "market-report.yaml"
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as file:
+        return yaml.safe_load(file) or {}
+
+
+STRATEGY_CONFIG = _load_yaml(STRATEGY_CONFIG_PATH)
+STRATEGY_ID = str(STRATEGY_CONFIG["strategy"]["id"])
+STRATEGY_NAME = str(STRATEGY_CONFIG["strategy"]["name"])
+BASE_WEIGHT = float(STRATEGY_CONFIG["score"]["base_weight"])
+THEME_WEIGHT = float(STRATEGY_CONFIG["score"]["theme_weight"])
+UNMAPPED_THEME_SCORE = float(STRATEGY_CONFIG["score"]["unmapped_theme_score"])
+BASE_COMPONENT_WEIGHTS = {
+    str(key): float(value)
+    for key, value in STRATEGY_CONFIG["score"]["base_components"].items()
+}
+THEME_COMPONENT_WEIGHTS = {
+    str(key): float(value)
+    for key, value in STRATEGY_CONFIG["score"]["theme_components"].items()
+}
+MAX_POSITIONS = int(STRATEGY_CONFIG["portfolio"]["maximum_positions"])
+TARGET_WEIGHT_EACH = float(STRATEGY_CONFIG["portfolio"]["target_weight_each"])
+HOLD_RANK = int(STRATEGY_CONFIG["portfolio"]["hold_rank"])
+MAX_NAMES_PER_SECTOR = int(STRATEGY_CONFIG["portfolio"]["maximum_names_per_sector"])
+MAX_PAIRWISE_CORRELATION = float(STRATEGY_CONFIG["portfolio"]["maximum_pairwise_correlation"])
+CORRELATION_LOOKBACK = int(STRATEGY_CONFIG["portfolio"]["correlation_lookback_sessions"])
+MINIMUM_PRICE = float(STRATEGY_CONFIG["universe"]["minimum_price"])
+MINIMUM_DOLLAR_VOLUME = float(STRATEGY_CONFIG["universe"]["minimum_dollar_volume_63"])
+MAXIMUM_ANNUALIZED_VOLATILITY = float(STRATEGY_CONFIG["universe"]["maximum_annualized_volatility"])
+TOP_LIQUID_NAMES = int(STRATEGY_CONFIG["universe"]["top_liquid_names"])
+STOP_LOSS = float(STRATEGY_CONFIG["risk"]["stop_loss"])
+TRAILING_STOP = float(STRATEGY_CONFIG["risk"]["trailing_stop"])
+DRIFT_THRESHOLD = float(STRATEGY_CONFIG["portfolio"]["drift_threshold"])
+
+if not math.isclose(BASE_WEIGHT + THEME_WEIGHT, 1.0):
+    raise ValueError("Hybrid base and theme weights must sum to 1.0")
+if not math.isclose(sum(BASE_COMPONENT_WEIGHTS.values()), 1.0):
+    raise ValueError("Base score component weights must sum to 1.0")
+if not math.isclose(sum(THEME_COMPONENT_WEIGHTS.values()), 1.0):
+    raise ValueError("Theme score component weights must sum to 1.0")
+if not math.isclose(MAX_POSITIONS * TARGET_WEIGHT_EACH, 1.0):
+    raise ValueError("Maximum positions and target weight must allocate 100%")
 
 
 @dataclass
@@ -46,6 +80,8 @@ class MarketData:
     universe: pd.DataFrame
     benchmark: pd.Series
     snapshot_path: Path
+    theme_proxy_close: pd.DataFrame = field(default_factory=pd.DataFrame)
+    theme_definitions: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _read_price(path: Path, ticker: str) -> pd.DataFrame:
@@ -88,15 +124,41 @@ def load_market_data() -> MarketData:
         close.index
     )
 
-    benchmark_path = STOCK_CACHE / f"{safe_symbol(BENCHMARK_TICKER)}.parquet"
+    benchmark_path = STOCK_CACHE / f"{safe_symbol('IVV')}.parquet"
     if not benchmark_path.exists():
         raise FileNotFoundError("Cached IVV history is required")
-    benchmark = _read_price(benchmark_path, BENCHMARK_TICKER).set_index("date")[
+    benchmark = _read_price(benchmark_path, "IVV").set_index("date")[
         "close"
     ].sort_index()
     calendar = pd.DatetimeIndex(benchmark.index.unique()).sort_values()
     close = close.reindex(calendar)
     dollar_volume = (close * volume.reindex(calendar)).astype("float64")
+
+    market_config = _load_yaml(MARKET_CONFIG_PATH)
+    theme_definitions = {
+        str(theme): definition
+        for theme, definition in market_config.get("themes", {}).items()
+    }
+    proxy_series: dict[str, pd.Series] = {}
+    missing_proxies: list[str] = []
+    for definition in theme_definitions.values():
+        proxy = str(definition["proxy"]).upper()
+        proxy_path = STOCK_CACHE / f"{safe_symbol(proxy)}.parquet"
+        if not proxy_path.exists():
+            missing_proxies.append(proxy)
+            continue
+        proxy_frame = _read_price(proxy_path, proxy)
+        if proxy_frame.empty:
+            missing_proxies.append(proxy)
+            continue
+        proxy_series[proxy] = proxy_frame.set_index("date")["close"].astype(float)
+    if missing_proxies:
+        missing = ", ".join(sorted(set(missing_proxies)))
+        raise FileNotFoundError(
+            f"Cached theme proxy history is required for {STRATEGY_ID}: {missing}. "
+            "Run the market report collection before the portfolio report."
+        )
+    theme_proxy_close = pd.DataFrame(proxy_series).reindex(calendar).ffill()
     return MarketData(
         calendar=calendar,
         close=close.astype("float64"),
@@ -104,6 +166,8 @@ def load_market_data() -> MarketData:
         universe=universe,
         benchmark=benchmark.astype("float64"),
         snapshot_path=snapshot_path,
+        theme_proxy_close=theme_proxy_close,
+        theme_definitions=theme_definitions,
     )
 
 
@@ -128,8 +192,56 @@ def members_on_date(data: MarketData, _signal_date: pd.Timestamp) -> set[str]:
     return set(data.universe["ticker"].astype(str))
 
 
+def build_theme_strength(
+    data: MarketData, signal_date: pd.Timestamp
+) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+    """Rank theme proxies using only prices known on the signal date."""
+
+    ticker_themes: dict[str, list[str]] = {}
+    for theme, definition in data.theme_definitions.items():
+        for ticker in definition.get("members", []):
+            ticker_themes.setdefault(str(ticker).upper(), []).append(str(theme))
+    if not data.theme_definitions or data.theme_proxy_close.empty:
+        return pd.DataFrame(), ticker_themes
+
+    benchmark = data.benchmark.reindex(data.calendar).ffill().loc[:signal_date]
+    rows: list[dict[str, Any]] = []
+    for theme, definition in data.theme_definitions.items():
+        proxy = str(definition["proxy"]).upper()
+        if proxy not in data.theme_proxy_close:
+            continue
+        close = data.theme_proxy_close[proxy].loc[:signal_date].ffill()
+        if signal_date not in close.index or len(close) < 61 or len(benchmark) < 61:
+            continue
+        rows.append(
+            {
+                "theme": str(theme),
+                "proxy": proxy,
+                "relative_5": close.pct_change(5, fill_method=None).loc[signal_date]
+                - benchmark.pct_change(5, fill_method=None).loc[signal_date],
+                "relative_20": close.pct_change(20, fill_method=None).loc[signal_date]
+                - benchmark.pct_change(20, fill_method=None).loc[signal_date],
+                "relative_60": close.pct_change(60, fill_method=None).loc[signal_date]
+                - benchmark.pct_change(60, fill_method=None).loc[signal_date],
+                "above_ma_50": float(
+                    close.loc[signal_date] > close.rolling(50).mean().loc[signal_date]
+                ),
+            }
+        )
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result, ticker_themes
+    result["theme_strength"] = 0.0
+    for column, weight in THEME_COMPONENT_WEIGHTS.items():
+        result["theme_strength"] += float(weight) * result[column].rank(pct=True)
+    return (
+        result.sort_values(["theme_strength", "theme"], ascending=[False, True]),
+        ticker_themes,
+    )
+
+
 def build_daily_ranking(data: MarketData, signal_date: pd.Timestamp) -> pd.DataFrame:
-    """Rank stable, liquid momentum candidates without using future prices."""
+    """Build the versioned stable-momentum/theme hybrid score without look-ahead."""
 
     history = data.close.loc[:signal_date]
     liquidity = data.dollar_volume.loc[:signal_date]
@@ -165,12 +277,35 @@ def build_daily_ranking(data: MarketData, signal_date: pd.Timestamp) -> pd.DataF
     frame["rank_low_vol_63"] = (-frame["vol_63"]).rank(
         pct=True, method="average"
     )
-    frame["score"] = (
-        0.50 * frame["rank_mom_12_1"]
-        + 0.25 * frame["rank_mom_6_1"]
-        + 0.15 * frame["rank_trend_200"]
-        + 0.10 * frame["rank_low_vol_63"]
+    frame["base_score"] = (
+        BASE_COMPONENT_WEIGHTS["momentum_12_1"] * frame["rank_mom_12_1"]
+        + BASE_COMPONENT_WEIGHTS["momentum_6_1"] * frame["rank_mom_6_1"]
+        + BASE_COMPONENT_WEIGHTS["trend_200"] * frame["rank_trend_200"]
+        + BASE_COMPONENT_WEIGHTS["low_volatility_63"] * frame["rank_low_vol_63"]
     )
+    theme_strength, ticker_themes = build_theme_strength(data, signal_date)
+    theme_lookup = (
+        theme_strength.set_index("theme")["theme_strength"].to_dict()
+        if not theme_strength.empty
+        else {}
+    )
+
+    def mapped_theme_score(ticker: str) -> float:
+        values = [
+            theme_lookup.get(theme, np.nan)
+            for theme in ticker_themes.get(str(ticker).upper(), [])
+        ]
+        usable = [float(value) for value in values if pd.notna(value)]
+        return max(usable) if usable else UNMAPPED_THEME_SCORE
+
+    frame["theme_strength"] = frame.index.to_series().map(mapped_theme_score)
+    frame["themes"] = frame.index.to_series().map(
+        lambda ticker: ", ".join(ticker_themes.get(str(ticker).upper(), [])) or "미분류"
+    )
+    frame["theme_mapped"] = frame.index.to_series().map(
+        lambda ticker: bool(ticker_themes.get(str(ticker).upper(), []))
+    )
+    frame["score"] = BASE_WEIGHT * frame["base_score"] + THEME_WEIGHT * frame["theme_strength"]
     metadata = data.universe.drop_duplicates("ticker").set_index("ticker")
     frame["name"] = metadata["name"].reindex(frame.index).fillna(frame.index.to_series())
     frame["sector"] = metadata["sector"].reindex(frame.index).fillna("Unknown")
@@ -186,7 +321,7 @@ def _pairwise_ok(
         return True
     returns = (
         data.close.loc[:signal_date, selected + [ticker]]
-        .tail(127)
+        .tail(CORRELATION_LOOKBACK)
         .pct_change(fill_method=None)
     )
     correlations = returns[selected].corrwith(returns[ticker])
@@ -272,6 +407,10 @@ def build_device_payload(
             "sector": str(sector),
             "close": float(close_value),
             "rank": int(ranked.loc[ticker, "rank"]) if ticker in ranked.index else None,
+            "themes": str(ranked.loc[ticker, "themes"]) if ticker in ranked.index else "미분류",
+            "score": float(ranked.loc[ticker, "score"]) if ticker in ranked.index else None,
+            "base_score": float(ranked.loc[ticker, "base_score"]) if ticker in ranked.index else None,
+            "theme_strength": float(ranked.loc[ticker, "theme_strength"]) if ticker in ranked.index else None,
             "trend_200": trend if math.isfinite(trend) else None,
         }
 
@@ -289,9 +428,13 @@ def build_device_payload(
             "ticker": ticker,
             "name": str(ranked.loc[ticker, "name"]),
             "sector": str(ranked.loc[ticker, "sector"]),
-            "weight": 1 / MAX_POSITIONS,
+            "themes": str(ranked.loc[ticker, "themes"]),
+            "weight": TARGET_WEIGHT_EACH,
             "reference_close": float(ranked.loc[ticker, "close"]),
             "rank": int(ranked.loc[ticker, "rank"]),
+            "score": float(ranked.loc[ticker, "score"]),
+            "base_score": float(ranked.loc[ticker, "base_score"]),
+            "theme_strength": float(ranked.loc[ticker, "theme_strength"]),
             "trend_200": float(ranked.loc[ticker, "trend_200"]),
         }
         for ticker in selected
@@ -301,8 +444,11 @@ def build_device_payload(
             "ticker": str(row.ticker),
             "name": str(row.name),
             "sector": str(row.sector),
+            "themes": str(row.themes),
             "rank": int(row.rank),
             "score": float(row.score),
+            "base_score": float(row.base_score),
+            "theme_strength": float(row.theme_strength),
             "close": float(row.close),
             "trend_200": float(row.trend_200),
         }
@@ -310,7 +456,6 @@ def build_device_payload(
     ]
     return {
         "schema_version": SCHEMA_VERSION,
-        "generated_at": pd.Timestamp.now(tz="Asia/Seoul").isoformat(),
         "report_date_kst": str(report_date.date()),
         "report_time_kst": "07:30",
         "signal_market_date": str(signal_date.date()),
@@ -319,6 +464,14 @@ def build_device_payload(
         "default_capital": float(default_capital),
         "default_fractional_shares": True,
         "fractional_precision": 3,
+        "strategy": {
+            "id": STRATEGY_ID,
+            "name": STRATEGY_NAME,
+            "status": str(STRATEGY_CONFIG["strategy"]["status"]),
+            "base_weight": BASE_WEIGHT,
+            "theme_weight": THEME_WEIGHT,
+            "benchmark": str(STRATEGY_CONFIG["strategy"]["benchmark"]),
+        },
         "selection": selection,
         "candidates": candidates,
         "quotes": quotes,
@@ -330,10 +483,18 @@ def build_device_payload(
         "policy": {
             "maximum_positions": MAX_POSITIONS,
             "hold_rank": HOLD_RANK,
+            "maximum_names_per_sector": MAX_NAMES_PER_SECTOR,
+            "maximum_pairwise_correlation": MAX_PAIRWISE_CORRELATION,
             "stop_loss": STOP_LOSS,
             "trailing_stop": TRAILING_STOP,
             "drift_threshold": DRIFT_THRESHOLD,
             "review_frequency": "first KST weekday report of each month",
+            "market_regime_cash_overlay": bool(
+                STRATEGY_CONFIG["risk"]["market_regime_cash_overlay"]
+            ),
+            "stopped_capital_stays_cash_until_monthly_review": bool(
+                STRATEGY_CONFIG["risk"]["stopped_capital_stays_cash_until_monthly_review"]
+            ),
             "automatic_trading": False,
         },
         "privacy": {

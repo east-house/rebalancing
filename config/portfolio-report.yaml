@@ -1,0 +1,49 @@
+strategy:
+  id: us_theme_hybrid_v1
+  name: "안정 모멘텀·테마 혼합"
+  status: production_baseline
+  benchmark: IVV
+  description: "안정 모멘텀 85%와 시장 리포트의 테마 강도 15%를 결합한 최대 5종목 전략"
+
+score:
+  base_weight: 0.85
+  theme_weight: 0.15
+  unmapped_theme_score: 0.50
+  base_components:
+    momentum_12_1: 0.50
+    momentum_6_1: 0.25
+    trend_200: 0.15
+    low_volatility_63: 0.10
+  theme_components:
+    relative_5: 0.20
+    relative_20: 0.35
+    relative_60: 0.25
+    above_ma_50: 0.20
+
+universe:
+  minimum_price: 10.0
+  minimum_dollar_volume_63: 25000000
+  maximum_annualized_volatility: 0.80
+  top_liquid_names: 200
+
+portfolio:
+  maximum_positions: 5
+  target_weight_each: 0.20
+  hold_rank: 10
+  maximum_names_per_sector: 2
+  maximum_pairwise_correlation: 0.80
+  correlation_lookback_sessions: 127
+  rebalance_frequency: monthly
+  drift_threshold: 0.03
+
+risk:
+  stop_loss: 0.12
+  trailing_stop: 0.15
+  market_regime_cash_overlay: false
+  stopped_capital_stays_cash_until_monthly_review: true
+
+execution:
+  decision_data: "latest completed US close"
+  proposed_fill: "next US close"
+  transaction_cost_each_side: 0.001
+  automatic_trading: false
