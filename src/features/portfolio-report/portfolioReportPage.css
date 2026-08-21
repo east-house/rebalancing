@@ -240,18 +240,32 @@
 .portfolio-report-side .portfolio-report-side-controls input[type="number"] { width: 100%; }
 .portfolio-report-side .portfolio-report-side-controls button { width: 100%; }
 
-.portfolio-report-history article {
+.portfolio-report-history button {
   display: flex;
+  width: 100%;
   padding: 10px 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  border: 0;
   border-bottom: 1px solid var(--line);
   font-size: 10px;
 }
-
-.portfolio-report-history article small { display: block; color: var(--muted); }
-.portfolio-report-history article > span { color: var(--text-secondary); text-align: right; }
+.portfolio-report-history button:hover,
+.portfolio-report-history button.is-selected { margin-inline: -6px; padding-inline: 6px; background: #f1f6ff; border-radius: 7px; }
+.portfolio-report-history button small { display: block; color: var(--muted); }
+.portfolio-report-history button > span { color: var(--text-secondary); text-align: right; }
+.portfolio-report-history-help { margin: -2px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.portfolio-report-history-performance { display: grid; margin-top: 12px; padding: 12px; gap: 3px; background: #eefaf5; border: 1px solid #bde7d5; border-radius: 9px; font-size: 12px; }
+.portfolio-report-history-performance.is-down { background: #fff1f0; border-color: #ffd1cd; }
+.portfolio-report-history-performance span,
+.portfolio-report-history-performance small { color: var(--text-secondary); }
+.portfolio-report-history-performance b { font-size: 15px; }
 .portfolio-report-danger { width: 100%; margin-top: 16px; padding: 10px; color: var(--danger); font-size: 11px; font-weight: 800; cursor: pointer; background: #fff1f0; border: 1px solid #ffd1cd; border-radius: 9px; }
 .is-up { color: #087a55; font-weight: 800; }
 .is-down { color: var(--danger); font-weight: 800; }

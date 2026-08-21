@@ -16,6 +16,7 @@ import {
   allocatePortfolio,
   applyActions,
   buildSnapshot,
+  calculateHistoryPerformance,
   type DeviceHistory,
   type PortfolioActionKind,
   type PortfolioDeviceState,
@@ -74,6 +75,7 @@ function historyItem(
   payload: PortfolioReportPayload,
   type: DeviceHistory["type"],
   summary: string,
+  equity?: number,
 ): DeviceHistory {
   return {
     reportDate: payload.report_date_kst,
@@ -81,6 +83,7 @@ function historyItem(
     type,
     summary,
     recordedAt: new Date().toISOString(),
+    equity,
   };
 }
 
@@ -96,6 +99,7 @@ export default function PortfolioReportPage({
   const [fractional, setFractional] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedHistoryKey, setSelectedHistoryKey] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -129,7 +133,7 @@ export default function PortfolioReportPage({
     const next = {
       ...deviceState,
       positions: snapshot.actions.map(({ action: _action, reason: _reason, currentWeight: _currentWeight, targetShares: _targetShares, close: _close, rank: _rank, loss: _loss, drawdown: _drawdown, ...position }) => position),
-      history: [...deviceState.history, historyItem(payload, "DAILY", actionable.length ? `${actionable.length}건 확인 필요` : "전 종목 유지")].slice(-180),
+      history: [...deviceState.history, historyItem(payload, "DAILY", actionable.length ? `${actionable.length}건 확인 필요` : "전 종목 유지", snapshot.equity)].slice(-180),
     };
     saveDeviceState(next);
     setDeviceState(next);
@@ -150,7 +154,7 @@ export default function PortfolioReportPage({
         strategyId: payload.strategy.id,
       },
       lastReviewMonth: payload.report_date_kst.slice(0, 7),
-      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · 5종목 각 20% · ${payload.strategy.name}`) ],
+      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · 5종목 각 20% · ${payload.strategy.name}`, Math.max(100, capital)) ],
     };
     saveDeviceState(state);
     setDeviceState(state);
@@ -162,7 +166,7 @@ export default function PortfolioReportPage({
     const count = snapshot.actions.filter((item) => ["SELL", "ADD", "REDUCE"].includes(item.action)).length;
     const next = {
       ...applied,
-      history: [...applied.history, historyItem(payload, "APPLY", `${count}건 모델 기록에 반영`)].slice(-180),
+      history: [...applied.history, historyItem(payload, "APPLY", `${count}건 모델 기록에 반영`, snapshot.equity)].slice(-180),
     };
     saveDeviceState(next);
     setDeviceState(next);
@@ -197,7 +201,7 @@ export default function PortfolioReportPage({
       fractional,
       cash: plan.cash,
       positions,
-      history: [...deviceState.history, historyItem(payload, "CAPITAL_CHANGE", `${money(Math.max(100, capital))}로 목표비중 재계산`)].slice(-180),
+      history: [...deviceState.history, historyItem(payload, "CAPITAL_CHANGE", `${money(Math.max(100, capital))}로 목표비중 재계산`, Math.max(100, capital))].slice(-180),
     };
     saveDeviceState(next);
     setDeviceState(next);
@@ -207,7 +211,15 @@ export default function PortfolioReportPage({
     if (!window.confirm("이 기기에 저장된 포트폴리오와 기록을 모두 삭제할까요?")) return;
     saveDeviceState(null);
     setDeviceState(null);
+    setSelectedHistoryKey(null);
   };
+
+  const selectedHistory = deviceState?.history.find(
+    (item) => `${item.recordedAt}-${item.type}` === selectedHistoryKey,
+  ) ?? deviceState?.history.at(-1) ?? null;
+  const selectedPerformance = payload && snapshot && selectedHistory
+    ? calculateHistoryPerformance(selectedHistory, snapshot.equity, payload.report_date_kst)
+    : null;
 
   if (loading) return <main className="portfolio-report-loading"><RefreshCw className="spin" /> 포트폴리오 보고서를 불러오는 중입니다.</main>;
 
@@ -259,7 +271,26 @@ export default function PortfolioReportPage({
 
                   <aside className="portfolio-report-side">
                     <section className="portfolio-report-card"><h2>투자금 변경</h2><p>현재 종목과 목표비중을 유지한 채 수량을 다시 계산합니다.</p><div className="portfolio-report-side-controls"><label>새 투자금액<input type="number" min="100" step="1" value={capital} onChange={(event) => setCapital(Number(event.target.value))} /></label><label className="portfolio-report-check"><input type="checkbox" checked={fractional} onChange={(event) => setFractional(event.target.checked)} /> 소수점 주식</label><button type="button" onClick={changeCapital}>비율대로 변경</button></div></section>
-                    <section className="portfolio-report-card"><h2>이 기기의 기록</h2><div className="portfolio-report-history">{deviceState.history.slice(-8).reverse().map((item) => <article key={`${item.recordedAt}-${item.type}`}><div><strong>{item.reportDate}</strong><small>{item.type} · 미국 {item.marketDate}</small></div><span>{item.summary}</span></article>)}</div></section>
+                    <section className="portfolio-report-card">
+                      <h2>이 기기의 기록</h2>
+                      <p className="portfolio-report-history-help">기록을 선택하면 그 시점부터 현재 보고서까지의 성과를 확인할 수 있습니다.</p>
+                      <div className="portfolio-report-history">
+                        {deviceState.history.slice(-8).reverse().map((item) => {
+                          const key = `${item.recordedAt}-${item.type}`;
+                          return <button className={key === `${selectedHistory?.recordedAt}-${selectedHistory?.type}` ? "is-selected" : ""} type="button" key={key} onClick={() => setSelectedHistoryKey(key)}><div><strong>{item.reportDate}</strong><small>{item.type} · 미국 {item.marketDate}</small></div><span>{item.summary}</span></button>;
+                        })}
+                      </div>
+                      {selectedHistory ? (
+                        <div className={`portfolio-report-history-performance ${selectedPerformance && selectedPerformance.returnRate < 0 ? "is-down" : "is-up"}`} aria-label="선택 기록 성과" aria-live="polite">
+                          {selectedPerformance ? <>
+                            <strong>{selectedHistory.reportDate} 기록 대비</strong>
+                            <span>{selectedPerformance.elapsedDays}일 경과</span>
+                            <b>{pct(selectedPerformance.returnRate)} {selectedPerformance.returnRate > 0 ? "상승" : selectedPerformance.returnRate < 0 ? "하락" : "변동 없음"}</b>
+                            <small>{money(selectedHistory.equity ?? 0)} → {money(snapshot.equity)}</small>
+                          </> : <small>선택한 기존 기록에는 당시 평가액이 없어 성과를 계산할 수 없습니다. 새로 저장되는 기록부터 비교할 수 있습니다.</small>}
+                        </div>
+                      ) : null}
+                    </section>
                     <button className="portfolio-report-danger" type="button" onClick={reset}>이 기기의 포트폴리오 기록 삭제</button>
                   </aside>
                 </div>

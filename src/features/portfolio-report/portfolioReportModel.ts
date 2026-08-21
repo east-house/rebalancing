@@ -22,6 +22,8 @@ export interface DeviceHistory {
   type: "INITIAL" | "DAILY" | "APPLY" | "CAPITAL_CHANGE";
   summary: string;
   recordedAt: string;
+  /** Model portfolio value when this record was made. Older records may not have it. */
+  equity?: number;
 }
 
 export interface PortfolioDeviceState {
@@ -56,6 +58,36 @@ export interface PortfolioSnapshot {
   stockValue: number;
   monthReview: boolean;
   actions: PortfolioSuggestedAction[];
+}
+
+export interface HistoryPerformance {
+  elapsedDays: number;
+  returnRate: number;
+}
+
+function utcDay(date: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const value = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** Calculates performance from a saved record to the currently loaded report date. */
+export function calculateHistoryPerformance(
+  record: DeviceHistory,
+  currentEquity: number,
+  currentReportDate: string,
+): HistoryPerformance | null {
+  const recordEquity = record.equity;
+  if (!Number.isFinite(recordEquity) || !recordEquity || recordEquity <= 0 || !Number.isFinite(currentEquity)) {
+    return null;
+  }
+  const start = utcDay(record.reportDate);
+  const end = utcDay(currentReportDate);
+  if (start === null || end === null) return null;
+  return {
+    elapsedDays: Math.max(0, Math.round((end - start) / 86_400_000)),
+    returnRate: currentEquity / recordEquity - 1,
+  };
 }
 
 export function floorShares(raw: number, fractional: boolean, precision = 3): number {
