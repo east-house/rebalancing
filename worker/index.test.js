@@ -226,3 +226,35 @@ describe("portfolio report Worker API", () => {
     expect(env.MARKET_DATA.get).toHaveBeenCalledWith("portfolio-reports/latest.json");
   });
 });
+
+describe("trading-test report Worker API", () => {
+  it("serves the dated IRCS paper-account report from R2", async () => {
+    const payload = { schemaVersion: 1, reportDate: "2026-08-27", marketDate: "2026-08-26" };
+    const env = {
+      MARKET_DATA: { get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }) },
+      ASSETS: { fetch: vi.fn() },
+    };
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/trading-test-reports/2026-08-27"),
+      env,
+      { waitUntil: vi.fn() },
+    );
+    await expect(response.json()).resolves.toEqual(payload);
+    expect(env.MARKET_DATA.get).toHaveBeenCalledWith(
+      "trading-test-reports/reports/2026-08-27.json",
+    );
+  });
+
+  it("rejects an invalid trading-test report date", async () => {
+    const get = vi.fn();
+    const worker = (await import("./index.js")).default;
+    const response = await worker.fetch(
+      new Request("https://portfolio.example/api/trading-test-reports/bad-date"),
+      { MARKET_DATA: { get } },
+      {},
+    );
+    expect(response.status).toBe(400);
+    expect(get).not.toHaveBeenCalled();
+  });
+});

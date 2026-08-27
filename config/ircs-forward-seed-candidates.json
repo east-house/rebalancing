@@ -1,0 +1,3839 @@
+{
+  "schemaVersion": 1,
+  "candidateDate": "2026-07-31",
+  "source": "frozen IRCS point-in-time candidate table",
+  "candidates": [
+    {
+      "ticker": "NVDA",
+      "adv_63": 31811636662.857143,
+      "raw_close": 200.75,
+      "vol_63": 0.41356490464158163,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "TSLA",
+      "adv_63": 18797495799.873016,
+      "raw_close": 311.2099914550781,
+      "vol_63": 0.5662851193782796,
+      "theme": "로봇·자동화",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "AAPL",
+      "adv_63": 17265356637.460316,
+      "raw_close": 308.6438293457031,
+      "vol_63": 0.3232474914438499,
+      "theme": "Unmapped::AAPL",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MSFT",
+      "adv_63": 16174038162.285715,
+      "raw_close": 464.7200012207031,
+      "vol_63": 0.45208180888113314,
+      "theme": "사이버보안",
+      "sector": "Unknown::MSFT"
+    },
+    {
+      "ticker": "AMZN",
+      "adv_63": 12325080762.920635,
+      "raw_close": 271.5799865722656,
+      "vol_63": 0.4310201915275391,
+      "theme": "Unmapped::AMZN",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "GOOGL",
+      "adv_63": 11779629283.555555,
+      "raw_close": 356.1300048828125,
+      "vol_63": 0.3606502438848017,
+      "theme": "Unmapped::GOOGL",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "META",
+      "adv_63": 10963939693.714285,
+      "raw_close": 556.7100219726562,
+      "vol_63": 0.44716903057173296,
+      "theme": "Unmapped::META",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "AVGO",
+      "adv_63": 10390795052.698412,
+      "raw_close": 389.2799987792969,
+      "vol_63": 0.5334327754353608,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "GOOG",
+      "adv_63": 8026239650.539682,
+      "raw_close": 356.6499938964844,
+      "vol_63": 0.36363465464528594,
+      "theme": "Unmapped::GOOG",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "PLTR",
+      "adv_63": 5456280129.015873,
+      "raw_close": 123.05999755859375,
+      "vol_63": 0.5614743859589126,
+      "theme": "사이버보안",
+      "sector": "Unknown::PLTR"
+    },
+    {
+      "ticker": "ORCL",
+      "adv_63": 5039597864.634921,
+      "raw_close": 129.8699951171875,
+      "vol_63": 0.6606565505214769,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "QCOM",
+      "adv_63": 4397374010.920635,
+      "raw_close": 147.61000061035156,
+      "vol_63": 0.7904417856862264,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "NFLX",
+      "adv_63": 3402807753.142857,
+      "raw_close": 71.70999908447266,
+      "vol_63": 0.33106293402299675,
+      "theme": "Unmapped::NFLX",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "LLY",
+      "adv_63": 3359745306.4126983,
+      "raw_close": 1147.196044921875,
+      "vol_63": 0.3261204439503284,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "JPM",
+      "adv_63": 3008658958.2222223,
+      "raw_close": 351.7900085449219,
+      "vol_63": 0.23393418642207078,
+      "theme": "방산",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "GEV",
+      "adv_63": 2929122842.4126983,
+      "raw_close": 990.2899780273438,
+      "vol_63": 0.5871151038874659,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "NOW",
+      "adv_63": 2924648872.6349206,
+      "raw_close": 111.2300033569336,
+      "vol_63": 0.7120216871939951,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "CAT",
+      "adv_63": 2913762255.2380953,
+      "raw_close": 814.8099975585938,
+      "vol_63": 0.46608286218780437,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "CSCO",
+      "adv_63": 2894133203.301587,
+      "raw_close": 115.98999786376953,
+      "vol_63": 0.4500396700737325,
+      "theme": "Unmapped::CSCO",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "IBM",
+      "adv_63": 2797733254.095238,
+      "raw_close": 222.05706787109375,
+      "vol_63": 0.7488862933429318,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "V",
+      "adv_63": 2778970416.7619047,
+      "raw_close": 365.4510803222656,
+      "vol_63": 0.20749572020129875,
+      "theme": "Unmapped::V",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "APP",
+      "adv_63": 2728816546.5396824,
+      "raw_close": 395.8999938964844,
+      "vol_63": 0.6957649295852626,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "WMT",
+      "adv_63": 2683535666.7936506,
+      "raw_close": 111.19999694824219,
+      "vol_63": 0.2698899167877943,
+      "theme": "Unmapped::WMT",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "TXN",
+      "adv_63": 2591903270.6031747,
+      "raw_close": 275.739990234375,
+      "vol_63": 0.4936842741648796,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "UNH",
+      "adv_63": 2589329353.142857,
+      "raw_close": 414.3999938964844,
+      "vol_63": 0.2609691088125541,
+      "theme": "Unmapped::UNH",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CRM",
+      "adv_63": 2566724914.7936506,
+      "raw_close": 184.02000427246094,
+      "vol_63": 0.5094277429688355,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "HOOD",
+      "adv_63": 2529657667.047619,
+      "raw_close": 86.55999755859375,
+      "vol_63": 0.703542635166211,
+      "theme": "원전·전력망",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "XOM",
+      "adv_63": 2454944928.5079365,
+      "raw_close": 155.44000244140625,
+      "vol_63": 0.2893764591368059,
+      "theme": "Unmapped::XOM",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "BRK.B",
+      "adv_63": 2415766556.4444447,
+      "raw_close": 511.5400085449219,
+      "vol_63": 0.1441681009435996,
+      "theme": "Unmapped::BRK.B",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "COST",
+      "adv_63": 2320638344.126984,
+      "raw_close": 951.8900146484375,
+      "vol_63": 0.23376886387182355,
+      "theme": "Unmapped::COST",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "PANW",
+      "adv_63": 2277073776.7619047,
+      "raw_close": 331.8299865722656,
+      "vol_63": 0.5384655477099501,
+      "theme": "사이버보안",
+      "sector": "Unknown::PANW"
+    },
+    {
+      "ticker": "GS",
+      "adv_63": 2232084658.7936506,
+      "raw_close": 1018.3800048828125,
+      "vol_63": 0.39678033059088097,
+      "theme": "원전·전력망",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "CRWD",
+      "adv_63": 2049235090.2857144,
+      "raw_close": 190.86000061035156,
+      "vol_63": 0.5549818785128029,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "BAC",
+      "adv_63": 2016793705.6507936,
+      "raw_close": 61.95000076293945,
+      "vol_63": 0.20875421588727808,
+      "theme": "Unmapped::BAC",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "JNJ",
+      "adv_63": 1988397253.079365,
+      "raw_close": 256.3500061035156,
+      "vol_63": 0.25376800393578636,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "VRT",
+      "adv_63": 1957543604.8253968,
+      "raw_close": 241.57000732421875,
+      "vol_63": 0.7460430770223336,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "ADI",
+      "adv_63": 1916041713.7777777,
+      "raw_close": 367.4100036621094,
+      "vol_63": 0.4595587575159535,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "MA",
+      "adv_63": 1891519210.6666667,
+      "raw_close": 573.0999755859375,
+      "vol_63": 0.23581695254701684,
+      "theme": "Unmapped::MA",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "C",
+      "adv_63": 1678120201.142857,
+      "raw_close": 131.77999877929688,
+      "vol_63": 0.2936087083514349,
+      "theme": "Unmapped::C",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CVX",
+      "adv_63": 1670383651.5555556,
+      "raw_close": 196.8300018310547,
+      "vol_63": 0.26389240165484495,
+      "theme": "Unmapped::CVX",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "INTU",
+      "adv_63": 1603941898.1587303,
+      "raw_close": 316.07000732421875,
+      "vol_63": 0.6615878216942085,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "GE",
+      "adv_63": 1597339991.3650794,
+      "raw_close": 360.07000732421875,
+      "vol_63": 0.339511374159358,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "HD",
+      "adv_63": 1595950153.142857,
+      "raw_close": 331.9599914550781,
+      "vol_63": 0.28666781974608363,
+      "theme": "Unmapped::HD",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "ABBV",
+      "adv_63": 1583732672.0,
+      "raw_close": 250.94000244140625,
+      "vol_63": 0.2875180039121241,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ANET",
+      "adv_63": 1547008037.5873015,
+      "raw_close": 180.35000610351562,
+      "vol_63": 0.6528351222895562,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "COIN",
+      "adv_63": 1498543530.6666667,
+      "raw_close": 146.25999450683594,
+      "vol_63": 0.6837360944514084,
+      "theme": "원전·전력망",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "ADBE",
+      "adv_63": 1470509858.5396826,
+      "raw_close": 250.41000366210938,
+      "vol_63": 0.5128090149688493,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "UBER",
+      "adv_63": 1448634163.8095238,
+      "raw_close": 70.36000061035156,
+      "vol_63": 0.40089874991875063,
+      "theme": "Unmapped::UBER",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "KO",
+      "adv_63": 1432592891.936508,
+      "raw_close": 87.58999633789062,
+      "vol_63": 0.2422454977380719,
+      "theme": "Unmapped::KO",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "APH",
+      "adv_63": 1412324404.8253968,
+      "raw_close": 160.6999969482422,
+      "vol_63": 0.5074719348871933,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "BA",
+      "adv_63": 1410791613.9682539,
+      "raw_close": 216.13999938964844,
+      "vol_63": 0.3632379563056103,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "T",
+      "adv_63": 1401100804.063492,
+      "raw_close": 23.25,
+      "vol_63": 0.3072281393723576,
+      "theme": "데이터센터",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MPWR",
+      "adv_63": 1348581687.8730159,
+      "raw_close": 1426.030029296875,
+      "vol_63": 0.6898868010700873,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "WFC",
+      "adv_63": 1339576496.7619047,
+      "raw_close": 85.95650482177734,
+      "vol_63": 0.2636677254385931,
+      "theme": "Unmapped::WFC",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CIEN",
+      "adv_63": 1300790874.4126985,
+      "raw_close": 377.04998779296875,
+      "vol_63": 0.7809611439503379,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "PG",
+      "adv_63": 1290259316.8253968,
+      "raw_close": 144.49000549316406,
+      "vol_63": 0.23350280584201005,
+      "theme": "Unmapped::PG",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "BKNG",
+      "adv_63": 1283703380.3174603,
+      "raw_close": 192.89999389648438,
+      "vol_63": 0.3934999844881776,
+      "theme": "Unmapped::BKNG",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "ACN",
+      "adv_63": 1278174982.0952382,
+      "raw_close": 165.9199981689453,
+      "vol_63": 0.6232510479324239,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "MCD",
+      "adv_63": 1253236286.984127,
+      "raw_close": 270.6400146484375,
+      "vol_63": 0.22438488280249141,
+      "theme": "Unmapped::MCD",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MS",
+      "adv_63": 1244757331.3015873,
+      "raw_close": 210.4199981689453,
+      "vol_63": 0.3033855319551748,
+      "theme": "Unmapped::MS",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NXPI",
+      "adv_63": 1231231441.2698412,
+      "raw_close": 229.16000366210938,
+      "vol_63": 0.5357677266802081,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "PEP",
+      "adv_63": 1229930188.1904762,
+      "raw_close": 139.55999755859375,
+      "vol_63": 0.2476381134172723,
+      "theme": "Unmapped::PEP",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "VZ",
+      "adv_63": 1219911741.9682539,
+      "raw_close": 46.810001373291016,
+      "vol_63": 0.2808064155497316,
+      "theme": "Unmapped::VZ",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MRK",
+      "adv_63": 1211109011.3015873,
+      "raw_close": 130.1999969482422,
+      "vol_63": 0.2970743688911217,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ABT",
+      "adv_63": 1196524616.1269841,
+      "raw_close": 105.69999694824219,
+      "vol_63": 0.3467162194371907,
+      "theme": "Unmapped::ABT",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ISRG",
+      "adv_63": 1185571037.4603174,
+      "raw_close": 353.3299865722656,
+      "vol_63": 0.4670486507284052,
+      "theme": "Unmapped::ISRG",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "TMO",
+      "adv_63": 1183047062.3492064,
+      "raw_close": 574.2999877929688,
+      "vol_63": 0.348136489524706,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "HPE",
+      "adv_63": 1175708350.984127,
+      "raw_close": 47.900001525878906,
+      "vol_63": 0.768193171524673,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "LIN",
+      "adv_63": 1171454445.7142856,
+      "raw_close": 478.3800048828125,
+      "vol_63": 0.2318176048209945,
+      "theme": "Unmapped::LIN",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "AZO",
+      "adv_63": 1116476479.4920635,
+      "raw_close": 3016.25,
+      "vol_63": 0.3606792097606631,
+      "theme": "Unmapped::AZO",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MCHP",
+      "adv_63": 1086372216.8888888,
+      "raw_close": 74.29000091552734,
+      "vol_63": 0.5607359633069585,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "HON",
+      "adv_63": 1065597761.5238096,
+      "raw_close": 242.32290649414062,
+      "vol_63": 0.35269335570485455,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "ETN",
+      "adv_63": 1057131430.6031746,
+      "raw_close": 414.18096923828125,
+      "vol_63": 0.512174222382101,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "DIS",
+      "adv_63": 1044481441.5238096,
+      "raw_close": 96.19000244140625,
+      "vol_63": 0.28734703817828006,
+      "theme": "Unmapped::DIS",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "AXP",
+      "adv_63": 1038065022.9841269,
+      "raw_close": 336.25,
+      "vol_63": 0.25337321219343345,
+      "theme": "Unmapped::AXP",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NEE",
+      "adv_63": 1025110378.1587301,
+      "raw_close": 86.91999816894531,
+      "vol_63": 0.21331719230132243,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "PFE",
+      "adv_63": 1022300790.8571428,
+      "raw_close": 25.010000228881836,
+      "vol_63": 0.1925249656305179,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "RTX",
+      "adv_63": 1016557528.3809524,
+      "raw_close": 214.50741577148438,
+      "vol_63": 0.294679235210952,
+      "theme": "방산",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "BSX",
+      "adv_63": 1004403330.031746,
+      "raw_close": 46.72999954223633,
+      "vol_63": 0.39583839401152077,
+      "theme": "Unmapped::BSX",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "NKE",
+      "adv_63": 995319653.5873016,
+      "raw_close": 41.709999084472656,
+      "vol_63": 0.33914226883063475,
+      "theme": "Unmapped::NKE",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "SCHW",
+      "adv_63": 989590346.6666666,
+      "raw_close": 104.93401336669922,
+      "vol_63": 0.25796925681652516,
+      "theme": "Unmapped::SCHW",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "TMUS",
+      "adv_63": 980354551.8730159,
+      "raw_close": 172.7100067138672,
+      "vol_63": 0.38186171017360443,
+      "theme": "Unmapped::TMUS",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "GILD",
+      "adv_63": 978790730.1587301,
+      "raw_close": 130.2100067138672,
+      "vol_63": 0.2871566430188645,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CEG",
+      "adv_63": 976657432.8888888,
+      "raw_close": 262.75,
+      "vol_63": 0.44045250231090083,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "DHR",
+      "adv_63": 957568349.968254,
+      "raw_close": 194.97999572753906,
+      "vol_63": 0.3889262341652739,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "AMGN",
+      "adv_63": 949821495.8730159,
+      "raw_close": 385.1600036621094,
+      "vol_63": 0.2676097712863085,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "SPGI",
+      "adv_63": 947695270.0952381,
+      "raw_close": 411.92999267578125,
+      "vol_63": 0.34350962535393,
+      "theme": "Unmapped::SPGI",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ECHO",
+      "adv_63": 936294754.5396825,
+      "raw_close": 84.08999633789062,
+      "vol_63": 0.5817893134903036,
+      "theme": "우주·위성",
+      "sector": "Unknown::ECHO"
+    },
+    {
+      "ticker": "PM",
+      "adv_63": 929076012.1904762,
+      "raw_close": 190.82000732421875,
+      "vol_63": 0.31531411167234613,
+      "theme": "Unmapped::PM",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "TJX",
+      "adv_63": 926584418.5396825,
+      "raw_close": 156.84512329101562,
+      "vol_63": 0.26001906405976366,
+      "theme": "Unmapped::TJX",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "COF",
+      "adv_63": 926210751.4920635,
+      "raw_close": 209.00999450683594,
+      "vol_63": 0.30233524526865646,
+      "theme": "Unmapped::COF",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "FCX",
+      "adv_63": 913795772.9523809,
+      "raw_close": 62.630001068115234,
+      "vol_63": 0.5245592576346173,
+      "theme": "원전·전력망",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "MCK",
+      "adv_63": 912548675.5555556,
+      "raw_close": 856.1900024414062,
+      "vol_63": 0.313564259720551,
+      "theme": "Unmapped::MCK",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "F",
+      "adv_63": 911480841.1428572,
+      "raw_close": 14.522714614868164,
+      "vol_63": 0.5151386610778458,
+      "theme": "Unmapped::F",
+      "sector": "Unknown::F"
+    },
+    {
+      "ticker": "SNPS",
+      "adv_63": 909310852.0634921,
+      "raw_close": 388.760009765625,
+      "vol_63": 0.3890191431207599,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "FIX",
+      "adv_63": 907015963.9365079,
+      "raw_close": 1728.794677734375,
+      "vol_63": 0.623056807153764,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "PWR",
+      "adv_63": 899794821.0793651,
+      "raw_close": 667.3599853515625,
+      "vol_63": 0.5554955985016033,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "CDNS",
+      "adv_63": 892493415.6190476,
+      "raw_close": 340.0199890136719,
+      "vol_63": 0.4511843798522346,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "FTNT",
+      "adv_63": 892103634.7936507,
+      "raw_close": 161.9499969482422,
+      "vol_63": 0.5584989450627639,
+      "theme": "사이버보안",
+      "sector": "Unknown::FTNT"
+    },
+    {
+      "ticker": "SYK",
+      "adv_63": 872706356.8253968,
+      "raw_close": 325.70001220703125,
+      "vol_63": 0.40281757811667784,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CMCSA",
+      "adv_63": 862172947.3015873,
+      "raw_close": 23.959999084472656,
+      "vol_63": 0.32892783063093967,
+      "theme": "Unmapped::CMCSA",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "CME",
+      "adv_63": 857806595.0476191,
+      "raw_close": 267.7900085449219,
+      "vol_63": 0.33437974678260435,
+      "theme": "Unmapped::CME",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "PYPL",
+      "adv_63": 827943310.7301587,
+      "raw_close": 57.209999084472656,
+      "vol_63": 0.4653922329005174,
+      "theme": "Unmapped::PYPL",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "COP",
+      "adv_63": 822720877.7142857,
+      "raw_close": 120.4800033569336,
+      "vol_63": 0.31628741644020947,
+      "theme": "Unmapped::COP",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "UNP",
+      "adv_63": 821776037.0793651,
+      "raw_close": 292.1300048828125,
+      "vol_63": 0.2571470616106815,
+      "theme": "Unmapped::UNP",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "DASH",
+      "adv_63": 821607829.8412699,
+      "raw_close": 196.16000366210938,
+      "vol_63": 0.5163751728631956,
+      "theme": "Unmapped::DASH",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CVS",
+      "adv_63": 813044879.7460318,
+      "raw_close": 104.43000030517578,
+      "vol_63": 0.2978510702878796,
+      "theme": "Unmapped::CVS",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "NEM",
+      "adv_63": 800565599.4920635,
+      "raw_close": 93.70999908447266,
+      "vol_63": 0.45635613297538136,
+      "theme": "원전·전력망",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "SBUX",
+      "adv_63": 792469794.5396825,
+      "raw_close": 104.64884948730469,
+      "vol_63": 0.22037627768307835,
+      "theme": "Unmapped::SBUX",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "VLO",
+      "adv_63": 791027796.8253968,
+      "raw_close": 312.8999938964844,
+      "vol_63": 0.3865672607629762,
+      "theme": "Unmapped::VLO",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "BLK",
+      "adv_63": 790914353.7777778,
+      "raw_close": 1090.3900146484375,
+      "vol_63": 0.29475375248413427,
+      "theme": "Unmapped::BLK",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "RCL",
+      "adv_63": 789028329.6507937,
+      "raw_close": 318.29998779296875,
+      "vol_63": 0.46468299332302093,
+      "theme": "Unmapped::RCL",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "MDT",
+      "adv_63": 783628957.968254,
+      "raw_close": 85.38999938964844,
+      "vol_63": 0.31741197674268,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "SHW",
+      "adv_63": 769185369.9047619,
+      "raw_close": 340.8500061035156,
+      "vol_63": 0.33697687546954336,
+      "theme": "바이오테크",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "WELL",
+      "adv_63": 761687535.7460318,
+      "raw_close": 233.5583038330078,
+      "vol_63": 0.2704084092135473,
+      "theme": "바이오테크",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "CVNA",
+      "adv_63": 750100410.4126984,
+      "raw_close": 62.36000061035156,
+      "vol_63": 0.6074407108352916,
+      "theme": "Unmapped::CVNA",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "DE",
+      "adv_63": 747967334.0952381,
+      "raw_close": 592.6699829101562,
+      "vol_63": 0.33379345390288595,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "HWM",
+      "adv_63": 741328745.6507937,
+      "raw_close": 282.1236267089844,
+      "vol_63": 0.3433765447513931,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "VST",
+      "adv_63": 732786346.1587301,
+      "raw_close": 148.19000244140625,
+      "vol_63": 0.4655970616304756,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "SLB",
+      "adv_63": 725492454.0952381,
+      "raw_close": 49.59000015258789,
+      "vol_63": 0.38555558771626913,
+      "theme": "Unmapped::SLB",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "VRTX",
+      "adv_63": 718761694.4761904,
+      "raw_close": 477.1000061035156,
+      "vol_63": 0.2726608117275025,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ORLY",
+      "adv_63": 708925401.9047619,
+      "raw_close": 89.3499984741211,
+      "vol_63": 0.3238709594511452,
+      "theme": "Unmapped::ORLY",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ROST",
+      "adv_63": 702440432.2539682,
+      "raw_close": 251.07000732421875,
+      "vol_63": 0.33876747491719683,
+      "theme": "Unmapped::ROST",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "CMI",
+      "adv_63": 694950765.2063493,
+      "raw_close": 634.2000122070312,
+      "vol_63": 0.4499076479054564,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "WDAY",
+      "adv_63": 692231731.8095238,
+      "raw_close": 160.33999633789062,
+      "vol_63": 0.6726032480063506,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CCL",
+      "adv_63": 690843635.3015873,
+      "raw_close": 27.66510581970215,
+      "vol_63": 0.4768300842178376,
+      "theme": "Unmapped::CCL",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "PGR",
+      "adv_63": 684433368.8888888,
+      "raw_close": 211.4199981689453,
+      "vol_63": 0.3366250035764578,
+      "theme": "Unmapped::PGR",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "LMT",
+      "adv_63": 683589441.0158731,
+      "raw_close": 582.739990234375,
+      "vol_63": 0.33531792698791674,
+      "theme": "방산",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "BMY",
+      "adv_63": 682536049.7777778,
+      "raw_close": 65.30999755859375,
+      "vol_63": 0.29582634534734403,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "LOW",
+      "adv_63": 665134188.1904762,
+      "raw_close": 207.80999755859375,
+      "vol_63": 0.3102753773773758,
+      "theme": "Unmapped::LOW",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "AKAM",
+      "adv_63": 663216491.6825397,
+      "raw_close": 115.18000030517578,
+      "vol_63": 0.7875494741252729,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "HLT",
+      "adv_63": 662181062.0952381,
+      "raw_close": 320.489990234375,
+      "vol_63": 0.2252274135394087,
+      "theme": "Unmapped::HLT",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "AEP",
+      "adv_63": 657940385.0158731,
+      "raw_close": 126.88397979736328,
+      "vol_63": 0.2251785372180733,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "HCA",
+      "adv_63": 654479283.8095238,
+      "raw_close": 402.5899963378906,
+      "vol_63": 0.3670927519251692,
+      "theme": "Unmapped::HCA",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "REGN",
+      "adv_63": 652378292.3174603,
+      "raw_close": 762.6300048828125,
+      "vol_63": 0.35831338013463526,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ELV",
+      "adv_63": 650743562.1587301,
+      "raw_close": 375.8399963378906,
+      "vol_63": 0.3648521629848142,
+      "theme": "Unmapped::ELV",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "PH",
+      "adv_63": 647619573.3333334,
+      "raw_close": 976.530029296875,
+      "vol_63": 0.24943391362476416,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "TT",
+      "adv_63": 646436384.0,
+      "raw_close": 454.95001220703125,
+      "vol_63": 0.3257679103653018,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "FDX",
+      "adv_63": 645805457.2698413,
+      "raw_close": 307.3999938964844,
+      "vol_63": 0.3572028903152301,
+      "theme": "Unmapped::FDX",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "GM",
+      "adv_63": 633969128.6349206,
+      "raw_close": 88.86000061035156,
+      "vol_63": 0.3559275185661075,
+      "theme": "Unmapped::GM",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "ICE",
+      "adv_63": 633244852.3174603,
+      "raw_close": 152.47999572753906,
+      "vol_63": 0.2812513298686342,
+      "theme": "Unmapped::ICE",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ADP",
+      "adv_63": 633135668.3174603,
+      "raw_close": 266.4599914550781,
+      "vol_63": 0.3326377104182388,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "DVN",
+      "adv_63": 628045528.8888888,
+      "raw_close": 45.130001068115234,
+      "vol_63": 0.3941049404617536,
+      "theme": "Unmapped::DVN",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "TGT",
+      "adv_63": 625366250.6666666,
+      "raw_close": 143.38941955566406,
+      "vol_63": 0.3465077987669218,
+      "theme": "Unmapped::TGT",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "CMG",
+      "adv_63": 625356439.3650794,
+      "raw_close": 37.220001220703125,
+      "vol_63": 0.46918516370810365,
+      "theme": "Unmapped::CMG",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "EQIX",
+      "adv_63": 621482548.3174603,
+      "raw_close": 1019.280029296875,
+      "vol_63": 0.2596070815448665,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "MPC",
+      "adv_63": 621007030.8571428,
+      "raw_close": 316.4700012207031,
+      "vol_63": 0.3415097908129733,
+      "theme": "Unmapped::MPC",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "CSX",
+      "adv_63": 618064588.6984127,
+      "raw_close": 50.400001525878906,
+      "vol_63": 0.23713368102400972,
+      "theme": "Unmapped::CSX",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "DAL",
+      "adv_63": 616583271.1111112,
+      "raw_close": 87.44000244140625,
+      "vol_63": 0.4028109949071611,
+      "theme": "Unmapped::DAL",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "MMM",
+      "adv_63": 615803146.1587301,
+      "raw_close": 176.27999877929688,
+      "vol_63": 0.2746367031966336,
+      "theme": "Unmapped::MMM",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "BX",
+      "adv_63": 614138455.3650794,
+      "raw_close": 126.45999908447266,
+      "vol_63": 0.3674801637422351,
+      "theme": "Unmapped::BX",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "UAL",
+      "adv_63": 613721107.8095238,
+      "raw_close": 121.33000183105469,
+      "vol_63": 0.5176250790425516,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "TRV",
+      "adv_63": 609511827.8095238,
+      "raw_close": 374.3599853515625,
+      "vol_63": 0.27994238485755296,
+      "theme": "Unmapped::TRV",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "FSLR",
+      "adv_63": 599257988.5714285,
+      "raw_close": 211.02999877929688,
+      "vol_63": 0.5821578668722658,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "CB",
+      "adv_63": 597309324.1904762,
+      "raw_close": 350.67999267578125,
+      "vol_63": 0.2452137619774002,
+      "theme": "Unmapped::CB",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "MO",
+      "adv_63": 595996491.6825397,
+      "raw_close": 68.33000183105469,
+      "vol_63": 0.3127944395161928,
+      "theme": "Unmapped::MO",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "JCI",
+      "adv_63": 595843754.1587301,
+      "raw_close": 146.66000366210938,
+      "vol_63": 0.3391609825202687,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "UPS",
+      "adv_63": 595131681.0158731,
+      "raw_close": 104.22000122070312,
+      "vol_63": 0.37635662111240364,
+      "theme": "Unmapped::UPS",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "ZTS",
+      "adv_63": 589798285.2063493,
+      "raw_close": 77.29000091552734,
+      "vol_63": 0.5390387939449919,
+      "theme": "Unmapped::ZTS",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "TTWO",
+      "adv_63": 584690078.9841269,
+      "raw_close": 242.9199981689453,
+      "vol_63": 0.3511610158783422,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "ADSK",
+      "adv_63": 582114928.5079365,
+      "raw_close": 234.1999969482422,
+      "vol_63": 0.45090459376397,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "WBD",
+      "adv_63": 577724227.3015873,
+      "raw_close": 26.299999237060547,
+      "vol_63": 0.19012210144896588,
+      "theme": "Unmapped::WBD",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "AMT",
+      "adv_63": 575573380.5714285,
+      "raw_close": 173.36000061035156,
+      "vol_63": 0.31506300080800526,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "OXY",
+      "adv_63": 574531176.6349206,
+      "raw_close": 57.06999969482422,
+      "vol_63": 0.38083625603568977,
+      "theme": "Unmapped::OXY",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "TEL",
+      "adv_63": 560638116.5714285,
+      "raw_close": 205.69000244140625,
+      "vol_63": 0.3385276806063197,
+      "theme": "Unmapped::TEL",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "BNY",
+      "adv_63": 558471640.3809524,
+      "raw_close": 156.3300018310547,
+      "vol_63": 0.2309253972895652,
+      "theme": "Unmapped::BNY",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "PLD",
+      "adv_63": 557719690.1587301,
+      "raw_close": 144.61000061035156,
+      "vol_63": 0.24531514851448077,
+      "theme": "Unmapped::PLD",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "MAR",
+      "adv_63": 555256160.0,
+      "raw_close": 372.8299865722656,
+      "vol_63": 0.23717210995194485,
+      "theme": "Unmapped::MAR",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "SO",
+      "adv_63": 550640128.2539682,
+      "raw_close": 94.54000091552734,
+      "vol_63": 0.19206028849266743,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "MDLZ",
+      "adv_63": 544502104.8888888,
+      "raw_close": 62.310001373291016,
+      "vol_63": 0.2592245102870423,
+      "theme": "Unmapped::MDLZ",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "DLR",
+      "adv_63": 542005483.9365079,
+      "raw_close": 188.52000427246094,
+      "vol_63": 0.3541123215502364,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "HUM",
+      "adv_63": 538156757.5873016,
+      "raw_close": 363.8599853515625,
+      "vol_63": 0.4472198681138296,
+      "theme": "Unmapped::HUM",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ABNB",
+      "adv_63": 536665220.06349206,
+      "raw_close": 151.52000427246094,
+      "vol_63": 0.312429213597655,
+      "theme": "Unmapped::ABNB",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "MNST",
+      "adv_63": 533683208.8888889,
+      "raw_close": 96.37999725341797,
+      "vol_63": 0.3370946313765672,
+      "theme": "Unmapped::MNST",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "AON",
+      "adv_63": 533314982.85714287,
+      "raw_close": 359.7300109863281,
+      "vol_63": 0.27832145277504977,
+      "theme": "Unmapped::AON",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "KEYS",
+      "adv_63": 531791838.47619045,
+      "raw_close": 319.0799865722656,
+      "vol_63": 0.4503759387596653,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "URI",
+      "adv_63": 530947585.015873,
+      "raw_close": 1077.40087890625,
+      "vol_63": 0.390947712150755,
+      "theme": "Unmapped::URI",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "BKR",
+      "adv_63": 527850861.2063492,
+      "raw_close": 60.268287658691406,
+      "vol_63": 0.35245112471267087,
+      "theme": "Unmapped::BKR",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "VEEV",
+      "adv_63": 524040465.7777778,
+      "raw_close": 203.77999877929688,
+      "vol_63": 0.4966669529020079,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "AXON",
+      "adv_63": 523278435.8095238,
+      "raw_close": 527.760009765625,
+      "vol_63": 0.6551923941405985,
+      "theme": "사이버보안",
+      "sector": "Unknown::AXON"
+    },
+    {
+      "ticker": "NOC",
+      "adv_63": 520446939.17460316,
+      "raw_close": 542.47998046875,
+      "vol_63": 0.28056359814572746,
+      "theme": "방산",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "WMB",
+      "adv_63": 519534757.0793651,
+      "raw_close": 71.54000091552734,
+      "vol_63": 0.2631931285430821,
+      "theme": "Unmapped::WMB",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "USB",
+      "adv_63": 518955426.53968257,
+      "raw_close": 63.0099983215332,
+      "vol_63": 0.23920743631095176,
+      "theme": "Unmapped::USB",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "EBAY",
+      "adv_63": 513176518.85714287,
+      "raw_close": 114.01000213623047,
+      "vol_63": 0.3118952948504993,
+      "theme": "Unmapped::EBAY",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "CAH",
+      "adv_63": 512358120.63492066,
+      "raw_close": 230.02999877929688,
+      "vol_63": 0.2458079439542387,
+      "theme": "Unmapped::CAH",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "APO",
+      "adv_63": 510894570.15873015,
+      "raw_close": 125.58999633789062,
+      "vol_63": 0.3269668968039466,
+      "theme": "Unmapped::APO",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CTSH",
+      "adv_63": 510564795.17460316,
+      "raw_close": 55.349998474121094,
+      "vol_63": 0.5722249933028895,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NTAP",
+      "adv_63": 496213226.7936508,
+      "raw_close": 178.5,
+      "vol_63": 0.6402810997055187,
+      "theme": "사이버보안",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "CRH",
+      "adv_63": 494901894.6031746,
+      "raw_close": 94.63074493408203,
+      "vol_63": 0.34961579295767026,
+      "theme": "Unmapped::CRH",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "COR",
+      "adv_63": 491860354.7936508,
+      "raw_close": 310.7374267578125,
+      "vol_63": 0.42678123555524217,
+      "theme": "Unmapped::COR",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "EOG",
+      "adv_63": 482448343.61904764,
+      "raw_close": 148.69000244140625,
+      "vol_63": 0.3158729461812963,
+      "theme": "Unmapped::EOG",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "TDG",
+      "adv_63": 480002718.47619045,
+      "raw_close": 1254.3800048828125,
+      "vol_63": 0.3058969158736537,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "CHTR",
+      "adv_63": 479452560.0,
+      "raw_close": 144.97999572753906,
+      "vol_63": 0.5124181337026411,
+      "theme": "Unmapped::CHTR",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "WM",
+      "adv_63": 478552504.38095236,
+      "raw_close": 226.5500030517578,
+      "vol_63": 0.24526464987220295,
+      "theme": "Unmapped::WM",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "CI",
+      "adv_63": 475590343.8730159,
+      "raw_close": 279.04998779296875,
+      "vol_63": 0.3068198660042679,
+      "theme": "Unmapped::CI",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "PNC",
+      "adv_63": 474190960.50793654,
+      "raw_close": 249.8699951171875,
+      "vol_63": 0.20961900550163534,
+      "theme": "Unmapped::PNC",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "MRSH",
+      "adv_63": 473740101.0793651,
+      "raw_close": 189.69000244140625,
+      "vol_63": 0.2963243261546762,
+      "theme": "Unmapped::MRSH",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "JBL",
+      "adv_63": 472311267.8095238,
+      "raw_close": 314.98193359375,
+      "vol_63": 0.5382021453461416,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "MCO",
+      "adv_63": 465486001.015873,
+      "raw_close": 477.3711853027344,
+      "vol_63": 0.2857523272228077,
+      "theme": "Unmapped::MCO",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "PSX",
+      "adv_63": 464080195.5555556,
+      "raw_close": 211.67999267578125,
+      "vol_63": 0.31486667736915014,
+      "theme": "Unmapped::PSX",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "CL",
+      "adv_63": 462261706.15873015,
+      "raw_close": 91.30000305175781,
+      "vol_63": 0.2520399280989464,
+      "theme": "Unmapped::CL",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "KR",
+      "adv_63": 461660467.04761904,
+      "raw_close": 57.346527099609375,
+      "vol_63": 0.339943956524814,
+      "theme": "Unmapped::KR",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "D",
+      "adv_63": 460925058.53968257,
+      "raw_close": 69.16999816894531,
+      "vol_63": 0.2616953805981422,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "MSI",
+      "adv_63": 457320652.95238096,
+      "raw_close": 435.75,
+      "vol_63": 0.3228888073582499,
+      "theme": "데이터센터",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "FANG",
+      "adv_63": 455709665.015873,
+      "raw_close": 201.83843994140625,
+      "vol_63": 0.37473706555505704,
+      "theme": "Unmapped::FANG",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "HPQ",
+      "adv_63": 454273264.50793654,
+      "raw_close": 27.270000457763672,
+      "vol_63": 0.5807380156228196,
+      "theme": "사이버보안",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "MRNA",
+      "adv_63": 449778882.7936508,
+      "raw_close": 54.81999969482422,
+      "vol_63": 0.7701985748242185,
+      "theme": "바이오테크",
+      "sector": "Unknown::MRNA"
+    },
+    {
+      "ticker": "XEL",
+      "adv_63": 449692260.3174603,
+      "raw_close": 78.19999694824219,
+      "vol_63": 0.20626061914830846,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "KMB",
+      "adv_63": 449519531.17460316,
+      "raw_close": 109.30999755859375,
+      "vol_63": 0.28533431107731266,
+      "theme": "Unmapped::KMB",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "DUK",
+      "adv_63": 445960579.5555556,
+      "raw_close": 124.33680725097656,
+      "vol_63": 0.18881424213968015,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "GD",
+      "adv_63": 445771812.5714286,
+      "raw_close": 383.4200134277344,
+      "vol_63": 0.23286115705771906,
+      "theme": "방산",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CARR",
+      "adv_63": 441300614.6031746,
+      "raw_close": 61.810001373291016,
+      "vol_63": 0.4111221123762959,
+      "theme": "Unmapped::CARR",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "LYV",
+      "adv_63": 436888205.46031743,
+      "raw_close": 174.1300048828125,
+      "vol_63": 0.26871252511028776,
+      "theme": "Unmapped::LYV",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "EW",
+      "adv_63": 436194618.9206349,
+      "raw_close": 86.06999969482422,
+      "vol_63": 0.25709664901514917,
+      "theme": "Unmapped::EW",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "TFC",
+      "adv_63": 436025114.15873015,
+      "raw_close": 51.33128356933594,
+      "vol_63": 0.27585796192691864,
+      "theme": "Unmapped::TFC",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "HAL",
+      "adv_63": 435596946.7936508,
+      "raw_close": 32.25,
+      "vol_63": 0.33448654588118876,
+      "theme": "Unmapped::HAL",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "KKR",
+      "adv_63": 435248294.6031746,
+      "raw_close": 101.23761749267578,
+      "vol_63": 0.3226268683508198,
+      "theme": "Unmapped::KKR",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "IBKR",
+      "adv_63": 432383068.95238096,
+      "raw_close": 87.98999786376953,
+      "vol_63": 0.40436093097865516,
+      "theme": "원전·전력망",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "CASY",
+      "adv_63": 431142800.50793654,
+      "raw_close": 871.0,
+      "vol_63": 0.513015203852846,
+      "theme": "Unmapped::CASY",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "XYZ",
+      "adv_63": 428256788.5714286,
+      "raw_close": 81.23999786376953,
+      "vol_63": 0.4168120548269369,
+      "theme": "Unmapped::XYZ",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "CBOE",
+      "adv_63": 426911019.4285714,
+      "raw_close": 310.2300109863281,
+      "vol_63": 0.520880140889649,
+      "theme": "Unmapped::CBOE",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "ECL",
+      "adv_63": 425580828.6984127,
+      "raw_close": 277.6300048828125,
+      "vol_63": 0.2485851700621398,
+      "theme": "Unmapped::ECL",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "LULU",
+      "adv_63": 424366718.47619045,
+      "raw_close": 118.87000274658203,
+      "vol_63": 0.40458170674421656,
+      "theme": "Unmapped::LULU",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "VRSK",
+      "adv_63": 423924764.1904762,
+      "raw_close": 194.85000610351562,
+      "vol_63": 0.3843933309301744,
+      "theme": "Unmapped::VRSK",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "CTAS",
+      "adv_63": 419489662.984127,
+      "raw_close": 204.09982299804688,
+      "vol_63": 0.3270821014992224,
+      "theme": "Unmapped::CTAS",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "LHX",
+      "adv_63": 419033635.5555556,
+      "raw_close": 277.05999755859375,
+      "vol_63": 0.33392041874194084,
+      "theme": "방산",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "MSCI",
+      "adv_63": 417509010.28571427,
+      "raw_close": 570.20068359375,
+      "vol_63": 0.356938641575775,
+      "theme": "Unmapped::MSCI",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ODFL",
+      "adv_63": 413357040.7619048,
+      "raw_close": 212.13999938964844,
+      "vol_63": 0.3834696408745493,
+      "theme": "Unmapped::ODFL",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "KDP",
+      "adv_63": 410233559.8730159,
+      "raw_close": 31.1200008392334,
+      "vol_63": 0.2652355327505116,
+      "theme": "Unmapped::KDP",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "SPG",
+      "adv_63": 408444483.04761904,
+      "raw_close": 229.3699951171875,
+      "vol_63": 0.2161594076774605,
+      "theme": "바이오테크",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "DXCM",
+      "adv_63": 407613790.47619045,
+      "raw_close": 83.44999694824219,
+      "vol_63": 0.4841273095987044,
+      "theme": "Unmapped::DXCM",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "EXC",
+      "adv_63": 407085820.4444444,
+      "raw_close": 45.81999969482422,
+      "vol_63": 0.2185190386786158,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "ALL",
+      "adv_63": 406685906.28571427,
+      "raw_close": 264.0799865722656,
+      "vol_63": 0.28924574832203054,
+      "theme": "Unmapped::ALL",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "FISV",
+      "adv_63": 404765228.4444444,
+      "raw_close": 53.939998626708984,
+      "vol_63": 0.4632991652270678,
+      "theme": "Unmapped::FISV",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "DLTR",
+      "adv_63": 404570176.0,
+      "raw_close": 127.20999908447266,
+      "vol_63": 0.524072635748818,
+      "theme": "Unmapped::DLTR",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "EMR",
+      "adv_63": 404075822.984127,
+      "raw_close": 149.3136444091797,
+      "vol_63": 0.3421508101114609,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "GWW",
+      "adv_63": 402485149.71428573,
+      "raw_close": 1379.52587890625,
+      "vol_63": 0.23458953123130924,
+      "theme": "Unmapped::GWW",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "EXPE",
+      "adv_63": 401488845.2063492,
+      "raw_close": 294.739990234375,
+      "vol_63": 0.4465689573425768,
+      "theme": "Unmapped::EXPE",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "AJG",
+      "adv_63": 399607573.0793651,
+      "raw_close": 249.4199981689453,
+      "vol_63": 0.3555543082984964,
+      "theme": "Unmapped::AJG",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "BDX",
+      "adv_63": 396717942.85714287,
+      "raw_close": 165.6199951171875,
+      "vol_63": 0.32385527141492443,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ETR",
+      "adv_63": 395578574.984127,
+      "raw_close": 106.98136901855469,
+      "vol_63": 0.22237933595106338,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "HBAN",
+      "adv_63": 391772708.5714286,
+      "raw_close": 17.040000915527344,
+      "vol_63": 0.2659854415272327,
+      "theme": "Unmapped::HBAN",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "TSCO",
+      "adv_63": 391484473.14285713,
+      "raw_close": 30.770000457763672,
+      "vol_63": 0.3571469902961099,
+      "theme": "Unmapped::TSCO",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "EQT",
+      "adv_63": 389819166.73015875,
+      "raw_close": 53.123374938964844,
+      "vol_63": 0.2951740934047916,
+      "theme": "Unmapped::EQT",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "SWKS",
+      "adv_63": 388733164.4444444,
+      "raw_close": 62.279998779296875,
+      "vol_63": 0.6239513634897662,
+      "theme": "Unmapped::SWKS",
+      "sector": "Unknown::SWKS"
+    },
+    {
+      "ticker": "FICO",
+      "adv_63": 386751318.6031746,
+      "raw_close": 1122.969970703125,
+      "vol_63": 0.5528041215067441,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "ITW",
+      "adv_63": 386415396.5714286,
+      "raw_close": 286.95001220703125,
+      "vol_63": 0.22729392810795523,
+      "theme": "Unmapped::ITW",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "PCAR",
+      "adv_63": 385991497.14285713,
+      "raw_close": 132.32960510253906,
+      "vol_63": 0.3119092477340929,
+      "theme": "Unmapped::PCAR",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "TTD",
+      "adv_63": 384879288.38095236,
+      "raw_close": 18.040000915527344,
+      "vol_63": 0.5315919678323409,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "STT",
+      "adv_63": 383299050.6666667,
+      "raw_close": 184.16000366210938,
+      "vol_63": 0.2482849316154926,
+      "theme": "Unmapped::STT",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "DOW",
+      "adv_63": 380449656.63492066,
+      "raw_close": 30.290000915527344,
+      "vol_63": 0.3685051299683825,
+      "theme": "Unmapped::DOW",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "ROP",
+      "adv_63": 380020351.49206346,
+      "raw_close": 391.9700012207031,
+      "vol_63": 0.3631630545682946,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NCLH",
+      "adv_63": 378008196.82539684,
+      "raw_close": 18.530000686645508,
+      "vol_63": 0.554873513511432,
+      "theme": "Unmapped::NCLH",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "APD",
+      "adv_63": 375917185.52380955,
+      "raw_close": 294.8900146484375,
+      "vol_63": 0.27930776019076314,
+      "theme": "Unmapped::APD",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "TPR",
+      "adv_63": 375892031.49206346,
+      "raw_close": 152.3699951171875,
+      "vol_63": 0.4190979301139827,
+      "theme": "Unmapped::TPR",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "DG",
+      "adv_63": 375211047.1111111,
+      "raw_close": 127.05000305175781,
+      "vol_63": 0.4041197266185516,
+      "theme": "Unmapped::DG",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "ROK",
+      "adv_63": 371759618.28571427,
+      "raw_close": 480.0799865722656,
+      "vol_63": 0.37213440742956155,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "NSC",
+      "adv_63": 371535011.3015873,
+      "raw_close": 334.15753173828125,
+      "vol_63": 0.24269591791680264,
+      "theme": "Unmapped::NSC",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "NUE",
+      "adv_63": 371302797.46031743,
+      "raw_close": 257.2900085449219,
+      "vol_63": 0.3493147718142901,
+      "theme": "Unmapped::NUE",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "KVUE",
+      "adv_63": 370989635.5555556,
+      "raw_close": 19.027904510498047,
+      "vol_63": 0.2314828659731406,
+      "theme": "Unmapped::KVUE",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "HSY",
+      "adv_63": 369495280.50793654,
+      "raw_close": 173.6843719482422,
+      "vol_63": 0.3158633221132237,
+      "theme": "Unmapped::HSY",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "O",
+      "adv_63": 364807576.1269841,
+      "raw_close": 63.869998931884766,
+      "vol_63": 0.20028655902500334,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "NRG",
+      "adv_63": 364467568.50793654,
+      "raw_close": 133.8149871826172,
+      "vol_63": 0.4940021665307681,
+      "theme": "데이터센터",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "ULTA",
+      "adv_63": 363562586.9206349,
+      "raw_close": 512.8300170898438,
+      "vol_63": 0.31980803856597473,
+      "theme": "Unmapped::ULTA",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "YUM",
+      "adv_63": 363334679.1111111,
+      "raw_close": 153.27999877929688,
+      "vol_63": 0.24676320732888907,
+      "theme": "Unmapped::YUM",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "VTR",
+      "adv_63": 362699695.2380952,
+      "raw_close": 93.51000213623047,
+      "vol_63": 0.2793066295210526,
+      "theme": "Unmapped::VTR",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "GIS",
+      "adv_63": 362505667.04761904,
+      "raw_close": 35.75,
+      "vol_63": 0.3460481100288332,
+      "theme": "Unmapped::GIS",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "FITB",
+      "adv_63": 362432305.52380955,
+      "raw_close": 56.5,
+      "vol_63": 0.2587770562073214,
+      "theme": "Unmapped::FITB",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "DHI",
+      "adv_63": 361591418.4126984,
+      "raw_close": 142.63491821289062,
+      "vol_63": 0.3640674784739617,
+      "theme": "Unmapped::DHI",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "WAT",
+      "adv_63": 360507281.52380955,
+      "raw_close": 377.30999755859375,
+      "vol_63": 0.41219719343949374,
+      "theme": "Unmapped::WAT",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "IDXX",
+      "adv_63": 357977598.984127,
+      "raw_close": 559.0700073242188,
+      "vol_63": 0.32171876231732227,
+      "theme": "Unmapped::IDXX",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CPRT",
+      "adv_63": 357777843.8095238,
+      "raw_close": 29.1200008392334,
+      "vol_63": 0.369117662459881,
+      "theme": "Unmapped::CPRT",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "EME",
+      "adv_63": 357432790.0952381,
+      "raw_close": 797.4299926757812,
+      "vol_63": 0.5401611481143943,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "CCI",
+      "adv_63": 356715772.1904762,
+      "raw_close": 76.30000305175781,
+      "vol_63": 0.3429469789495582,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "ALB",
+      "adv_63": 353177059.3015873,
+      "raw_close": 117.63999938964844,
+      "vol_63": 0.449198028894849,
+      "theme": "원전·전력망",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "GEHC",
+      "adv_63": 352939382.0952381,
+      "raw_close": 68.0199966430664,
+      "vol_63": 0.4079316125338316,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "FAST",
+      "adv_63": 352743125.0793651,
+      "raw_close": 47.709999084472656,
+      "vol_63": 0.22848504181120838,
+      "theme": "Unmapped::FAST",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "NDAQ",
+      "adv_63": 352285498.6666667,
+      "raw_close": 94.19000244140625,
+      "vol_63": 0.3302676604142694,
+      "theme": "Unmapped::NDAQ",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "RSG",
+      "adv_63": 350719189.84126985,
+      "raw_close": 210.5500030517578,
+      "vol_63": 0.24154370714554166,
+      "theme": "Unmapped::RSG",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MLM",
+      "adv_63": 344718224.50793654,
+      "raw_close": 525.1400146484375,
+      "vol_63": 0.34824201743755223,
+      "theme": "방산",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "PAYX",
+      "adv_63": 344336994.53968257,
+      "raw_close": 116.83999633789062,
+      "vol_63": 0.33338656833253655,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CHRW",
+      "adv_63": 342391447.36507934,
+      "raw_close": 147.72999572753906,
+      "vol_63": 0.5255369475264476,
+      "theme": "Unmapped::CHRW",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "KHC",
+      "adv_63": 340678673.015873,
+      "raw_close": 25.850000381469727,
+      "vol_63": 0.31380951432631315,
+      "theme": "Unmapped::KHC",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "LYB",
+      "adv_63": 334817035.93650794,
+      "raw_close": 62.08000183105469,
+      "vol_63": 0.3149060958742918,
+      "theme": "Unmapped::LYB",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "VMC",
+      "adv_63": 333004739.3015873,
+      "raw_close": 268.0719299316406,
+      "vol_63": 0.31920624394688984,
+      "theme": "Unmapped::VMC",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "OKE",
+      "adv_63": 332486190.984127,
+      "raw_close": 89.73999786376953,
+      "vol_63": 0.30717782687047224,
+      "theme": "Unmapped::OKE",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "CTVA",
+      "adv_63": 331542629.5873016,
+      "raw_close": 78.70999908447266,
+      "vol_63": 0.3308994822788459,
+      "theme": "바이오테크",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "CNC",
+      "adv_63": 329122398.47619045,
+      "raw_close": 62.220001220703125,
+      "vol_63": 0.38744220660737044,
+      "theme": "Unmapped::CNC",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "EXE",
+      "adv_63": 329101506.53968257,
+      "raw_close": 93.46843719482422,
+      "vol_63": 0.2700785974685097,
+      "theme": "Unmapped::EXE",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "SRE",
+      "adv_63": 328782121.3968254,
+      "raw_close": 88.55000305175781,
+      "vol_63": 0.19975771640140735,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "PSA",
+      "adv_63": 328297437.71428573,
+      "raw_close": 324.1700134277344,
+      "vol_63": 0.2513544688414292,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "FOXA",
+      "adv_63": 328112420.6984127,
+      "raw_close": 58.22999954223633,
+      "vol_63": 0.4943834643299871,
+      "theme": "Unmapped::FOXA",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "PPL",
+      "adv_63": 327697395.8095238,
+      "raw_close": 35.209999084472656,
+      "vol_63": 0.2032166614017294,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "TRGP",
+      "adv_63": 324445956.06349206,
+      "raw_close": 270.3699951171875,
+      "vol_63": 0.29929601498600644,
+      "theme": "Unmapped::TRGP",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "MET",
+      "adv_63": 323803972.3174603,
+      "raw_close": 95.53810119628906,
+      "vol_63": 0.22789537802927717,
+      "theme": "Unmapped::MET",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "KMI",
+      "adv_63": 323053849.14285713,
+      "raw_close": 31.881999969482422,
+      "vol_63": 0.21291473921745,
+      "theme": "Unmapped::KMI",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "IR",
+      "adv_63": 321869496.63492066,
+      "raw_close": 83.36032104492188,
+      "vol_63": 0.3443871196089902,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "HUBB",
+      "adv_63": 321822335.2380952,
+      "raw_close": 472.54998779296875,
+      "vol_63": 0.3454182776616774,
+      "theme": "AI 반도체",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "PCG",
+      "adv_63": 320670230.0952381,
+      "raw_close": 17.3799991607666,
+      "vol_63": 0.2602109344526605,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "TECH",
+      "adv_63": 318915173.0793651,
+      "raw_close": 72.08999633789062,
+      "vol_63": 0.6416060069314645,
+      "theme": "Unmapped::TECH",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CF",
+      "adv_63": 318885922.4126984,
+      "raw_close": 124.54827880859375,
+      "vol_63": 0.4056094344017092,
+      "theme": "Unmapped::CF",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "AMP",
+      "adv_63": 317288333.46031743,
+      "raw_close": 544.1400146484375,
+      "vol_63": 0.24862723708957946,
+      "theme": "Unmapped::AMP",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "IQV",
+      "adv_63": 315294068.3174603,
+      "raw_close": 235.02000427246094,
+      "vol_63": 0.5099481319099631,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "RF",
+      "adv_63": 313129194.15873015,
+      "raw_close": 30.950000762939453,
+      "vol_63": 0.23032724256433823,
+      "theme": "Unmapped::RF",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "OMC",
+      "adv_63": 311129581.96825397,
+      "raw_close": 78.69999694824219,
+      "vol_63": 0.36392509494689146,
+      "theme": "Unmapped::OMC",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "ARES",
+      "adv_63": 310786632.1269841,
+      "raw_close": 128.08999633789062,
+      "vol_63": 0.39177731634808916,
+      "theme": "Unmapped::ARES",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "AIG",
+      "adv_63": 310753611.6825397,
+      "raw_close": 78.58000183105469,
+      "vol_63": 0.25641310124943717,
+      "theme": "Unmapped::AIG",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "STZ",
+      "adv_63": 308676872.1269841,
+      "raw_close": 130.22999572753906,
+      "vol_63": 0.3038300270580739,
+      "theme": "Unmapped::STZ",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "A",
+      "adv_63": 308195481.3968254,
+      "raw_close": 138.3699951171875,
+      "vol_63": 0.44309044779886464,
+      "theme": "Unmapped::A",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "RMD",
+      "adv_63": 306323388.6984127,
+      "raw_close": 210.97999572753906,
+      "vol_63": 0.37245604859741005,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CFG",
+      "adv_63": 306011690.4126984,
+      "raw_close": 71.6500015258789,
+      "vol_63": 0.26399971728030996,
+      "theme": "Unmapped::CFG",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ADM",
+      "adv_63": 300646997.3333333,
+      "raw_close": 79.2699966430664,
+      "vol_63": 0.265245662171288,
+      "theme": "Unmapped::ADM",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "EFX",
+      "adv_63": 300487720.8888889,
+      "raw_close": 172.6199951171875,
+      "vol_63": 0.43926938061656995,
+      "theme": "Unmapped::EFX",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CBRE",
+      "adv_63": 300154139.3015873,
+      "raw_close": 146.80999755859375,
+      "vol_63": 0.32638060542167546,
+      "theme": "Unmapped::CBRE",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "BBY",
+      "adv_63": 298391115.6825397,
+      "raw_close": 86.26000213623047,
+      "vol_63": 0.45366257772881136,
+      "theme": "Unmapped::BBY",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "STLD",
+      "adv_63": 294414371.3015873,
+      "raw_close": 251.25999450683594,
+      "vol_63": 0.3805241382169184,
+      "theme": "Unmapped::STLD",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "DPZ",
+      "adv_63": 294012176.50793654,
+      "raw_close": 347.44000244140625,
+      "vol_63": 0.3443208576637121,
+      "theme": "Unmapped::DPZ",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "LUV",
+      "adv_63": 285411097.14285713,
+      "raw_close": 44.970001220703125,
+      "vol_63": 0.40718652011821543,
+      "theme": "Unmapped::LUV",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "AFL",
+      "adv_63": 282777196.1904762,
+      "raw_close": 127.4800033569336,
+      "vol_63": 0.17491787653400648,
+      "theme": "Unmapped::AFL",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "AWK",
+      "adv_63": 282215345.26984125,
+      "raw_close": 133.28346252441406,
+      "vol_63": 0.23157235082576444,
+      "theme": "Unmapped::AWK",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "JBHT",
+      "adv_63": 282131432.8888889,
+      "raw_close": 271.29241943359375,
+      "vol_63": 0.349003425691493,
+      "theme": "Unmapped::JBHT",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "SYF",
+      "adv_63": 281347112.1269841,
+      "raw_close": 75.46414184570312,
+      "vol_63": 0.35744672668950894,
+      "theme": "Unmapped::SYF",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "OTIS",
+      "adv_63": 279927377.7777778,
+      "raw_close": 71.5165023803711,
+      "vol_63": 0.23180898871094446,
+      "theme": "Unmapped::OTIS",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "EL",
+      "adv_63": 278499537.9047619,
+      "raw_close": 83.9000015258789,
+      "vol_63": 0.43913044966661385,
+      "theme": "Unmapped::EL",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "FIS",
+      "adv_63": 278494963.3015873,
+      "raw_close": 44.77000045776367,
+      "vol_63": 0.39170357568786596,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "AME",
+      "adv_63": 276843905.26984125,
+      "raw_close": 241.7100067138672,
+      "vol_63": 0.2343349909652989,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "CDW",
+      "adv_63": 274770054.73015875,
+      "raw_close": 147.80999755859375,
+      "vol_63": 0.6467038775580832,
+      "theme": "사이버보안",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "TKO",
+      "adv_63": 272718147.93650794,
+      "raw_close": 181.80999755859375,
+      "vol_63": 0.34102027110356997,
+      "theme": "Unmapped::TKO",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "WST",
+      "adv_63": 271070055.1111111,
+      "raw_close": 340.9599914550781,
+      "vol_63": 0.28882405324585037,
+      "theme": "Unmapped::WST",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "GPN",
+      "adv_63": 270390061.71428573,
+      "raw_close": 84.08000183105469,
+      "vol_63": 0.428437447093654,
+      "theme": "Unmapped::GPN",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ED",
+      "adv_63": 266399535.23809522,
+      "raw_close": 108.8499984741211,
+      "vol_63": 0.19139381998278204,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "DRI",
+      "adv_63": 265806648.8888889,
+      "raw_close": 203.5800018310547,
+      "vol_63": 0.2675570654390815,
+      "theme": "Unmapped::DRI",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "TYL",
+      "adv_63": 264310993.9047619,
+      "raw_close": 309.6000061035156,
+      "vol_63": 0.46160807219494937,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "CNP",
+      "adv_63": 264217093.58730158,
+      "raw_close": 42.040000915527344,
+      "vol_63": 0.20247151432804522,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "SYY",
+      "adv_63": 263526440.8888889,
+      "raw_close": 85.23999786376953,
+      "vol_63": 0.19501938463649166,
+      "theme": "Unmapped::SYY",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "FFIV",
+      "adv_63": 262941889.52380952,
+      "raw_close": 402.57000732421875,
+      "vol_63": 0.32641240849034975,
+      "theme": "사이버보안",
+      "sector": "Unknown::FFIV"
+    },
+    {
+      "ticker": "CLX",
+      "adv_63": 260114201.14285713,
+      "raw_close": 94.4268798828125,
+      "vol_63": 0.3972762779514564,
+      "theme": "Unmapped::CLX",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "RL",
+      "adv_63": 259115718.6031746,
+      "raw_close": 380.3399963378906,
+      "vol_63": 0.4490622324386762,
+      "theme": "Unmapped::RL",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "WAB",
+      "adv_63": 257266089.65079364,
+      "raw_close": 290.8599853515625,
+      "vol_63": 0.3358291866134523,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "MTD",
+      "adv_63": 256299241.9047619,
+      "raw_close": 1416.300048828125,
+      "vol_63": 0.4492879201137558,
+      "theme": "Unmapped::MTD",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "KEY",
+      "adv_63": 255333071.4920635,
+      "raw_close": 22.59000015258789,
+      "vol_63": 0.21805397464443052,
+      "theme": "Unmapped::KEY",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "MTB",
+      "adv_63": 254402655.23809522,
+      "raw_close": 246.2899932861328,
+      "vol_63": 0.21535125374482822,
+      "theme": "Unmapped::MTB",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "VICI",
+      "adv_63": 250414446.47619048,
+      "raw_close": 26.350000381469727,
+      "vol_63": 0.2278161529722741,
+      "theme": "Unmapped::VICI",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "CSGP",
+      "adv_63": 248282487.36507937,
+      "raw_close": 28.760000228881836,
+      "vol_63": 0.44972009622889697,
+      "theme": "Unmapped::CSGP",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "BIIB",
+      "adv_63": 247711857.65079364,
+      "raw_close": 202.9499969482422,
+      "vol_63": 0.4014736593671707,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ATO",
+      "adv_63": 246124242.15873015,
+      "raw_close": 172.77999877929688,
+      "vol_63": 0.1761854874507905,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "CMS",
+      "adv_63": 245964811.93650794,
+      "raw_close": 71.4136734008789,
+      "vol_63": 0.20547162130550659,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "WSM",
+      "adv_63": 241947766.47619048,
+      "raw_close": 228.66000366210938,
+      "vol_63": 0.36353541369557896,
+      "theme": "Unmapped::WSM",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "GNRC",
+      "adv_63": 240961035.68253967,
+      "raw_close": 197.11000061035156,
+      "vol_63": 0.5760563411793949,
+      "theme": "AI 반도체",
+      "sector": "Information Technology"
+    },
+    {
+      "ticker": "PODD",
+      "adv_63": 239922286.47619048,
+      "raw_close": 165.35000610351562,
+      "vol_63": 0.47701029153439817,
+      "theme": "Unmapped::PODD",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "PEG",
+      "adv_63": 239843412.31746033,
+      "raw_close": 76.68000030517578,
+      "vol_63": 0.1866047138915658,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "ZBRA",
+      "adv_63": 239839531.3015873,
+      "raw_close": 293.82000732421875,
+      "vol_63": 0.4836432339503872,
+      "theme": "Unmapped::ZBRA",
+      "sector": "Unknown::ZBRA"
+    },
+    {
+      "ticker": "SW",
+      "adv_63": 239329837.58730158,
+      "raw_close": 45.55459976196289,
+      "vol_63": 0.5074641591495218,
+      "theme": "Unmapped::SW",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "PTC",
+      "adv_63": 239326053.33333334,
+      "raw_close": 137.1999969482422,
+      "vol_63": 0.46772290785073556,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "WEC",
+      "adv_63": 238691391.4920635,
+      "raw_close": 108.47442626953125,
+      "vol_63": 0.18449036927880058,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "IT",
+      "adv_63": 237408842.15873015,
+      "raw_close": 151.02000427246094,
+      "vol_63": 0.5875492051925633,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "DECK",
+      "adv_63": 237138217.65079364,
+      "raw_close": 96.87999725341797,
+      "vol_63": 0.4185206778220448,
+      "theme": "Unmapped::DECK",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "HIG",
+      "adv_63": 235941450.92063493,
+      "raw_close": 141.91000366210938,
+      "vol_63": 0.2250833068696289,
+      "theme": "Unmapped::HIG",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "LEN",
+      "adv_63": 235636942.2222222,
+      "raw_close": 82.3499984741211,
+      "vol_63": 0.3914308356932992,
+      "theme": "Unmapped::LEN",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "TROW",
+      "adv_63": 233757161.01587301,
+      "raw_close": 111.75,
+      "vol_63": 0.26616906992973766,
+      "theme": "Unmapped::TROW",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "FDS",
+      "adv_63": 233609235.68253967,
+      "raw_close": 263.20001220703125,
+      "vol_63": 0.5885681294230098,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "VRSN",
+      "adv_63": 233173545.01587301,
+      "raw_close": 290.0199890136719,
+      "vol_63": 0.342042958724267,
+      "theme": "Unmapped::VRSN",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "LVS",
+      "adv_63": 233075376.76190478,
+      "raw_close": 48.57978439331055,
+      "vol_63": 0.2648180749643246,
+      "theme": "Unmapped::LVS",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "LII",
+      "adv_63": 232083962.15873015,
+      "raw_close": 415.8800048828125,
+      "vol_63": 0.5380591054855997,
+      "theme": "Unmapped::LII",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "XYL",
+      "adv_63": 230005846.0952381,
+      "raw_close": 116.97000122070312,
+      "vol_63": 0.2674821000460328,
+      "theme": "Unmapped::XYL",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "PHM",
+      "adv_63": 227389881.65079364,
+      "raw_close": 126.47000122070312,
+      "vol_63": 0.36476309779114907,
+      "theme": "바이오테크",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "FE",
+      "adv_63": 227156394.2857143,
+      "raw_close": 47.83577346801758,
+      "vol_63": 0.19105211331463445,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "TDY",
+      "adv_63": 225995109.58730158,
+      "raw_close": 655.5700073242188,
+      "vol_63": 0.2726938133151919,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "DOV",
+      "adv_63": 225694204.6984127,
+      "raw_close": 204.6199951171875,
+      "vol_63": 0.2996157851335572,
+      "theme": "Unmapped::DOV",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "PPG",
+      "adv_63": 224279596.95238096,
+      "raw_close": 109.83686828613281,
+      "vol_63": 0.34174333001355267,
+      "theme": "Unmapped::PPG",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "GRMN",
+      "adv_63": 221138831.4920635,
+      "raw_close": 293.7799987792969,
+      "vol_63": 0.42800501316114764,
+      "theme": "Unmapped::GRMN",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "RJF",
+      "adv_63": 220109949.46031746,
+      "raw_close": 175.97999572753906,
+      "vol_63": 0.2584577856131731,
+      "theme": "Unmapped::RJF",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ROL",
+      "adv_63": 219966304.76190478,
+      "raw_close": 37.785884857177734,
+      "vol_63": 0.32281134031156045,
+      "theme": "Unmapped::ROL",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "DTE",
+      "adv_63": 218230147.3015873,
+      "raw_close": 141.8699951171875,
+      "vol_63": 0.20312115724703952,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "IP",
+      "adv_63": 218215016.0,
+      "raw_close": 40.37026596069336,
+      "vol_63": 0.4909964115323719,
+      "theme": "Unmapped::IP",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "CPAY",
+      "adv_63": 217087110.73015872,
+      "raw_close": 382.1099853515625,
+      "vol_63": 0.39271044316254644,
+      "theme": "Unmapped::CPAY",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ACGL",
+      "adv_63": 216679907.55555555,
+      "raw_close": 100.52999877929688,
+      "vol_63": 0.24311558486544574,
+      "theme": "바이오테크",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "IRM",
+      "adv_63": 216306455.6190476,
+      "raw_close": 122.31999969482422,
+      "vol_63": 0.3024121312267547,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "GDDY",
+      "adv_63": 216266598.73015872,
+      "raw_close": 82.73999786376953,
+      "vol_63": 0.6156883486124427,
+      "theme": "Unmapped::GDDY",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "JKHY",
+      "adv_63": 215162291.42857143,
+      "raw_close": 154.0399932861328,
+      "vol_63": 0.3424146657913122,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "HST",
+      "adv_63": 213585645.33333334,
+      "raw_close": 25.1299991607666,
+      "vol_63": 0.22224827163392463,
+      "theme": "Unmapped::HST",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "APA",
+      "adv_63": 211235152.76190478,
+      "raw_close": 37.31999969482422,
+      "vol_63": 0.4508456018818686,
+      "theme": "Unmapped::APA",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "BR",
+      "adv_63": 210248020.6984127,
+      "raw_close": 153.9499969482422,
+      "vol_63": 0.3120847355964937,
+      "theme": "Unmapped::BR",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "APTV",
+      "adv_63": 209400351.4920635,
+      "raw_close": 56.470001220703125,
+      "vol_63": 0.5044482360213113,
+      "theme": "Unmapped::APTV",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "NI",
+      "adv_63": 208582222.85714287,
+      "raw_close": 44.43000030517578,
+      "vol_63": 0.19604612791621082,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "MKC",
+      "adv_63": 206347812.44444445,
+      "raw_close": 50.900001525878906,
+      "vol_63": 0.32017822964120496,
+      "theme": "Unmapped::MKC",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "PRU",
+      "adv_63": 206187961.9047619,
+      "raw_close": 122.08000183105469,
+      "vol_63": 0.20472991007519806,
+      "theme": "Unmapped::PRU",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "EXPD",
+      "adv_63": 205231059.68253967,
+      "raw_close": 167.88999938964844,
+      "vol_63": 0.30139077970871136,
+      "theme": "Unmapped::EXPD",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "DD",
+      "adv_63": 205010780.44444445,
+      "raw_close": 137.0,
+      "vol_63": 0.3288181576120049,
+      "theme": "Unmapped::DD",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "VMRK",
+      "adv_63": 204032961.14285713,
+      "raw_close": 66.44999694824219,
+      "vol_63": 0.19208929881603554,
+      "theme": "Unmapped::VMRK",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "TSN",
+      "adv_63": 200940876.19047618,
+      "raw_close": 57.959999084472656,
+      "vol_63": 0.3249400972225632,
+      "theme": "Unmapped::TSN",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "GPC",
+      "adv_63": 200789660.31746033,
+      "raw_close": 124.37000274658203,
+      "vol_63": 0.4061121478104509,
+      "theme": "Unmapped::GPC",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "BLDR",
+      "adv_63": 200206335.36507937,
+      "raw_close": 66.44000244140625,
+      "vol_63": 0.5643155201761574,
+      "theme": "Unmapped::BLDR",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "ZBH",
+      "adv_63": 199782831.87301588,
+      "raw_close": 93.93000030517578,
+      "vol_63": 0.3192780426545772,
+      "theme": "Unmapped::ZBH",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "VLTO",
+      "adv_63": 198678375.4920635,
+      "raw_close": 94.16999816894531,
+      "vol_63": 0.2659514418795844,
+      "theme": "Unmapped::VLTO",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "BRO",
+      "adv_63": 197538191.87301588,
+      "raw_close": 70.2374038696289,
+      "vol_63": 0.3760715517799756,
+      "theme": "Unmapped::BRO",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "INCY",
+      "adv_63": 197527089.9047619,
+      "raw_close": 119.5199966430664,
+      "vol_63": 0.3882708246133455,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "AEE",
+      "adv_63": 196519950.6031746,
+      "raw_close": 109.61000061035156,
+      "vol_63": 0.2201882288719193,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "MOS",
+      "adv_63": 196507409.01587301,
+      "raw_close": 22.1200008392334,
+      "vol_63": 0.4456460351300923,
+      "theme": "Unmapped::MOS",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "WTW",
+      "adv_63": 196253772.06349206,
+      "raw_close": 335.9200134277344,
+      "vol_63": 0.3215676429412994,
+      "theme": "Unmapped::WTW",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "BG",
+      "adv_63": 195567461.96825397,
+      "raw_close": 106.2300033569336,
+      "vol_63": 0.3453515982596466,
+      "theme": "Unmapped::BG",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "AVB",
+      "adv_63": 194610351.87301588,
+      "raw_close": 185.61000061035156,
+      "vol_63": 0.20983279952476278,
+      "theme": "Unmapped::AVB",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "CHD",
+      "adv_63": 192601308.44444445,
+      "raw_close": 98.50962829589844,
+      "vol_63": 0.2537415602644025,
+      "theme": "Unmapped::CHD",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "MAS",
+      "adv_63": 192449369.3968254,
+      "raw_close": 71.4800033569336,
+      "vol_63": 0.40555872028366086,
+      "theme": "Unmapped::MAS",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "HAS",
+      "adv_63": 190989095.23809522,
+      "raw_close": 93.94000244140625,
+      "vol_63": 0.3656865150254962,
+      "theme": "Unmapped::HAS",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "DGX",
+      "adv_63": 190870921.14285713,
+      "raw_close": 233.00999450683594,
+      "vol_63": 0.26837525863977807,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "PNR",
+      "adv_63": 190516812.6984127,
+      "raw_close": 65.44000244140625,
+      "vol_63": 0.42141970350626606,
+      "theme": "Unmapped::PNR",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "LH",
+      "adv_63": 189985673.7777778,
+      "raw_close": 309.20001220703125,
+      "vol_63": 0.24474351401576278,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "COO",
+      "adv_63": 188829770.41269842,
+      "raw_close": 72.31999969482422,
+      "vol_63": 0.316286049828029,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "LDOS",
+      "adv_63": 188459402.7936508,
+      "raw_close": 115.5999984741211,
+      "vol_63": 0.35186649172512774,
+      "theme": "Unmapped::LDOS",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "MGM",
+      "adv_63": 188019162.2857143,
+      "raw_close": 44.56999969482422,
+      "vol_63": 0.4495321001664121,
+      "theme": "Unmapped::MGM",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "LNT",
+      "adv_63": 186704414.85714287,
+      "raw_close": 70.77999877929688,
+      "vol_63": 0.2008975168943691,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "NVR",
+      "adv_63": 186614560.0,
+      "raw_close": 6147.0498046875,
+      "vol_63": 0.32030744748659873,
+      "theme": "Unmapped::NVR",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "FTV",
+      "adv_63": 185838209.65079364,
+      "raw_close": 59.209999084472656,
+      "vol_63": 0.2708197724332792,
+      "theme": "Unmapped::FTV",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NTRS",
+      "adv_63": 185408660.95238096,
+      "raw_close": 182.19000244140625,
+      "vol_63": 0.22191586833200444,
+      "theme": "Unmapped::NTRS",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "ES",
+      "adv_63": 185319442.66666666,
+      "raw_close": 71.58999633789062,
+      "vol_63": 0.23204357386189245,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "SJM",
+      "adv_63": 184936604.6984127,
+      "raw_close": 118.15271759033203,
+      "vol_63": 0.36423297377136077,
+      "theme": "Unmapped::SJM",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "EIX",
+      "adv_63": 184887431.74603173,
+      "raw_close": 73.37000274658203,
+      "vol_63": 0.2585039791731583,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "SBAC",
+      "adv_63": 184429171.17460316,
+      "raw_close": 180.97999572753906,
+      "vol_63": 0.3283154130034849,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "VTRS",
+      "adv_63": 178994119.36507937,
+      "raw_close": 17.559999465942383,
+      "vol_63": 0.3409947576143147,
+      "theme": "Unmapped::VTRS",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "DVA",
+      "adv_63": 178414246.6031746,
+      "raw_close": 240.08999633789062,
+      "vol_63": 0.5192149913126423,
+      "theme": "Unmapped::DVA",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "EVRG",
+      "adv_63": 177140176.63492063,
+      "raw_close": 83.01000213623047,
+      "vol_63": 0.18663764950166392,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "CRL",
+      "adv_63": 175810417.14285713,
+      "raw_close": 232.50999450683594,
+      "vol_63": 0.49353986003933786,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "ALGN",
+      "adv_63": 175193651.55555555,
+      "raw_close": 169.16000366210938,
+      "vol_63": 0.44948466685794736,
+      "theme": "Unmapped::ALGN",
+      "sector": "Consumer Discretionary"
+    },
+    {
+      "ticker": "STE",
+      "adv_63": 174685051.80952382,
+      "raw_close": 228.39999389648438,
+      "vol_63": 0.2999567447431311,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "EXR",
+      "adv_63": 170718100.19047618,
+      "raw_close": 148.0399932861328,
+      "vol_63": 0.2329675220769675,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "HII",
+      "adv_63": 167892239.6190476,
+      "raw_close": 326.45001220703125,
+      "vol_63": 0.4839056122542066,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "GEN",
+      "adv_63": 167598091.04761904,
+      "raw_close": 27.450000762939453,
+      "vol_63": 0.44951739120553835,
+      "theme": "사이버보안",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "ALLE",
+      "adv_63": 167562059.68253967,
+      "raw_close": 157.39999389648438,
+      "vol_63": 0.3380433032721348,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "UHS",
+      "adv_63": 167299030.0952381,
+      "raw_close": 168.44000244140625,
+      "vol_63": 0.3176565720669288,
+      "theme": "Unmapped::UHS",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "DOC",
+      "adv_63": 165695342.73015872,
+      "raw_close": 21.829999923706055,
+      "vol_63": 0.42323467190690434,
+      "theme": "Unmapped::DOC",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "UDR",
+      "adv_63": 165219016.76190478,
+      "raw_close": 38.15999984741211,
+      "vol_63": 0.2119221087437592,
+      "theme": "Unmapped::UDR",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "BALL",
+      "adv_63": 162001974.73015872,
+      "raw_close": 64.9000015258789,
+      "vol_63": 0.2846028169101347,
+      "theme": "방산",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "TRMB",
+      "adv_63": 160976385.14285713,
+      "raw_close": 56.58000183105469,
+      "vol_63": 0.37260341721986934,
+      "theme": "사이버보안",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "RVTY",
+      "adv_63": 158444709.7142857,
+      "raw_close": 112.5199966430664,
+      "vol_63": 0.40989966224961494,
+      "theme": "바이오테크",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "PKG",
+      "adv_63": 158387662.47619048,
+      "raw_close": 245.83999633789062,
+      "vol_63": 0.32648827784431955,
+      "theme": "Unmapped::PKG",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "IEX",
+      "adv_63": 158073701.7142857,
+      "raw_close": 230.4499969482422,
+      "vol_63": 0.19954441923494098,
+      "theme": "Unmapped::IEX",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "J",
+      "adv_63": 158043253.7142857,
+      "raw_close": 134.92999267578125,
+      "vol_63": 0.375679632033444,
+      "theme": "Unmapped::J",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "TPL",
+      "adv_63": 156885337.65079364,
+      "raw_close": 402.5799865722656,
+      "vol_63": 0.4414681067615982,
+      "theme": "Unmapped::TPL",
+      "sector": "Energy"
+    },
+    {
+      "ticker": "AMCR",
+      "adv_63": 156852208.0,
+      "raw_close": 44.880001068115234,
+      "vol_63": 0.3502159953999598,
+      "theme": "방산",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "IFF",
+      "adv_63": 156675878.6031746,
+      "raw_close": 79.22000122070312,
+      "vol_63": 0.48624192930120447,
+      "theme": "바이오테크",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "INVH",
+      "adv_63": 156095001.26984128,
+      "raw_close": 29.719999313354492,
+      "vol_63": 0.1895207218731561,
+      "theme": "Unmapped::INVH",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "WYNN",
+      "adv_63": 150804638.47619048,
+      "raw_close": 99.06746673583984,
+      "vol_63": 0.2940858341844956,
+      "theme": "Unmapped::WYNN",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "PFG",
+      "adv_63": 150020401.01587301,
+      "raw_close": 113.69999694824219,
+      "vol_63": 0.21555835871176904,
+      "theme": "Unmapped::PFG",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "BEN",
+      "adv_63": 147575090.41269842,
+      "raw_close": 33.86000061035156,
+      "vol_63": 0.2730832174247308,
+      "theme": "Unmapped::BEN",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "SWK",
+      "adv_63": 146381273.65079364,
+      "raw_close": 94.58000183105469,
+      "vol_63": 0.3936829388821493,
+      "theme": "Unmapped::SWK",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "EG",
+      "adv_63": 144319707.93650794,
+      "raw_close": 374.1499938964844,
+      "vol_63": 0.2523823327619753,
+      "theme": "Unmapped::EG",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "WRB",
+      "adv_63": 143944889.65079364,
+      "raw_close": 72.54000091552734,
+      "vol_63": 0.24596379421490464,
+      "theme": "Unmapped::WRB",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "CINF",
+      "adv_63": 142557479.1111111,
+      "raw_close": 177.67999267578125,
+      "vol_63": 0.25973054127204814,
+      "theme": "Unmapped::CINF",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "BAX",
+      "adv_63": 142500373.96825397,
+      "raw_close": 26.15999984741211,
+      "vol_63": 0.4231445553076912,
+      "theme": "Unmapped::BAX",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "TXT",
+      "adv_63": 141738427.68253967,
+      "raw_close": 85.26000213623047,
+      "vol_63": 0.30159222742045716,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "IVZ",
+      "adv_63": 141408009.01587301,
+      "raw_close": 29.403337478637695,
+      "vol_63": 0.3717548108227111,
+      "theme": "Unmapped::IVZ",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "SNA",
+      "adv_63": 139100769.14285713,
+      "raw_close": 410.4100036621094,
+      "vol_63": 0.22654896649903572,
+      "theme": "Unmapped::SNA",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "MAA",
+      "adv_63": 138537684.19047618,
+      "raw_close": 132.33999633789062,
+      "vol_63": 0.20379588490863318,
+      "theme": "Unmapped::MAA",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "ESS",
+      "adv_63": 136813494.92063493,
+      "raw_close": 284.1400146484375,
+      "vol_63": 0.20301580607757455,
+      "theme": "Unmapped::ESS",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "AES",
+      "adv_63": 133866799.3015873,
+      "raw_close": 14.680000305175781,
+      "vol_63": 0.042711070172476585,
+      "theme": "Unmapped::AES",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "TAP",
+      "adv_63": 133268024.50793651,
+      "raw_close": 41.560001373291016,
+      "vol_63": 0.3088549034958397,
+      "theme": "Unmapped::TAP",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "NWSA",
+      "adv_63": 132454165.52380952,
+      "raw_close": 27.559999465942383,
+      "vol_63": 0.2917962889170361,
+      "theme": "Unmapped::NWSA",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "WY",
+      "adv_63": 132374769.65079366,
+      "raw_close": 25.030000686645508,
+      "vol_63": 0.31011421119514443,
+      "theme": "Unmapped::WY",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "PNW",
+      "adv_63": 130568618.03174603,
+      "raw_close": 100.08000183105469,
+      "vol_63": 0.19352581262587087,
+      "theme": "데이터센터",
+      "sector": "Utilities"
+    },
+    {
+      "ticker": "SOLV",
+      "adv_63": 129153642.53968254,
+      "raw_close": 85.44000244140625,
+      "vol_63": 0.3356190764528629,
+      "theme": "Unmapped::SOLV",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "CPT",
+      "adv_63": 126860033.26984127,
+      "raw_close": 110.80999755859375,
+      "vol_63": 0.2038153081792825,
+      "theme": "Unmapped::CPT",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "AVY",
+      "adv_63": 121951777.3968254,
+      "raw_close": 169.72999572753906,
+      "vol_63": 0.28715334344499244,
+      "theme": "바이오테크",
+      "sector": "Materials"
+    },
+    {
+      "ticker": "HSIC",
+      "adv_63": 119974790.73015873,
+      "raw_close": 85.75,
+      "vol_63": 0.24507436757104561,
+      "theme": "Unmapped::HSIC",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "KIM",
+      "adv_63": 119415028.82539682,
+      "raw_close": 25.479999542236328,
+      "vol_63": 0.2063144358333869,
+      "theme": "데이터센터",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "HRL",
+      "adv_63": 117264118.15873016,
+      "raw_close": 25.010000228881836,
+      "vol_63": 0.3554594994991215,
+      "theme": "Unmapped::HRL",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "REG",
+      "adv_63": 116422041.01587301,
+      "raw_close": 80.29000091552734,
+      "vol_63": 0.16989483529235272,
+      "theme": "Unmapped::REG",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "NDSN",
+      "adv_63": 114700831.1111111,
+      "raw_close": 297.7799987792969,
+      "vol_63": 0.24016191246057364,
+      "theme": "Unmapped::NDSN",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "FRT",
+      "adv_63": 112904802.15873016,
+      "raw_close": 124.08999633789062,
+      "vol_63": 0.17454318481487713,
+      "theme": "Unmapped::FRT",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "AIZ",
+      "adv_63": 109444519.23809524,
+      "raw_close": 279.19000244140625,
+      "vol_63": 0.20123137651401532,
+      "theme": "Unmapped::AIZ",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "GL",
+      "adv_63": 108582155.87301587,
+      "raw_close": 182.25,
+      "vol_63": 0.25056284983795135,
+      "theme": "Unmapped::GL",
+      "sector": "Financials"
+    },
+    {
+      "ticker": "AOS",
+      "adv_63": 105999038.85714285,
+      "raw_close": 60.130001068115234,
+      "vol_63": 0.30827539973000795,
+      "theme": "방산",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "L",
+      "adv_63": 98763942.03174603,
+      "raw_close": 116.01000213623047,
+      "vol_63": 0.20960874921029965,
+      "theme": "Unmapped::L",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "BXP",
+      "adv_63": 96815568.95238096,
+      "raw_close": 70.12000274658203,
+      "vol_63": 0.27109986980224515,
+      "theme": "Unmapped::BXP",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "ARE",
+      "adv_63": 93742480.06349206,
+      "raw_close": 51.45000076293945,
+      "vol_63": 0.43041548459297513,
+      "theme": "Unmapped::ARE",
+      "sector": "Real Estate"
+    },
+    {
+      "ticker": "FOX",
+      "adv_63": 87681524.12698413,
+      "raw_close": 51.939998626708984,
+      "vol_63": 0.46898299235292595,
+      "theme": "Unmapped::FOX",
+      "sector": "Communication Services"
+    },
+    {
+      "ticker": "BF.B",
+      "adv_63": 80831719.23809524,
+      "raw_close": 28.729999542236328,
+      "vol_63": 0.372937663515493,
+      "theme": "Unmapped::BF.B",
+      "sector": "Consumer Staples"
+    },
+    {
+      "ticker": "ERIE",
+      "adv_63": 55133268.12698413,
+      "raw_close": 242.0399932861328,
+      "vol_63": 0.4999797459540164,
+      "theme": "Unmapped::ERIE",
+      "sector": "Health Care"
+    },
+    {
+      "ticker": "NWS",
+      "adv_63": 47291403.9047619,
+      "raw_close": 31.270000457763672,
+      "vol_63": 0.3051999037026979,
+      "theme": "Unmapped::NWS",
+      "sector": "Communication Services"
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "strategyVersion": "IRCS-M-R2-FORWARD-2026-08-27",
+  "reportDate": "2026-08-27",
+  "marketDate": "2026-08-26",
+  "generatedAt": "2026-08-27T14:35:15.479992+00:00",
+  "executionPriceBasis": "split/dividend-adjusted close",
+  "oneWayCost": 0.001,
+  "accounts": {
+    "IRCS-BBCCI-M": {
+      "cash": 21000.0,
+      "marketValue": 0.0,
+      "equity": 21000.0,
+      "totalReturn": 0.0,
+      "realizedPnl": 0.0,
+      "unrealizedPnl": 0,
+      "feesPaid": 0.0,
+      "positions": [],
+      "positionCount": 0,
+      "closedTrades": 0,
+      "winRate": null,
+      "profitFactor": null,
+      "maxDrawdown": 0.0
+    },
+    "IRCS-BBCCI-M-R2": {
+      "cash": 21000.0,
+      "marketValue": 0.0,
+      "equity": 21000.0,
+      "totalReturn": 0.0,
+      "realizedPnl": 0.0,
+      "unrealizedPnl": 0,
+      "feesPaid": 0.0,
+      "positions": [],
+      "positionCount": 0,
+      "closedTrades": 0,
+      "winRate": null,
+      "profitFactor": null,
+      "maxDrawdown": 0.0
+    }
+  },
+  "completedActions": {
+    "IRCS-BBCCI-M": [],
+    "IRCS-BBCCI-M-R2": []
+  },
+  "nextActions": {
+    "IRCS-BBCCI-M": {
+      "signalDate": "2026-08-26",
+      "candidateDate": "2026-07-31",
+      "strategy": "IRCS-BBCCI-M",
+      "marketGate": {
+        "open": false,
+        "baseOpen": false,
+        "cciRising": false,
+        "ivvCci": -7.095508764957629,
+        "ivvCciChange": -9.878489458643756,
+        "ivvBandPosition": 0.9672757351364338,
+        "ivvClose": 769.6500244140625
+      },
+      "rawSignals": 0,
+      "orders": [],
+      "summary": "주문 없음 · 현금/보유 유지"
+    },
+    "IRCS-BBCCI-M-R2": {
+      "signalDate": "2026-08-26",
+      "candidateDate": "2026-07-31",
+      "strategy": "IRCS-BBCCI-M-R2",
+      "marketGate": {
+        "open": false,
+        "baseOpen": false,
+        "cciRising": false,
+        "ivvCci": -7.095508764957629,
+        "ivvCciChange": -9.878489458643756,
+        "ivvBandPosition": 0.9672757351364338,
+        "ivvClose": 769.6500244140625
+      },
+      "rawSignals": 0,
+      "orders": [],
+      "summary": "주문 없음 · 현금/보유 유지"
+    }
+  },
+  "benchmark": {
+    "ticker": "IVV",
+    "initialClose": 769.6500244140625,
+    "currentClose": 769.6500244140625,
+    "totalReturn": 0.0
+  },
+  "dataQuality": {
+    "marketDate": "2026-08-26",
+    "universeCount": 503,
+    "latestCoverage": 1.0,
+    "missingSymbols": [],
+    "snapshot": "sp500_20260827.parquet"
+  },
+  "disclaimer": "실제 주문이 아닌 조정종가 기반 포워드 가상계좌입니다."
+}

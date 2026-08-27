@@ -40,6 +40,7 @@ interface EtfResearchLabProps {
   onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
+  onOpenTradingTestReport?: () => void;
   onOpenEtfCompare: () => void;
 }
 
@@ -118,6 +119,7 @@ export default function EtfResearchLab({
   onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
+  onOpenTradingTestReport,
   onOpenEtfCompare,
 }: EtfResearchLabProps) {
   const [tab, setTab] = useState<Tab>("explorer");
@@ -287,6 +289,7 @@ export default function EtfResearchLab({
           onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
+          onOpenTradingTestReport={onOpenTradingTestReport}
           onOpenEtfCompare={onOpenEtfCompare}
         />
       </header>

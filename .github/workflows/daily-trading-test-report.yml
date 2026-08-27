@@ -1,0 +1,110 @@
+name: Publish daily IRCS trading-test report
+
+on:
+  schedule:
+    # US Monday-Friday closes are available in Korea on Tuesday-Saturday.
+    - cron: "0 19 * * 2-6"
+      timezone: "Asia/Seoul"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Korean report date (YYYY-MM-DD); leave empty for today"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ircs-trading-test-report
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MPLBACKEND: Agg
+      PYTHONUNBUFFERED: "1"
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-market-report.txt
+
+      - name: Restore incremental US market cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache/market-report
+          key: market-report-${{ runner.os }}-ircs-${{ github.run_id }}
+          restore-keys: |
+            market-report-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements-market-report.txt
+
+      - name: Resolve Korean report date
+        shell: bash
+        env:
+          REQUESTED_DATE: ${{ inputs.as_of }}
+        run: |
+          if [[ -n "${REQUESTED_DATE}" ]]; then
+            run_date="${REQUESTED_DATE}"
+          else
+            run_date="$(TZ=Asia/Seoul date +%F)"
+          fi
+          if [[ ! "${run_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::Invalid as_of date: ${run_date}"
+            exit 1
+          fi
+          echo "RUN_DATE=${run_date}" >> "${GITHUB_ENV}"
+
+      - name: Validate R2 configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Refresh the existing US market cache
+        run: >-
+          python -m market_report_pipeline.us_market_report run
+          --as-of "${{ env.RUN_DATE }}"
+          --output "action-output/ircs-market-cache/${{ env.RUN_DATE }}"
+
+      - name: Validate the IRCS ledger engine
+        run: >-
+          python -m pytest
+          tests/market_report_pipeline/test_us_ircs_forward_report.py -q
+
+      - name: Update both virtual accounts and publish dated reports
+        run: >-
+          python -m market_report_pipeline.us_ircs_forward_report
+          --as-of "${{ env.RUN_DATE }}"
+          --output-dir action-output/trading-test-reports
+          --upload-r2
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trading-test-report-${{ github.run_id }}
+          path: action-output/trading-test-reports/
+          if-no-files-found: warn
+          retention-days: 7
+

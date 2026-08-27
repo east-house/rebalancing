@@ -4,13 +4,15 @@ import App from "./App";
 import EtfResearchLab from "./features/etf-research/EtfResearchLab";
 import MarketReportPage from "./features/market-report/MarketReportPage";
 import PortfolioReportPage from "./features/portfolio-report/PortfolioReportPage";
+import TradingTestReportPage from "./features/trading-test-report/TradingTestReportPage";
 import SiteInfoPage, { type SiteInfoKind } from "./features/site-info/SiteInfoPage";
 
-type Screen = "portfolio" | "portfolioReport" | "research" | "report" | SiteInfoKind;
+type Screen = "portfolio" | "portfolioReport" | "tradingTestReport" | "research" | "report" | SiteInfoKind;
 
 const SCREEN_PATHS: Record<Screen, string> = {
   portfolio: "/rebalancing",
   portfolioReport: "/portfolio-report",
+  tradingTestReport: "/trading-test-report",
   research: "/etf-research",
   report: "/",
   about: "/about",
@@ -31,6 +33,10 @@ const SCREEN_META: Record<Screen, { title: string; description: string }> = {
   portfolioReport: {
     title: "TM Reports — 포트폴리오 보고서",
     description: "미국 5종목 모델의 매수·매도와 월간 리밸런싱 점검 결과를 확인합니다.",
+  },
+  tradingTestReport: {
+    title: "TM Reports · 매매테스트 보고서",
+    description: "IRCS-BBCCI-M과 M-R2의 독립 가상계좌, 체결 결과와 다음 거래일 행동을 날짜별로 확인합니다.",
   },
   research: {
     title: "TM Reports — ETF비교",
@@ -59,6 +65,7 @@ function screenFromPath(pathname: string): Screen {
   if (normalizedPath === SCREEN_PATHS.report || normalizedPath === "/report") return "report";
   if (normalizedPath === SCREEN_PATHS.portfolio) return "portfolio";
   if (normalizedPath === SCREEN_PATHS.portfolioReport) return "portfolioReport";
+  if (normalizedPath === SCREEN_PATHS.tradingTestReport) return "tradingTestReport";
   if (normalizedPath === SCREEN_PATHS.research) return "research";
   if (normalizedPath === SCREEN_PATHS.about) return "about";
   if (normalizedPath === SCREEN_PATHS.privacy) return "privacy";
@@ -124,11 +131,13 @@ export default function RootApp() {
     onOpenReport: () => navigate("report"),
     onOpenPortfolio: () => navigate("portfolio"),
     onOpenPortfolioReport: () => navigate("portfolioReport"),
+    onOpenTradingTestReport: () => navigate("tradingTestReport"),
     onOpenEtfCompare: () => navigate("research"),
   };
 
   if (screen === "research") return <EtfResearchLab {...productNavigation} />;
   if (screen === "portfolioReport") return <PortfolioReportPage {...productNavigation} />;
+  if (screen === "tradingTestReport") return <TradingTestReportPage {...productNavigation} />;
   if (screen === "about" || screen === "privacy" || screen === "terms" || screen === "contact") {
     return <SiteInfoPage kind={screen} />;
   }

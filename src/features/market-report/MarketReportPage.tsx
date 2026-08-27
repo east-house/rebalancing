@@ -34,6 +34,7 @@ interface MarketReportPageProps {
   onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
+  onOpenTradingTestReport?: () => void;
   onOpenEtfCompare: () => void;
   now?: Date;
 }
@@ -160,6 +161,7 @@ export default function MarketReportPage({
   onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
+  onOpenTradingTestReport,
   onOpenEtfCompare,
   now,
 }: MarketReportPageProps) {
@@ -265,6 +267,7 @@ export default function MarketReportPage({
           onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
+          onOpenTradingTestReport={onOpenTradingTestReport}
           onOpenEtfCompare={onOpenEtfCompare}
         />
       </header>

@@ -1,0 +1,28 @@
+strategy:
+  version: "IRCS-M-R2-FORWARD-2026-08-27"
+  # 2026-08-27 KST evening can only use the completed 2026-08-26 US session.
+  initial_signal_date: "2026-08-26"
+  initial_capital_each: 21000.0
+  maximum_positions: 4
+  one_way_cost: 0.001
+  cash_yield: 0.0
+  execution: "next_completed_us_session_adjusted_close"
+
+universe:
+  minimum_price: 10.0
+  minimum_dollar_volume_63: 25000000.0
+  maximum_annualized_volatility: 0.80
+  minimum_latest_coverage: 0.98
+
+market_gate:
+  cci_minimum: -100.0
+  cci_maximum: -50.0
+  band_position_minimum: 0.40
+  band_position_maximum: 0.80
+
+r2:
+  require_cci_rising: true
+  minimum_target_room: 0.02
+
+storage:
+  prefix: "trading-test-reports"

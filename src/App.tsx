@@ -242,10 +242,11 @@ interface AppProps {
   onOpenReport?: () => void;
   onOpenPortfolio?: () => void;
   onOpenPortfolioReport?: () => void;
+  onOpenTradingTestReport?: () => void;
   onOpenEtfCompare?: () => void;
 }
 
-function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCompare }: AppProps) {
+function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenTradingTestReport, onOpenEtfCompare }: AppProps) {
   const [initialLocalState] = useState(() =>
     loadLocalAppState(createDefaultLocalState()),
   );
@@ -976,6 +977,7 @@ function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenEtfCo
               onOpenReport={onOpenReport}
               onOpenPortfolio={onOpenPortfolio}
               onOpenPortfolioReport={onOpenPortfolioReport}
+              onOpenTradingTestReport={onOpenTradingTestReport}
               onOpenEtfCompare={onOpenEtfCompare}
             />
           ) : null}

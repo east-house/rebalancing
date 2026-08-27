@@ -53,6 +53,15 @@ vi.mock("./features/portfolio-report/PortfolioReportPage", () => ({
   ),
 }));
 
+vi.mock("./features/trading-test-report/TradingTestReportPage", () => ({
+  default: ({ onOpenReport }: { onOpenReport: () => void }) => (
+    <main>
+      <h1>Trading test report</h1>
+      <button type="button" onClick={onOpenReport}>Back to market report</button>
+    </main>
+  ),
+}));
+
 vi.mock("./features/site-info/SiteInfoPage", () => ({
   default: ({ kind }: { kind: string }) => <main><h1>Info: {kind}</h1></main>,
 }));
@@ -91,6 +100,13 @@ describe("RootApp routes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open market report" }));
     expect(window.location.pathname).toBe("/");
     expect(screen.getByRole("heading", { name: "Market report" })).toBeTruthy();
+  });
+
+  it("opens the dated trading-test report at its own URL", () => {
+    window.history.replaceState({}, "", "/trading-test-report");
+    render(<RootApp />);
+    expect(screen.getByRole("heading", { name: "Trading test report" })).toBeTruthy();
+    expect(document.title).toBe("TM Reports · 매매테스트 보고서");
   });
 
   it("follows browser history changes", () => {

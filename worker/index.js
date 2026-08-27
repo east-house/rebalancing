@@ -8,6 +8,8 @@ const RESEARCH_VERSION_PREFIX = "/api/etf-research/versions/";
 const MARKET_REPORT_INDEX_PATH = "/api/market-reports";
 const MARKET_REPORT_VERSION_PREFIX = "/api/market-reports/";
 const PORTFOLIO_REPORT_PATH = "/api/portfolio-reports/latest";
+const TRADING_TEST_REPORT_INDEX_PATH = "/api/trading-test-reports";
+const TRADING_TEST_REPORT_VERSION_PREFIX = "/api/trading-test-reports/";
 
 function jsonError(message, status) {
   return new Response(
@@ -352,6 +354,47 @@ export default {
         false,
         globalThis.caches?.default,
         "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
+      );
+    }
+    if (url.pathname === TRADING_TEST_REPORT_INDEX_PATH) {
+      return handleEtfResearch(
+        request,
+        env,
+        context,
+        "trading-test-reports/index.json",
+        "/data/trading-test-reports/index.json",
+        false,
+        false,
+        globalThis.caches?.default,
+        "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
+      );
+    }
+    if (url.pathname.startsWith(TRADING_TEST_REPORT_VERSION_PREFIX)) {
+      const reportDate = url.pathname.slice(TRADING_TEST_REPORT_VERSION_PREFIX.length);
+      if (reportDate === "latest") {
+        return handleEtfResearch(
+          request,
+          env,
+          context,
+          "trading-test-reports/latest.json",
+          "/data/trading-test-reports/latest.json",
+          false,
+          false,
+          globalThis.caches?.default,
+          "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
+        );
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
+        return jsonError("Invalid trading-test report date.", 400);
+      }
+      return handleEtfResearch(
+        request,
+        env,
+        context,
+        `trading-test-reports/reports/${reportDate}.json`,
+        `/data/trading-test-reports/${reportDate}.json`,
+        false,
+        true,
       );
     }
     if (url.pathname.startsWith(MARKET_REPORT_VERSION_PREFIX)) {

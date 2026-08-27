@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-27T14:35:15.479992+00:00",
+  "latestReportDate": "2026-08-27",
+  "reports": [
+    {
+      "reportDate": "2026-08-27",
+      "marketDate": "2026-08-26",
+      "generatedAt": "2026-08-27T14:35:15.479992+00:00",
+      "mEquity": 21000.0,
+      "r2Equity": 21000.0,
+      "mNextActionCount": 0,
+      "r2NextActionCount": 0
+    }
+  ]
+}

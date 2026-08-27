@@ -29,6 +29,7 @@ interface PortfolioReportPageProps {
   onOpenReport: () => void;
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
+  onOpenTradingTestReport?: () => void;
   onOpenEtfCompare: () => void;
 }
 
@@ -91,6 +92,7 @@ export default function PortfolioReportPage({
   onOpenReport,
   onOpenPortfolio,
   onOpenPortfolioReport,
+  onOpenTradingTestReport,
   onOpenEtfCompare,
 }: PortfolioReportPageProps) {
   const [payload, setPayload] = useState<PortfolioReportPayload | null>(null);
@@ -232,6 +234,7 @@ export default function PortfolioReportPage({
           onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio}
           onOpenPortfolioReport={onOpenPortfolioReport}
+          onOpenTradingTestReport={onOpenTradingTestReport}
           onOpenEtfCompare={onOpenEtfCompare}
         />
       </header>
