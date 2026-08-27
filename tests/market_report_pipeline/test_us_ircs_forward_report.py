@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pandas as pd
+import pytest
 
 from market_report_pipeline.us_ircs_forward_report import (
     _merge_index,
     _new_account,
     account_snapshot,
     execute_pending,
+    validate_publication_time,
 )
 
 
@@ -78,3 +82,16 @@ def test_report_index_is_dated_and_idempotent() -> None:
 
     assert second["latestReportDate"] == "2026-08-27"
     assert len(second["reports"]) == 1
+
+
+def test_same_day_report_is_blocked_before_1900_kst() -> None:
+    now = datetime(2026, 8, 28, 9, 59, tzinfo=timezone.utc)  # 18:59 KST
+
+    with pytest.raises(RuntimeError, match="19:00 Asia/Seoul"):
+        validate_publication_time(pd.Timestamp("2026-08-28"), now)
+
+
+def test_same_day_report_is_allowed_at_1900_kst() -> None:
+    now = datetime(2026, 8, 28, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
+
+    validate_publication_time(pd.Timestamp("2026-08-28"), now)

@@ -11,6 +11,11 @@ on:
         description: "Korean report date (YYYY-MM-DD); leave empty for today"
         required: false
         type: string
+      reset_ledger:
+        description: "Rebuild the M/R2 ledger from the frozen 2026-08-26 seed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -67,6 +72,16 @@ jobs:
             echo "::error::Invalid as_of date: ${run_date}"
             exit 1
           fi
+          today_kst="$(TZ=Asia/Seoul date +%F)"
+          hour_kst="$(TZ=Asia/Seoul date +%H)"
+          if [[ "${run_date}" > "${today_kst}" ]]; then
+            echo "::error::Future report date is not allowed: ${run_date}"
+            exit 1
+          fi
+          if [[ "${run_date}" == "${today_kst}" ]] && (( 10#${hour_kst} < 19 )); then
+            echo "::error::Today's report may only run at or after 19:00 Asia/Seoul"
+            exit 1
+          fi
           echo "RUN_DATE=${run_date}" >> "${GITHUB_ENV}"
 
       - name: Validate R2 configuration
@@ -93,11 +108,19 @@ jobs:
           tests/market_report_pipeline/test_us_ircs_forward_report.py -q
 
       - name: Update both virtual accounts and publish dated reports
-        run: >-
-          python -m market_report_pipeline.us_ircs_forward_report
-          --as-of "${{ env.RUN_DATE }}"
-          --output-dir action-output/trading-test-reports
-          --upload-r2
+        shell: bash
+        env:
+          RESET_LEDGER: ${{ inputs.reset_ledger || false }}
+        run: |
+          args=(
+            --as-of "${RUN_DATE}"
+            --output-dir action-output/trading-test-reports
+            --upload-r2
+          )
+          if [[ "${RESET_LEDGER}" == "true" ]]; then
+            args+=(--reset-ledger)
+          fi
+          python -m market_report_pipeline.us_ircs_forward_report "${args[@]}"
 
       - name: Upload diagnostics
         if: always()

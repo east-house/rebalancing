@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -33,6 +34,25 @@ SEED_CANDIDATES_PATH = PROJECT_ROOT / "config" / "ircs-forward-seed-candidates.j
 DEFAULT_OUTPUT = PROJECT_ROOT / "action-output" / "trading-test-reports"
 STATIC_OUTPUT = PROJECT_ROOT / "public" / "data" / "trading-test-reports"
 STRATEGIES = ("IRCS-BBCCI-M", "IRCS-BBCCI-M-R2")
+KST = ZoneInfo("Asia/Seoul")
+PUBLICATION_HOUR_KST = 19
+
+
+def validate_publication_time(
+    as_of: pd.Timestamp,
+    now: datetime | None = None,
+) -> None:
+    """Reject future or premature same-day publication requests."""
+    now_kst = (now or datetime.now(timezone.utc)).astimezone(KST)
+    report_date = pd.Timestamp(as_of).date()
+    if report_date > now_kst.date():
+        raise RuntimeError(f"Future report date is not allowed: {report_date}")
+    if report_date == now_kst.date() and now_kst.hour < PUBLICATION_HOUR_KST:
+        raise RuntimeError(
+            f"The {report_date} report may only be published at or after "
+            f"{PUBLICATION_HOUR_KST:02d}:00 Asia/Seoul; current time is "
+            f"{now_kst:%H:%M}."
+        )
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -740,6 +760,7 @@ def run(
     *,
     upload_r2: bool = False,
     publish_static: bool = False,
+    reset_ledger: bool = False,
 ) -> dict[str, Any]:
     panel, quality = load_market_panel(as_of)
     latest = pd.Timestamp(quality["marketDate"])
@@ -747,7 +768,7 @@ def run(
     signals = _signals(panel, indicators)
     prefix = str(CONFIG["storage"]["prefix"])
     store = R2JsonStore.from_environment(prefix) if upload_r2 else None
-    stored_state = store.load("state/latest.json") if store else None
+    stored_state = None if reset_ledger else (store.load("state/latest.json") if store else None)
     state = stored_state or load_seed_state()
     is_new_ledger = stored_state is None
     last = pd.Timestamp(state["lastProcessedMarketDate"])
@@ -811,7 +832,7 @@ def run(
 
     if not reports:
         raise RuntimeError("No report could be generated")
-    existing_index = store.load("index.json") if store else None
+    existing_index = None if reset_ledger else (store.load("index.json") if store else None)
     index = _merge_index(existing_index, reports)
     output_dir.mkdir(parents=True, exist_ok=True)
     for report in reports:
@@ -841,13 +862,20 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--upload-r2", action="store_true")
     parser.add_argument("--publish-static", action="store_true")
+    parser.add_argument(
+        "--reset-ledger",
+        action="store_true",
+        help="Ignore the stored R2 ledger and rebuild every report from the frozen seed.",
+    )
     args = parser.parse_args()
     as_of = pd.Timestamp.today().normalize() if args.as_of == "today" else pd.Timestamp(args.as_of)
+    validate_publication_time(as_of)
     result = run(
         as_of,
         args.output_dir,
         upload_r2=bool(args.upload_r2),
         publish_static=bool(args.publish_static),
+        reset_ledger=bool(args.reset_ledger),
     )
     latest = result["reports"][-1]
     checksum = hashlib.sha256(
@@ -859,6 +887,7 @@ def main() -> None:
         "r2Equity": latest["accounts"]["IRCS-BBCCI-M-R2"]["equity"],
         "sha256": checksum,
         "r2Uploaded": bool(args.upload_r2),
+        "ledgerReset": bool(args.reset_ledger),
     }, ensure_ascii=False, indent=2))
 
 
