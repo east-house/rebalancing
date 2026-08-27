@@ -42,7 +42,7 @@ jobs:
           cache-dependency-path: requirements-market-report.txt
 
       - name: Restore incremental market-data cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             data/cache/market-report
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload report diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: market-report-${{ github.run_id }}
           path: |

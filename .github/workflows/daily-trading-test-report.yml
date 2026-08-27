@@ -43,7 +43,7 @@ jobs:
           cache-dependency-path: requirements-market-report.txt
 
       - name: Restore incremental US market cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: data/cache/market-report
           key: market-report-${{ runner.os }}-ircs-${{ github.run_id }}
@@ -101,10 +101,9 @@ jobs:
 
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: trading-test-report-${{ github.run_id }}
           path: action-output/trading-test-reports/
           if-no-files-found: warn
           retention-days: 7
-
