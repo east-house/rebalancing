@@ -148,13 +148,16 @@ export async function loadTradingTestIndex(): Promise<TradingTestIndex> {
   ));
 }
 
-export async function loadTradingTestReport(reportDate: string): Promise<TradingTestReport> {
+export async function loadTradingTestReport(
+  reportDate: string,
+  generatedAt?: string,
+): Promise<TradingTestReport> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
     throw new Error("잘못된 보고서 날짜입니다.");
   }
+  const version = generatedAt ? `?v=${encodeURIComponent(generatedAt)}` : "";
   return assertReport(await fetchJson(
-    `/api/trading-test-reports/${reportDate}`,
-    `/data/trading-test-reports/${reportDate}.json`,
+    `/api/trading-test-reports/${reportDate}${version}`,
+    `/data/trading-test-reports/${reportDate}.json${version}`,
   ));
 }
-

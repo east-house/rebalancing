@@ -135,13 +135,14 @@ export default function TradingTestReportPage({
     if (!selectedDate) return;
     let active = true;
     setLoading(true); setError("");
-    loadTradingTestReport(selectedDate)
+    const generatedAt = index?.reports.find((item) => item.reportDate === selectedDate)?.generatedAt;
+    loadTradingTestReport(selectedDate, generatedAt)
       .then((value) => { if (active) setReport(value); })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "보고서를 불러오지 못했습니다.");
       }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [selectedDate]);
+  }, [index, selectedDate]);
 
   const allPositions = useMemo(() => report
     ? STRATEGIES.flatMap((strategy) => report.accounts[strategy].positions.map((position) => ({ strategy, ...position })))

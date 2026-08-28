@@ -21,4 +21,22 @@ describe("trading-test report API", () => {
     await expect(loadTradingTestReport("bad-date")).rejects.toThrow("잘못된");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("versions a repaired dated report with its index generation time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      schemaVersion: 1,
+      reportDate: "2026-08-28",
+      marketDate: "2026-08-27",
+      accounts: {},
+      nextActions: {},
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadTradingTestReport("2026-08-28", "2026-08-28T12:20:16Z");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/trading-test-reports/2026-08-28?v=2026-08-28T12%3A20%3A16Z",
+      expect.any(Object),
+    );
+  });
 });
