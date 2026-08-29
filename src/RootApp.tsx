@@ -36,7 +36,7 @@ const SCREEN_META: Record<Screen, { title: string; description: string }> = {
   },
   tradingTestReport: {
     title: "TM Reports · 매매테스트 보고서",
-    description: "IRCS-BBCCI-M과 M-R2의 독립 가상계좌, 체결 결과와 다음 거래일 행동을 날짜별로 확인합니다.",
+    description: "IRCS-BBCCI-M-G55와 M-R2의 독립 가상계좌, 체결 결과와 다음 거래일 행동을 날짜별로 확인합니다.",
   },
   research: {
     title: "TM Reports — ETF비교",

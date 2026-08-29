@@ -6,15 +6,19 @@ import pandas as pd
 import pytest
 
 from market_report_pipeline.us_ircs_forward_report import (
+    G55_STRATEGY,
+    R2_STRATEGY,
     _merge_index,
     _new_account,
+    _passes_entry_variant,
     account_snapshot,
     execute_pending,
+    transaction_cost_model,
     validate_publication_time,
 )
 
 
-def test_execute_pending_uses_next_close_and_one_way_cost() -> None:
+def test_execute_pending_uses_next_close_and_published_buy_cost() -> None:
     account = _new_account(21_000.0)
     decision = {
         "signalDate": "2026-08-26",
@@ -34,9 +38,23 @@ def test_execute_pending_uses_next_close_and_one_way_cost() -> None:
 
     assert completed[0]["shares"] == 52.5
     assert completed[0]["notional"] == 5_250.0
-    assert completed[0]["fee"] == 5.25
-    assert account["cash"] == 15_744.75
+    assert completed[0]["fee"] == 13.125
+    assert account["cash"] == 15_736.875
     assert account["positions"]["AAA"]["entryPrice"] == 100.0
+
+
+def test_transaction_cost_model_separates_buy_and_sell_rates() -> None:
+    model = transaction_cost_model()
+
+    assert model["buyRate"] == pytest.approx(0.0025)
+    assert model["sellRate"] == pytest.approx(0.0025206)
+
+
+def test_g55_and_r2_apply_distinct_frozen_entry_filters() -> None:
+    assert _passes_entry_variant(G55_STRATEGY, cci_gap=55.0034894356, target_room=0.0)
+    assert not _passes_entry_variant(G55_STRATEGY, cci_gap=55.0, target_room=0.10)
+    assert _passes_entry_variant(R2_STRATEGY, cci_gap=-10.0, target_room=0.02)
+    assert not _passes_entry_variant(R2_STRATEGY, cci_gap=100.0, target_room=0.0199)
 
 
 def test_account_snapshot_keeps_two_accounts_independent() -> None:
@@ -68,12 +86,12 @@ def test_report_index_is_dated_and_idempotent() -> None:
         "marketDate": "2026-08-26",
         "generatedAt": "2026-08-27T10:00:00Z",
         "accounts": {
-            "IRCS-BBCCI-M": {"equity": 21_000.0},
-            "IRCS-BBCCI-M-R2": {"equity": 21_000.0},
+            G55_STRATEGY: {"equity": 21_000.0},
+            R2_STRATEGY: {"equity": 21_000.0},
         },
         "nextActions": {
-            "IRCS-BBCCI-M": {"orders": []},
-            "IRCS-BBCCI-M-R2": {"orders": []},
+            G55_STRATEGY: {"orders": []},
+            R2_STRATEGY: {"orders": []},
         },
     }
 
@@ -82,6 +100,40 @@ def test_report_index_is_dated_and_idempotent() -> None:
 
     assert second["latestReportDate"] == "2026-08-27"
     assert len(second["reports"]) == 1
+
+
+def test_new_g55_index_keeps_older_m_report_in_archive() -> None:
+    legacy_item = {
+        "reportDate": "2026-08-27",
+        "marketDate": "2026-08-26",
+        "generatedAt": "2026-08-27T10:00:00Z",
+        "mEquity": 21_000.0,
+        "r2Equity": 21_000.0,
+        "mNextActionCount": 0,
+        "r2NextActionCount": 0,
+    }
+    g55_report = {
+        "reportDate": "2026-08-29",
+        "marketDate": "2026-08-28",
+        "generatedAt": "2026-08-30T10:00:00Z",
+        "accounts": {
+            G55_STRATEGY: {"equity": 21_000.0},
+            R2_STRATEGY: {"equity": 21_000.0},
+        },
+        "nextActions": {
+            G55_STRATEGY: {"orders": []},
+            R2_STRATEGY: {"orders": []},
+        },
+    }
+
+    result = _merge_index({"schemaVersion": 1, "reports": [legacy_item]}, [g55_report])
+
+    assert result["schemaVersion"] == 2
+    assert [item["reportDate"] for item in result["reports"]] == [
+        "2026-08-29",
+        "2026-08-27",
+    ]
+    assert result["reports"][1]["mEquity"] == 21_000.0
 
 
 def test_same_day_report_is_blocked_before_1900_kst() -> None:

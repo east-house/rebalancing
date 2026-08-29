@@ -1,12 +1,17 @@
-export type StrategyName = "IRCS-BBCCI-M" | "IRCS-BBCCI-M-R2";
+export type StrategyName =
+  | "IRCS-BBCCI-M-G55"
+  | "IRCS-BBCCI-M-R2"
+  | "IRCS-BBCCI-M";
 
 export interface TradingTestIndexItem {
   reportDate: string;
   marketDate: string;
   generatedAt: string;
-  mEquity: number;
+  g55Equity?: number;
+  mEquity?: number;
   r2Equity: number;
-  mNextActionCount: number;
+  g55NextActionCount?: number;
+  mNextActionCount?: number;
   r2NextActionCount: number;
 }
 
@@ -85,7 +90,15 @@ export interface TradingTestReport {
   marketDate: string;
   generatedAt: string;
   executionPriceBasis: string;
-  oneWayCost: number;
+  transactionCosts?: {
+    modelId: string;
+    label: string;
+    buyRate: number;
+    sellRate: number;
+    included: string;
+    excluded: string;
+  };
+  oneWayCost?: number;
   accounts: Record<StrategyName, AccountSnapshot>;
   completedActions: Record<StrategyName, TradingAction[]>;
   nextActions: Record<StrategyName, StrategyDecision>;
@@ -122,7 +135,7 @@ async function fetchJson<T>(primary: string, fallback: string): Promise<T> {
 }
 
 function assertIndex(value: TradingTestIndex): TradingTestIndex {
-  if (value.schemaVersion !== 1 || !Array.isArray(value.reports)) {
+  if (![1, 2].includes(value.schemaVersion) || !Array.isArray(value.reports)) {
     throw new Error("지원하지 않는 매매테스트 목록 형식입니다.");
   }
   return value;
@@ -130,7 +143,7 @@ function assertIndex(value: TradingTestIndex): TradingTestIndex {
 
 function assertReport(value: TradingTestReport): TradingTestReport {
   if (
-    value.schemaVersion !== 1
+    ![1, 2].includes(value.schemaVersion)
     || !value.reportDate
     || !value.marketDate
     || !value.accounts

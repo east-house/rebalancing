@@ -1,4 +1,4 @@
-"""Run the frozen IRCS M/R2 paper accounts and publish dated reports.
+"""Run the frozen IRCS G55/R2 paper accounts and publish dated reports.
 
 The market-report cache is reused as the price source.  R2 is the authoritative
 ledger; GitHub Actions cache remains only a download accelerator.  Decisions
@@ -33,7 +33,9 @@ SEED_STATE_PATH = PROJECT_ROOT / "config" / "ircs-forward-seed-state.json"
 SEED_CANDIDATES_PATH = PROJECT_ROOT / "config" / "ircs-forward-seed-candidates.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "action-output" / "trading-test-reports"
 STATIC_OUTPUT = PROJECT_ROOT / "public" / "data" / "trading-test-reports"
-STRATEGIES = ("IRCS-BBCCI-M", "IRCS-BBCCI-M-R2")
+G55_STRATEGY = "IRCS-BBCCI-M-G55"
+R2_STRATEGY = "IRCS-BBCCI-M-R2"
+STRATEGIES = (G55_STRATEGY, R2_STRATEGY)
 KST = ZoneInfo("Asia/Seoul")
 PUBLICATION_HOUR_KST = 19
 
@@ -398,7 +400,7 @@ def _market_gate(
         and float(gate_cfg["band_position_minimum"]) <= band <= float(gate_cfg["band_position_maximum"])
     )
     rising = cci > previous_cci
-    opened = base and (strategy == "IRCS-BBCCI-M" or rising)
+    opened = base and (strategy != R2_STRATEGY or rising)
     return opened, {
         "baseOpen": base,
         "cciRising": rising,
@@ -451,20 +453,20 @@ def make_decision(
     free_slots = int(CONFIG["strategy"]["maximum_positions"]) - len(remaining)
     raw_signals = 0
     if gate_open and free_slots > 0:
-        minimum_room = (
-            float(CONFIG["r2"]["minimum_target_room"])
-            if strategy == "IRCS-BBCCI-M-R2" else 0.0
-        )
         eligible = [
             ticker for ticker in table.index.astype(str)
             if ticker not in remaining
             and ticker in signals["entry"]
             and bool(signals["entry"].at[date, ticker])
             and pd.notna(panel.close.at[date, ticker])
-            and (
-                float(indicators["middle"].at[date, ticker])
-                / float(panel.close.at[date, ticker]) - 1.0
-            ) >= minimum_room
+            and _passes_entry_variant(
+                strategy,
+                cci_gap=float(signals["cciGap"].at[date, ticker]),
+                target_room=(
+                    float(indicators["middle"].at[date, ticker])
+                    / float(panel.close.at[date, ticker]) - 1.0
+                ),
+            )
         ]
         raw_signals = len(eligible)
         if eligible:
@@ -507,6 +509,16 @@ def make_decision(
         "orders": orders,
         "summary": "주문 없음 · 현금/보유 유지" if not orders else f"{len(orders)}건 실행 예정",
     }
+
+
+def _passes_entry_variant(strategy: str, *, cci_gap: float, target_room: float) -> bool:
+    """Apply only the frozen entry-quality rule belonging to each strategy."""
+
+    if strategy == G55_STRATEGY:
+        return cci_gap >= float(CONFIG["g55"]["minimum_cci_signal_gap"])
+    if strategy == R2_STRATEGY:
+        return target_room >= float(CONFIG["r2"]["minimum_target_room"])
+    raise ValueError(f"Unsupported forward strategy: {strategy}")
 
 
 def _new_account(capital: float) -> dict[str, Any]:
@@ -555,13 +567,33 @@ def _position_value(account: dict[str, Any], date: pd.Timestamp, close: pd.DataF
     )
 
 
+def transaction_cost_model() -> dict[str, Any]:
+    cost = CONFIG["execution_cost"]
+    buy_rate = float(cost["buy_commission_rate"])
+    sell_rate = float(cost["sell_commission_rate"]) + float(cost["sell_regulatory_rate"])
+    return {
+        "modelId": str(cost["model_id"]),
+        "label": str(cost["label"]),
+        "buyRate": buy_rate,
+        "sellRate": sell_rate,
+        "included": str(cost["included"]),
+        "excluded": str(cost["excluded"]),
+    }
+
+
+def _execution_fee(side: str, notional: float) -> float:
+    model = transaction_cost_model()
+    rate = model["buyRate"] if side.upper() == "BUY" else model["sellRate"]
+    return abs(float(notional)) * float(rate)
+
+
 def execute_pending(
     account: dict[str, Any],
     decision: dict[str, Any],
     execution_date: pd.Timestamp,
     close: pd.DataFrame,
 ) -> list[dict[str, Any]]:
-    cost_rate = float(CONFIG["strategy"]["one_way_cost"])
+    cost_model = transaction_cost_model()
     completed: list[dict[str, Any]] = []
     orders = list(decision.get("orders", []))
     for order in [item for item in orders if item["side"] == "SELL"]:
@@ -572,7 +604,7 @@ def execute_pending(
             raise RuntimeError(f"Cannot execute SELL {ticker} on {execution_date.date()}")
         price = float(price)
         notional = float(position["shares"]) * price
-        fee = notional * cost_rate
+        fee = _execution_fee("SELL", notional)
         proceeds = notional - fee
         net_pnl = proceeds - float(position["costBasis"])
         account["cash"] += proceeds
@@ -600,13 +632,13 @@ def execute_pending(
         if pd.isna(price):
             raise RuntimeError(f"Cannot execute BUY {ticker} on {execution_date.date()}")
         price = float(price)
-        affordable = max(float(account["cash"]), 0.0) / (1.0 + cost_rate)
+        affordable = max(float(account["cash"]), 0.0) / (1.0 + cost_model["buyRate"])
         notional = min(target, affordable)
         shares = math.floor((notional / price) * 1000.0) / 1000.0
         if shares < 0.0005:
             continue
         notional = shares * price
-        fee = notional * cost_rate
+        fee = _execution_fee("BUY", notional)
         account["cash"] -= notional + fee
         account["feesPaid"] += fee
         account["positions"][ticker] = {
@@ -696,13 +728,13 @@ def build_report(
     ivv_close = float(panel.close.at[date, "IVV"])
     display_date = date + pd.offsets.Day(1)
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "strategyVersion": state["strategyVersion"],
         "reportDate": str(display_date.date()),
         "marketDate": str(date.date()),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "executionPriceBasis": "split/dividend-adjusted close",
-        "oneWayCost": float(CONFIG["strategy"]["one_way_cost"]),
+        "transactionCosts": transaction_cost_model(),
         "accounts": accounts,
         "completedActions": completed,
         "nextActions": next_decisions,
@@ -730,10 +762,10 @@ def _report_index_item(report: dict[str, Any]) -> dict[str, Any]:
         "reportDate": report["reportDate"],
         "marketDate": report["marketDate"],
         "generatedAt": report["generatedAt"],
-        "mEquity": report["accounts"]["IRCS-BBCCI-M"]["equity"],
-        "r2Equity": report["accounts"]["IRCS-BBCCI-M-R2"]["equity"],
-        "mNextActionCount": len(report["nextActions"]["IRCS-BBCCI-M"]["orders"]),
-        "r2NextActionCount": len(report["nextActions"]["IRCS-BBCCI-M-R2"]["orders"]),
+        "g55Equity": report["accounts"][G55_STRATEGY]["equity"],
+        "r2Equity": report["accounts"][R2_STRATEGY]["equity"],
+        "g55NextActionCount": len(report["nextActions"][G55_STRATEGY]["orders"]),
+        "r2NextActionCount": len(report["nextActions"][R2_STRATEGY]["orders"]),
     }
 
 
@@ -747,7 +779,7 @@ def _merge_index(existing: dict[str, Any] | None, reports: list[dict[str, Any]])
         items[report["reportDate"]] = _report_index_item(report)
     ordered = sorted(items.values(), key=lambda item: item["reportDate"], reverse=True)
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "updatedAt": datetime.now(timezone.utc).isoformat(),
         "latestReportDate": ordered[0]["reportDate"] if ordered else None,
         "reports": ordered,
@@ -769,6 +801,12 @@ def run(
     prefix = str(CONFIG["storage"]["prefix"])
     store = R2JsonStore.from_environment(prefix) if upload_r2 else None
     stored_state = None if reset_ledger else (store.load("state/latest.json") if store else None)
+    version_changed = bool(
+        stored_state
+        and stored_state.get("strategyVersion") != CONFIG["strategy"]["version"]
+    )
+    if version_changed:
+        stored_state = None
     state = stored_state or load_seed_state()
     is_new_ledger = stored_state is None
     last = pd.Timestamp(state["lastProcessedMarketDate"])
@@ -832,6 +870,9 @@ def run(
 
     if not reports:
         raise RuntimeError("No report could be generated")
+    # A strategy-version change starts a fresh ledger, but the dated M/R2
+    # reports remain in the archive as immutable legacy records.  Only an
+    # explicit rebuild replaces the archive index.
     existing_index = None if reset_ledger else (store.load("index.json") if store else None)
     index = _merge_index(existing_index, reports)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -853,7 +894,12 @@ def run(
         store.save("latest.json", reports[-1])
         store.save("index.json", index)
         store.save("state/latest.json", state)
-    return {"state": state, "reports": reports, "index": index}
+    return {
+        "state": state,
+        "reports": reports,
+        "index": index,
+        "ledgerReset": bool(reset_ledger or version_changed),
+    }
 
 
 def main() -> None:
@@ -883,11 +929,11 @@ def main() -> None:
     ).hexdigest()
     print(json.dumps({
         "reportDate": latest["reportDate"],
-        "mEquity": latest["accounts"]["IRCS-BBCCI-M"]["equity"],
-        "r2Equity": latest["accounts"]["IRCS-BBCCI-M-R2"]["equity"],
+        "g55Equity": latest["accounts"][G55_STRATEGY]["equity"],
+        "r2Equity": latest["accounts"][R2_STRATEGY]["equity"],
         "sha256": checksum,
         "r2Uploaded": bool(args.upload_r2),
-        "ledgerReset": bool(args.reset_ledger),
+        "ledgerReset": bool(result["ledgerReset"]),
     }, ensure_ascii=False, indent=2))
 
 

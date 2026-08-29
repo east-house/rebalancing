@@ -7,7 +7,7 @@ describe("trading-test report API", () => {
 
   it("loads the dated archive index", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       updatedAt: "2026-08-27T10:00:00Z",
       latestReportDate: "2026-08-27",
       reports: [],
@@ -24,7 +24,7 @@ describe("trading-test report API", () => {
 
   it("versions a repaired dated report with its index generation time", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       reportDate: "2026-08-28",
       marketDate: "2026-08-27",
       accounts: {},

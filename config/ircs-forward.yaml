@@ -1,12 +1,21 @@
 strategy:
-  version: "IRCS-M-R2-FORWARD-2026-08-27"
-  # 2026-08-27 KST evening can only use the completed 2026-08-26 US session.
-  initial_signal_date: "2026-08-26"
+  version: "IRCS-G55-R2-FORWARD-2026-08-30"
+  # G55 was frozen after the completed 2026-08-28 US session. Starting both
+  # accounts from that signal date keeps the forward comparison contemporaneous.
+  initial_signal_date: "2026-08-28"
   initial_capital_each: 21000.0
   maximum_positions: 4
-  one_way_cost: 0.001
   cash_yield: 0.0
   execution: "next_completed_us_session_adjusted_close"
+
+execution_cost:
+  model_id: "korea_investment_standard_online_2026"
+  label: "한국투자증권 미국주식 온라인 표준(우대 미적용)"
+  buy_commission_rate: 0.0025
+  sell_commission_rate: 0.0025
+  sell_regulatory_rate: 0.0000206
+  included: "온라인 매매수수료와 매도 시 미국 규제비용"
+  excluded: "환전비용, 호가차이, 슬리피지, 양도소득세, 배당세, ADR 수수료"
 
 universe:
   minimum_price: 10.0
@@ -23,6 +32,9 @@ market_gate:
 r2:
   require_cci_rising: true
   minimum_target_room: 0.02
+
+g55:
+  minimum_cci_signal_gap: 55.0034894356
 
 storage:
   prefix: "trading-test-reports"

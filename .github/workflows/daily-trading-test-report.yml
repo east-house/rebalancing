@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       reset_ledger:
-        description: "Rebuild the M/R2 ledger from the frozen 2026-08-26 seed"
+        description: "Rebuild the G55/R2 ledger from the frozen 2026-08-28 seed"
         required: false
         default: false
         type: boolean
@@ -107,7 +107,7 @@ jobs:
           python -m pytest
           tests/market_report_pipeline/test_us_ircs_forward_report.py -q
 
-      - name: Update both virtual accounts and publish dated reports
+      - name: Update the G55 and R2 virtual accounts and publish dated reports
         shell: bash
         env:
           RESET_LEDGER: ${{ inputs.reset_ledger || false }}
