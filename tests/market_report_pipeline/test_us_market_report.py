@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import market_report_pipeline.us_market_report as market_report
 
+from market_report_pipeline.support import _apply_adjusted_ohlc
 from market_report_pipeline.us_market_report import (
     MarketRunSettings,
     SECTOR_DISPLAY_NAMES,
@@ -18,6 +19,29 @@ from market_report_pipeline.us_market_report import (
     classify_market_state,
     collect_context_prices,
 )
+
+
+def test_adjusted_ohlc_preserves_raw_quote_when_adjclose_is_missing() -> None:
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 110.0],
+            "high": [102.0, 112.0],
+            "low": [99.0, 109.0],
+            "close": [101.0, 111.0],
+            "adj_close": [100.0, None],
+        }
+    )
+
+    result = _apply_adjusted_ohlc(frame)
+
+    assert result.loc[0, "close"] == 100.0
+    assert result.loc[0, "open"] == 100.0 * (100.0 / 101.0)
+    assert result.loc[1, ["open", "high", "low", "close"]].tolist() == [
+        110.0,
+        112.0,
+        109.0,
+        111.0,
+    ]
 
 
 def test_expected_market_date_uses_latest_completed_us_calendar_day() -> None:

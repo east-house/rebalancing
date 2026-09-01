@@ -32,6 +32,25 @@ def safe_symbol(symbol: str) -> str:
     return yahoo_symbol(symbol).replace("^", "INDEX_").replace("/", "_")
 
 
+def _apply_adjusted_ohlc(frame: pd.DataFrame) -> pd.DataFrame:
+    """Use adjusted OHLC when available and preserve raw prices otherwise.
+
+    Yahoo can publish a completed quote row before its adjusted-close series is
+    populated. Multiplying that row by a missing adjustment factor used to turn
+    valid raw OHLC into NaN and poison the incremental cache.
+    """
+
+    result = frame.copy()
+    raw_close = pd.to_numeric(result["close"], errors="coerce")
+    adjusted = pd.to_numeric(result["adj_close"], errors="coerce")
+    valid_factor = adjusted.notna() & raw_close.notna() & raw_close.ne(0)
+    factor = (adjusted / raw_close).where(valid_factor, 1.0)
+    for column in ("open", "high", "low"):
+        result[column] = pd.to_numeric(result[column], errors="coerce") * factor
+    result["close"] = adjusted.where(adjusted.notna(), raw_close)
+    return result
+
+
 def fetch_sp500_snapshot(as_of: pd.Timestamp, *, refresh: bool = False) -> pd.DataFrame:
     """Fetch and cache the current S&P 500 table with sector and CIK metadata."""
 
@@ -113,7 +132,11 @@ def _download_yahoo_frame(
                 quote,
                 index=pd.to_datetime(timestamps, unit="s", utc=True).tz_convert(None).normalize(),
             )
-            frame["adj_close"] = adjusted
+            frame["adj_close"] = (
+                pd.Series(adjusted, dtype="float64")
+                .reindex(range(len(frame)))
+                .to_numpy()
+            )
             frame.index.name = "date"
             frame = frame.reset_index()
             frame = frame.loc[
@@ -121,10 +144,7 @@ def _download_yahoo_frame(
             ].copy()
             for column in [*PRICE_COLUMNS, "adj_close"]:
                 frame[column] = pd.to_numeric(frame[column], errors="coerce")
-            factor = frame["adj_close"] / frame["close"]
-            for column in ("open", "high", "low", "close"):
-                frame[column] = frame[column] * factor
-            frame["close"] = frame["adj_close"]
+            frame = _apply_adjusted_ohlc(frame)
             frame["ticker"] = str(symbol).upper()
             frame["provider_symbol"] = mapped
             return frame[
