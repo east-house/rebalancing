@@ -3,16 +3,121 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import market_report_pipeline.us_market_report as market_report
 
 from market_report_pipeline.us_market_report import (
+    MarketRunSettings,
     SECTOR_DISPLAY_NAMES,
     _align_index_closes,
+    _completed_price_rows,
     _event_latest_value,
+    _expected_market_date,
     audit_ma50_breadth,
     archive_legacy_reports,
     build_macro_dashboard,
     classify_market_state,
+    collect_context_prices,
 )
+
+
+def test_expected_market_date_uses_latest_completed_us_calendar_day() -> None:
+    assert _expected_market_date(pd.Timestamp("2026-09-01")) == pd.Timestamp("2026-08-31")
+    assert _expected_market_date(pd.Timestamp("2026-09-05")) == pd.Timestamp("2026-09-04")
+    assert _expected_market_date(pd.Timestamp("2026-09-07")) == pd.Timestamp("2026-09-04")
+
+
+def test_completed_price_rows_removes_incomplete_yahoo_placeholder() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-08-27",
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.5,
+                "volume": 1000,
+            },
+            {
+                "date": "2026-08-28",
+                "open": None,
+                "high": None,
+                "low": None,
+                "close": None,
+                "volume": 500,
+            },
+        ]
+    )
+
+    result = _completed_price_rows(frame)
+
+    assert result["date"].tolist() == [pd.Timestamp("2026-08-27")]
+    assert result["close"].tolist() == [100.5]
+
+
+def test_context_price_collection_repairs_placeholder_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cache = tmp_path / "stocks"
+    cache.mkdir()
+    columns = [
+        "date",
+        "ticker",
+        "provider_symbol",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
+    pd.DataFrame(
+        [
+            ["2026-08-27", "IVV", "IVV", 100.0, 101.0, 99.0, 100.5, 1000],
+            ["2026-08-28", "IVV", "IVV", None, None, None, None, 500],
+        ],
+        columns=columns,
+    ).to_parquet(cache / "IVV.parquet", index=False)
+    request: dict[str, pd.Timestamp] = {}
+
+    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries):
+        request["start"] = pd.Timestamp(start)
+        request["end"] = pd.Timestamp(end_exclusive)
+        return pd.DataFrame(
+            [
+                ["2026-08-28", symbol, symbol, 101.0, 102.0, 100.0, 101.5, 1100],
+                ["2026-08-31", symbol, symbol, 102.0, 103.0, 101.0, 102.5, 1200],
+            ],
+            columns=columns,
+        )
+
+    monkeypatch.setattr(market_report, "STOCK_CACHE", cache)
+    monkeypatch.setattr(market_report, "_download_yahoo_frame", fake_download)
+    settings = MarketRunSettings(
+        as_of=pd.Timestamp("2026-09-01"),
+        history_start=pd.Timestamp("2026-08-01"),
+        output_dir=tmp_path / "output",
+        config_path=tmp_path / "config.yaml",
+    )
+    config = {
+        "data": {
+            "cache_overlap_days": 5,
+            "request_timeout_seconds": 10,
+            "max_retries": 1,
+            "request_workers": 1,
+        }
+    }
+
+    result, audit = collect_context_prices(["IVV"], settings, config)
+    repaired = pd.read_parquet(cache / "IVV.parquet")
+
+    assert request == {
+        "start": pd.Timestamp("2026-08-22"),
+        "end": pd.Timestamp("2026-09-01"),
+    }
+    assert result["date"].max() == pd.Timestamp("2026-08-31")
+    assert repaired["date"].max() == pd.Timestamp("2026-08-31")
+    assert repaired[["open", "high", "low", "close"]].notna().all().all()
+    assert audit["end"] == pd.Timestamp("2026-08-31")
 
 
 def test_index_chart_uses_one_timeline_and_preserves_missing_dates() -> None:

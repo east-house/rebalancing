@@ -141,12 +141,39 @@ def archive_legacy_reports(results_root: Path) -> dict[str, Any]:
 
 
 def _expected_market_date(as_of: pd.Timestamp) -> pd.Timestamp:
-    result = as_of.normalize()
-    if result.weekday() == 5:
-        result -= pd.Timedelta(days=1)
-    elif result.weekday() == 6:
-        result -= pd.Timedelta(days=2)
+    """Return the latest US session date that can be complete at 19:00 KST.
+
+    A Korean report dated Tuesday through Saturday consumes the previous US
+    calendar day. Rolling weekends back here also makes ad-hoc Monday runs
+    use Friday instead of requesting an in-progress Monday candle.
+    """
+
+    result = as_of.normalize() - pd.offsets.Day(1)
+    while result.weekday() >= 5:
+        result -= pd.offsets.Day(1)
     return result
+
+
+def _completed_price_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Discard Yahoo placeholder/live rows that do not contain completed OHLC."""
+
+    if frame.empty:
+        return frame.copy()
+    result = frame.copy()
+    required = ["date", "open", "high", "low", "close"]
+    if not set(required).issubset(result.columns):
+        return result.iloc[0:0].copy()
+    result["date"] = pd.to_datetime(result["date"], errors="coerce").astype(
+        "datetime64[ns]"
+    )
+    for column in required[1:]:
+        result[column] = pd.to_numeric(result[column], errors="coerce")
+    return (
+        result.dropna(subset=required)
+        .sort_values("date")
+        .drop_duplicates("date", keep="last")
+        .reset_index(drop=True)
+    )
 
 
 def _merge_cache(existing: pd.DataFrame, update: pd.DataFrame) -> pd.DataFrame:
@@ -166,26 +193,34 @@ def collect_context_prices(
 
     def one(symbol: str) -> tuple[str, pd.DataFrame, bool]:
         target = STOCK_CACHE / f"{safe_symbol(symbol)}.parquet"
-        cached = pd.read_parquet(target) if target.exists() else pd.DataFrame()
-        if not cached.empty:
-            cached["date"] = pd.to_datetime(cached["date"]).astype("datetime64[ns]")
+        raw_cached = pd.read_parquet(target) if target.exists() else pd.DataFrame()
+        cached = _completed_price_rows(raw_cached)
         if not settings.refresh and not cached.empty and cached["date"].max() >= expected_latest:
+            if len(cached) != len(raw_cached):
+                atomic_write_parquet(cached, target)
             return symbol, cached.loc[cached["date"].ge(settings.history_start)].copy(), True
         request_start = settings.history_start
         if not settings.refresh and not cached.empty:
             request_start = max(
                 settings.history_start,
-                cached["date"].max() - pd.Timedelta(days=int(data_cfg["cache_overlap_days"])),
+                cached["date"].max()
+                - pd.offsets.Day(int(data_cfg["cache_overlap_days"])),
             )
-        update = _download_yahoo_frame(
+        update = _completed_price_rows(_download_yahoo_frame(
             symbol,
             request_start,
-            settings.as_of + pd.Timedelta(days=1),
+            expected_latest + pd.offsets.Day(1),
             timeout=int(data_cfg["request_timeout_seconds"]),
             max_retries=int(data_cfg["max_retries"]),
-        )
+        ))
         result = _merge_cache(cached, update) if not cached.empty else update
+        result = _completed_price_rows(result)
         result = result.loc[result["date"].between(settings.history_start, settings.as_of)]
+        if result.empty:
+            raise RuntimeError(
+                f"No completed OHLC rows are available for {symbol} through "
+                f"{expected_latest.date()}"
+            )
         atomic_write_parquet(result, target)
         return symbol, result, not cached.empty
 
@@ -1610,7 +1645,11 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
 
     LOGGER.info("2/10 Collecting post-close market prices for %d symbols", len(symbols))
     prices, price_audit = collect_context_prices(sorted(symbols), settings, config)
-    market_date = prices.loc[prices["ticker"].eq(str(config["indices"]["S&P 500"])), "date"].max()
+    benchmark_symbol = str(config["indices"]["S&P 500"])
+    benchmark_rows = prices.loc[
+        prices["ticker"].eq(benchmark_symbol) & prices["close"].notna()
+    ]
+    market_date = benchmark_rows["date"].max()
     if pd.isna(market_date):
         raise RuntimeError("S&P 500 market date is unavailable.")
 

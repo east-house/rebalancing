@@ -3,7 +3,8 @@ name: Publish daily IRCS trading-test report
 on:
   schedule:
     # US Monday-Friday closes are available in Korea on Tuesday-Saturday.
-    - cron: "0 19 * * 2-6"
+    # Avoid the top-of-hour GitHub Actions scheduling congestion.
+    - cron: "13 19 * * 2-6"
       timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
@@ -62,11 +63,16 @@ jobs:
         shell: bash
         env:
           REQUESTED_DATE: ${{ inputs.as_of }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ -n "${REQUESTED_DATE}" ]]; then
             run_date="${REQUESTED_DATE}"
           else
             run_date="$(TZ=Asia/Seoul date +%F)"
+            hour_kst="$(TZ=Asia/Seoul date +%H)"
+            if [[ "${EVENT_NAME}" == "schedule" ]] && (( 10#${hour_kst} < 19 )); then
+              run_date="$(TZ=Asia/Seoul date --date='yesterday' +%F)"
+            fi
           fi
           if [[ ! "${run_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
             echo "::error::Invalid as_of date: ${run_date}"
