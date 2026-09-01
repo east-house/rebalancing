@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from market_report_pipeline.us_ircs_forward_report import (
+    CONFIG,
     G55_STRATEGY,
     R2_STRATEGY,
     _merge_index,
@@ -13,9 +14,23 @@ from market_report_pipeline.us_ircs_forward_report import (
     _passes_entry_variant,
     account_snapshot,
     execute_pending,
+    load_seed_state,
     transaction_cost_model,
     validate_publication_time,
 )
+
+
+def test_forward_seed_uses_first_complete_session_without_fabricated_prices() -> None:
+    state = load_seed_state()
+
+    assert CONFIG["strategy"]["version"] == "IRCS-G55-R2-FORWARD-2026-09-01"
+    assert CONFIG["strategy"]["initial_signal_date"] == "2026-08-31"
+    assert state["initializedSignalDate"] == "2026-08-31"
+    assert state["lastProcessedMarketDate"] == "2026-08-31"
+    assert all(
+        state["accounts"][strategy]["cash"] == 21_000.0
+        for strategy in (G55_STRATEGY, R2_STRATEGY)
+    )
 
 
 def test_execute_pending_uses_next_close_and_published_buy_cost() -> None:

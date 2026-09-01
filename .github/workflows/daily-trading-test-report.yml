@@ -13,7 +13,7 @@ on:
         required: false
         type: string
       reset_ledger:
-        description: "Rebuild the G55/R2 ledger from the frozen 2026-08-28 seed"
+        description: "Rebuild the G55/R2 ledger from the frozen 2026-08-31 seed"
         required: false
         default: false
         type: boolean
