@@ -354,6 +354,33 @@ def test_ma50_breadth_audit_recomputes_raw_closes_and_reports_window() -> None:
     assert result["passed"] is True
 
 
+def test_stock_snapshots_exclude_symbols_stale_for_market_date() -> None:
+    dates = pd.bdate_range("2026-06-26", periods=50)
+    prices = pd.DataFrame(
+        [
+            *(
+                {"date": date, "ticker": "AAA", "close": 100 + position, "volume": 1_000_000}
+                for position, date in enumerate(dates)
+            ),
+            *(
+                {"date": date, "ticker": "BBB", "close": 200 + position, "volume": 1_000_000}
+                for position, date in enumerate(dates[:-1])
+            ),
+        ]
+    )
+    universe = pd.DataFrame(
+        [
+            {"ticker": "AAA", "name": "Current", "sector": "Technology", "industry": "Software"},
+            {"ticker": "BBB", "name": "Stale", "sector": "Technology", "industry": "Hardware"},
+        ]
+    )
+
+    result = market_report.build_stock_snapshots(prices, universe, market_date=dates[-1])
+
+    assert result["ticker"].tolist() == ["AAA"]
+    assert pd.Timestamp(result.iloc[0]["date"]).normalize() == dates[-1]
+
+
 def test_market_state_detects_broad_advance() -> None:
     indices = pd.DataFrame(
         [

@@ -461,12 +461,24 @@ def instrument_snapshot(frame: pd.DataFrame, symbol: str, name: str) -> dict[str
     return row
 
 
-def build_stock_snapshots(prices: pd.DataFrame, universe: pd.DataFrame) -> pd.DataFrame:
+def build_stock_snapshots(
+    prices: pd.DataFrame,
+    universe: pd.DataFrame,
+    market_date: pd.Timestamp | None = None,
+) -> pd.DataFrame:
     metadata = universe.set_index("ticker")
+    normalized_market_date = (
+        pd.Timestamp(market_date).normalize() if market_date is not None else None
+    )
     rows: list[dict[str, Any]] = []
     for ticker in sorted(set(prices["ticker"]) & set(metadata.index)):
         try:
             row = instrument_snapshot(prices, ticker, str(metadata.loc[ticker, "name"]))
+            if (
+                normalized_market_date is not None
+                and pd.Timestamp(row["date"]).normalize() != normalized_market_date
+            ):
+                continue
             row["sector"] = metadata.loc[ticker, "sector"]
             row["industry"] = metadata.loc[ticker, "industry"]
             rows.append(row)
@@ -1735,7 +1747,7 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
         raise RuntimeError("S&P 500 market date is unavailable.")
 
     LOGGER.info("3/10 Calculating index, breadth, and market regime")
-    stocks = build_stock_snapshots(prices, universe)
+    stocks = build_stock_snapshots(prices, universe, market_date=market_date)
     indices, risks = build_index_overview(prices, config)
     if "S&P 500" not in set(indices["name"]):
         raise RuntimeError("S&P 500 overview row is missing.")
