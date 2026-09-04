@@ -14,6 +14,7 @@ import math
 import re
 import shutil
 import time
+import traceback
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ from urllib.parse import quote_plus
 
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+import exchange_calendars as xcals
 import numpy as np
 import pandas as pd
 import requests
@@ -148,10 +150,9 @@ def _expected_market_date(as_of: pd.Timestamp) -> pd.Timestamp:
     use Friday instead of requesting an in-progress Monday candle.
     """
 
-    result = as_of.normalize() - pd.offsets.Day(1)
-    while result.weekday() >= 5:
-        result -= pd.offsets.Day(1)
-    return result
+    candidate = as_of.normalize() - pd.offsets.Day(1)
+    session = xcals.get_calendar("XNYS").date_to_session(candidate, direction="previous")
+    return pd.Timestamp(session).tz_localize(None).normalize()
 
 
 def _completed_price_rows(frame: pd.DataFrame) -> pd.DataFrame:
@@ -191,14 +192,19 @@ def collect_context_prices(
     expected_latest = _expected_market_date(settings.as_of)
     STOCK_CACHE.mkdir(parents=True, exist_ok=True)
 
-    def one(symbol: str) -> tuple[str, pd.DataFrame, bool]:
+    def one(symbol: str) -> tuple[str, pd.DataFrame, bool, str | None]:
         target = STOCK_CACHE / f"{safe_symbol(symbol)}.parquet"
         raw_cached = pd.read_parquet(target) if target.exists() else pd.DataFrame()
         cached = _completed_price_rows(raw_cached)
         if not settings.refresh and not cached.empty and cached["date"].max() >= expected_latest:
             if len(cached) != len(raw_cached):
                 atomic_write_parquet(cached, target)
-            return symbol, cached.loc[cached["date"].ge(settings.history_start)].copy(), True
+            return (
+                symbol,
+                cached.loc[cached["date"].ge(settings.history_start)].copy(),
+                True,
+                None,
+            )
         request_start = settings.history_start
         if not settings.refresh and not cached.empty:
             request_start = max(
@@ -206,13 +212,23 @@ def collect_context_prices(
                 cached["date"].max()
                 - pd.offsets.Day(int(data_cfg["cache_overlap_days"])),
             )
-        update = _completed_price_rows(_download_yahoo_frame(
-            symbol,
-            request_start,
-            expected_latest + pd.offsets.Day(1),
-            timeout=int(data_cfg["request_timeout_seconds"]),
-            max_retries=int(data_cfg["max_retries"]),
-        ))
+        try:
+            update = _completed_price_rows(_download_yahoo_frame(
+                symbol,
+                request_start,
+                expected_latest + pd.offsets.Day(1),
+                timeout=int(data_cfg["request_timeout_seconds"]),
+                max_retries=int(data_cfg["max_retries"]),
+            ))
+        except Exception as error:  # noqa: BLE001
+            if cached.empty:
+                raise
+            return (
+                symbol,
+                cached.loc[cached["date"].ge(settings.history_start)].copy(),
+                True,
+                str(error),
+            )
         result = _merge_cache(cached, update) if not cached.empty else update
         result = _completed_price_rows(result)
         result = result.loc[result["date"].between(settings.history_start, settings.as_of)]
@@ -222,35 +238,100 @@ def collect_context_prices(
                 f"{expected_latest.date()}"
             )
         atomic_write_parquet(result, target)
-        return symbol, result, not cached.empty
+        latest = pd.to_datetime(result["date"]).max()
+        stale_reason = (
+            f"Provider returned no completed OHLC through {expected_latest.date()}"
+            if latest < expected_latest
+            else None
+        )
+        return symbol, result, not cached.empty, stale_reason
 
     frames: list[pd.DataFrame] = []
     failures: list[dict[str, str]] = []
     cache_hits = 0
+    stale_cache_fallbacks = 0
     with ThreadPoolExecutor(max_workers=int(data_cfg["request_workers"])) as executor:
         futures = {executor.submit(one, symbol): symbol for symbol in sorted(set(symbols))}
         for future in as_completed(futures):
             symbol = futures[future]
             try:
-                _, frame, cached = future.result()
+                _, frame, cached, fallback_error = future.result()
                 frames.append(frame)
                 cache_hits += int(cached)
+                if fallback_error:
+                    stale_cache_fallbacks += 1
+                    failures.append(
+                        {
+                            "ticker": symbol,
+                            "error": fallback_error,
+                            "used_cached_data": "true",
+                        }
+                    )
             except Exception as error:  # noqa: BLE001
-                failures.append({"ticker": symbol, "error": str(error)})
+                failures.append(
+                    {
+                        "ticker": symbol,
+                        "error": str(error),
+                        "used_cached_data": "false",
+                    }
+                )
     if not frames:
-        raise RuntimeError("No context price series were collected.")
+        audit = {
+            "expected_latest": expected_latest,
+            "requested": len(set(symbols)),
+            "successful": 0,
+            "fresh_symbols": 0,
+            "required_fresh_symbols": min(
+                int(data_cfg.get("minimum_fresh_symbols", 490)), len(set(symbols))
+            ),
+            "failures": failures,
+            "cache_hits": cache_hits,
+            "stale_cache_fallbacks": stale_cache_fallbacks,
+        }
+        write_json(audit, settings.output_dir / "price_collection_audit.json")
+        raise RuntimeError("No context price series were collected; see price_collection_audit.json")
     result = pd.concat(frames, ignore_index=True)
     result["date"] = pd.to_datetime(result["date"]).astype("datetime64[ns]")
+    latest_by_ticker = result.groupby("ticker", observed=True)["date"].max()
+    stale_symbols = sorted(
+        str(ticker) for ticker, latest in latest_by_ticker.items() if latest < expected_latest
+    )
+    fresh_symbols = int(latest_by_ticker.ge(expected_latest).sum())
+    required_fresh_symbols = min(
+        int(data_cfg.get("minimum_fresh_symbols", 490)), len(set(symbols))
+    )
+    benchmark_symbol = str(config.get("indices", {}).get("S&P 500", "")).upper()
+    benchmark_is_fresh = (
+        not benchmark_symbol
+        or (
+            benchmark_symbol in latest_by_ticker.index
+            and latest_by_ticker.loc[benchmark_symbol] >= expected_latest
+        )
+    )
     audit = {
+        "expected_latest": expected_latest,
         "requested": len(set(symbols)),
         "successful": int(result["ticker"].nunique()),
+        "fresh_symbols": fresh_symbols,
+        "required_fresh_symbols": required_fresh_symbols,
+        "stale_symbols": stale_symbols,
+        "benchmark_symbol": benchmark_symbol or None,
+        "benchmark_is_fresh": benchmark_is_fresh,
         "failures": failures,
         "cache_hits": cache_hits,
+        "stale_cache_fallbacks": stale_cache_fallbacks,
         "start": result["date"].min(),
         "end": result["date"].max(),
         "rows": len(result),
         "duplicate_ticker_dates": int(result.duplicated(["ticker", "date"]).sum()),
     }
+    write_json(audit, settings.output_dir / "price_collection_audit.json")
+    if fresh_symbols < required_fresh_symbols or not benchmark_is_fresh:
+        raise RuntimeError(
+            "Market price freshness validation failed: "
+            f"fresh={fresh_symbols}, required={required_fresh_symbols}, "
+            f"benchmark_fresh={benchmark_is_fresh}; see price_collection_audit.json"
+        )
     return result, audit
 
 
@@ -1937,20 +2018,35 @@ def main(argv: list[str] | None = None) -> int:
     as_of = pd.Timestamp(args.as_of).normalize()
     output = args.output or RESULTS_ROOT / f"{as_of:%Y-%m-%d}"
     output = output if output.is_absolute() else PROJECT_ROOT / output
-    if args.command == "render-html":
-        result = rerender_market_html(output, as_of)
-    else:
-        config_path = args.config if args.config.is_absolute() else PROJECT_ROOT / args.config
-        config = load_config(config_path)
-        result = run_market_report(
-            MarketRunSettings(
-                as_of=as_of,
-                history_start=pd.Timestamp(config["data"]["history_start"]),
-                output_dir=output,
-                config_path=config_path,
-                refresh=bool(args.refresh),
+    try:
+        if args.command == "render-html":
+            result = rerender_market_html(output, as_of)
+        else:
+            config_path = args.config if args.config.is_absolute() else PROJECT_ROOT / args.config
+            config = load_config(config_path)
+            result = run_market_report(
+                MarketRunSettings(
+                    as_of=as_of,
+                    history_start=pd.Timestamp(config["data"]["history_start"]),
+                    output_dir=output,
+                    config_path=config_path,
+                    refresh=bool(args.refresh),
+                )
             )
+    except Exception as error:
+        write_json(
+            {
+                "as_of": as_of,
+                "command": args.command,
+                "exception_type": type(error).__name__,
+                "message": str(error),
+                "traceback": traceback.format_exc(),
+                "recorded_at_utc": pd.Timestamp.now(tz="UTC"),
+            },
+            output / "failure_diagnostics.json",
         )
+        LOGGER.exception("Market report pipeline failed; diagnostics written to %s", output)
+        raise
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     return 0
 

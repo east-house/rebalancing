@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 import market_report_pipeline.us_market_report as market_report
 
-from market_report_pipeline.support import _apply_adjusted_ohlc
+from market_report_pipeline.support import _apply_adjusted_ohlc, _retry_delay_seconds
 from market_report_pipeline.us_market_report import (
     MarketRunSettings,
     SECTOR_DISPLAY_NAMES,
@@ -48,6 +50,20 @@ def test_expected_market_date_uses_latest_completed_us_calendar_day() -> None:
     assert _expected_market_date(pd.Timestamp("2026-09-01")) == pd.Timestamp("2026-08-31")
     assert _expected_market_date(pd.Timestamp("2026-09-05")) == pd.Timestamp("2026-09-04")
     assert _expected_market_date(pd.Timestamp("2026-09-07")) == pd.Timestamp("2026-09-04")
+    assert _expected_market_date(pd.Timestamp("2026-09-08")) == pd.Timestamp("2026-09-04")
+    assert _expected_market_date(pd.Timestamp("2026-04-04")) == pd.Timestamp("2026-04-02")
+
+
+def test_retry_delay_honors_retry_after_and_jitter(monkeypatch) -> None:
+    class Response:
+        headers = {"Retry-After": "7"}
+
+    class Error(Exception):
+        response = Response()
+
+    monkeypatch.setattr("market_report_pipeline.support.random.uniform", lambda _a, _b: 0.2)
+
+    assert _retry_delay_seconds(Error(), 2) == 7.2
 
 
 def test_completed_price_rows_removes_incomplete_yahoo_placeholder() -> None:
@@ -142,6 +158,144 @@ def test_context_price_collection_repairs_placeholder_cache(
     assert repaired["date"].max() == pd.Timestamp("2026-08-31")
     assert repaired[["open", "high", "low", "close"]].notna().all().all()
     assert audit["end"] == pd.Timestamp("2026-08-31")
+
+
+def test_context_price_collection_uses_cached_fallback_and_records_audit(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cache = tmp_path / "stocks"
+    cache.mkdir()
+    columns = [
+        "date",
+        "ticker",
+        "provider_symbol",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
+    for ticker, date in (("IVV", "2026-08-31"), ("STALE", "2026-08-28")):
+        pd.DataFrame(
+            [[date, ticker, ticker, 100.0, 101.0, 99.0, 100.5, 1000]],
+            columns=columns,
+        ).to_parquet(cache / f"{ticker}.parquet", index=False)
+
+    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries):
+        raise RuntimeError(f"rate limited: {symbol}")
+
+    monkeypatch.setattr(market_report, "STOCK_CACHE", cache)
+    monkeypatch.setattr(market_report, "_download_yahoo_frame", fake_download)
+    settings = MarketRunSettings(
+        as_of=pd.Timestamp("2026-09-01"),
+        history_start=pd.Timestamp("2026-08-01"),
+        output_dir=tmp_path / "output",
+        config_path=tmp_path / "config.yaml",
+    )
+    config = {
+        "data": {
+            "cache_overlap_days": 5,
+            "request_timeout_seconds": 10,
+            "max_retries": 1,
+            "request_workers": 1,
+            "minimum_fresh_symbols": 1,
+        },
+        "indices": {"S&P 500": "IVV"},
+    }
+
+    result, audit = collect_context_prices(["IVV", "STALE"], settings, config)
+
+    assert set(result["ticker"]) == {"IVV", "STALE"}
+    assert audit["fresh_symbols"] == 1
+    assert audit["stale_cache_fallbacks"] == 1
+    assert audit["stale_symbols"] == ["STALE"]
+    saved = json.loads((settings.output_dir / "price_collection_audit.json").read_text())
+    assert saved["failures"][0]["used_cached_data"] == "true"
+
+
+def test_context_price_collection_rejects_stale_benchmark(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cache = tmp_path / "stocks"
+    cache.mkdir()
+    columns = [
+        "date",
+        "ticker",
+        "provider_symbol",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
+    pd.DataFrame(
+        [["2026-08-28", "IVV", "IVV", 100.0, 101.0, 99.0, 100.5, 1000]],
+        columns=columns,
+    ).to_parquet(cache / "IVV.parquet", index=False)
+
+    monkeypatch.setattr(market_report, "STOCK_CACHE", cache)
+    monkeypatch.setattr(
+        market_report,
+        "_download_yahoo_frame",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("rate limited")),
+    )
+    settings = MarketRunSettings(
+        as_of=pd.Timestamp("2026-09-01"),
+        history_start=pd.Timestamp("2026-08-01"),
+        output_dir=tmp_path / "output",
+        config_path=tmp_path / "config.yaml",
+    )
+    config = {
+        "data": {
+            "cache_overlap_days": 5,
+            "request_timeout_seconds": 10,
+            "max_retries": 1,
+            "request_workers": 1,
+            "minimum_fresh_symbols": 1,
+        },
+        "indices": {"S&P 500": "IVV"},
+    }
+
+    with pytest.raises(RuntimeError, match="freshness validation failed"):
+        collect_context_prices(["IVV"], settings, config)
+
+    saved = json.loads((settings.output_dir / "price_collection_audit.json").read_text())
+    assert saved["benchmark_is_fresh"] is False
+    assert saved["fresh_symbols"] == 0
+
+
+def test_main_writes_failure_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "market-report.yaml"
+    config_path.write_text('data:\n  history_start: "2024-01-01"\n', encoding="utf-8")
+    output = tmp_path / "report"
+    monkeypatch.setattr(
+        market_report,
+        "run_market_report",
+        lambda _settings: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        market_report.main(
+            [
+                "run",
+                "--as-of",
+                "2026-09-04",
+                "--config",
+                str(config_path),
+                "--output",
+                str(output),
+            ]
+        )
+
+    diagnostics = json.loads((output / "failure_diagnostics.json").read_text())
+    assert diagnostics["exception_type"] == "RuntimeError"
+    assert diagnostics["message"] == "provider unavailable"
+    assert "RuntimeError: provider unavailable" in diagnostics["traceback"]
 
 
 def test_index_chart_uses_one_timeline_and_preserves_missing_dates() -> None:

@@ -42,7 +42,8 @@ jobs:
           cache-dependency-path: requirements-market-report.txt
 
       - name: Restore incremental market-data cache
-        uses: actions/cache@v5
+        id: market-cache
+        uses: actions/cache/restore@v5
         with:
           path: |
             data/cache/market-report
@@ -96,10 +97,14 @@ jobs:
           exit "${missing}"
 
       - name: Collect data and generate report
-        run: >-
-          python -m market_report_pipeline.us_market_report run
-          --as-of "${{ env.RUN_DATE }}"
-          --output "${{ env.REPORT_OUTPUT }}"
+        shell: bash
+        run: |
+          mkdir -p "${REPORT_OUTPUT}"
+          set -o pipefail
+          python -m market_report_pipeline.us_market_report run \
+            --as-of "${RUN_DATE}" \
+            --output "${REPORT_OUTPUT}" \
+            2>&1 | tee "${REPORT_OUTPUT}/pipeline.log"
 
       - name: Build and publish portfolio decision report
         run: >-
@@ -115,6 +120,15 @@ jobs:
           --source "${{ env.REPORT_OUTPUT }}"
           --project-root .
           --upload-r2
+
+      - name: Save incremental market-data cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            data/cache/market-report
+            data/raw/us_market
+          key: market-report-${{ runner.os }}-${{ github.run_id }}
 
       - name: Upload report diagnostics
         if: always()

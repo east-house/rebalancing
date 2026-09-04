@@ -3,10 +3,11 @@ project:
 
 data:
   history_start: "2024-01-01"
-  request_workers: 8
+  request_workers: 4
   request_timeout_seconds: 20
-  max_retries: 3
+  max_retries: 4
   cache_overlap_days: 10
+  minimum_fresh_symbols: 490
 
 portfolio_report:
   benchmark: "IVV"

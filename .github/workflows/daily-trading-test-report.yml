@@ -49,7 +49,8 @@ jobs:
           cache-dependency-path: requirements-market-report.txt
 
       - name: Restore incremental US market cache
-        uses: actions/cache@v5
+        id: market-cache
+        uses: actions/cache/restore@v5
         with:
           path: data/cache/market-report
           key: market-report-${{ runner.os }}-ircs-${{ github.run_id }}
@@ -103,10 +104,15 @@ jobs:
           exit "${missing}"
 
       - name: Refresh the existing US market cache
-        run: >-
-          python -m market_report_pipeline.us_market_report run
-          --as-of "${{ env.RUN_DATE }}"
-          --output "action-output/ircs-market-cache/${{ env.RUN_DATE }}"
+        shell: bash
+        run: |
+          output="action-output/ircs-market-cache/${RUN_DATE}"
+          mkdir -p "${output}"
+          set -o pipefail
+          python -m market_report_pipeline.us_market_report run \
+            --as-of "${RUN_DATE}" \
+            --output "${output}" \
+            2>&1 | tee "${output}/pipeline.log"
 
       - name: Validate the IRCS ledger engine
         run: >-
@@ -128,11 +134,20 @@ jobs:
           fi
           python -m market_report_pipeline.us_ircs_forward_report "${args[@]}"
 
+      - name: Save incremental US market cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: data/cache/market-report
+          key: market-report-${{ runner.os }}-ircs-${{ github.run_id }}
+
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: trading-test-report-${{ github.run_id }}
-          path: action-output/trading-test-reports/
+          path: |
+            action-output/ircs-market-cache/
+            action-output/trading-test-reports/
           if-no-files-found: warn
           retention-days: 7

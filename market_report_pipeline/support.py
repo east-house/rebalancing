@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import time
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -20,8 +21,22 @@ UNIVERSE_CACHE = MARKET_CACHE_ROOT / "universe"
 
 WIKIPEDIA_SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 YAHOO_CHART_URL = "https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
+YAHOO_CHART_FALLBACK_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 FRED_GRAPH_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 PRICE_COLUMNS = ["open", "high", "low", "close", "volume"]
+
+
+def _retry_delay_seconds(error: Exception, attempt: int) -> float:
+    """Return a bounded exponential delay, honoring numeric Retry-After."""
+
+    response = getattr(error, "response", None)
+    retry_after = response.headers.get("Retry-After") if response is not None else None
+    try:
+        requested_delay = float(retry_after) if retry_after is not None else 0.0
+    except (TypeError, ValueError):
+        requested_delay = 0.0
+    exponential_delay = min(30.0, float(2 ** (attempt - 1)))
+    return min(30.0, max(requested_delay, exponential_delay)) + random.uniform(0.0, 0.25)
 
 
 def yahoo_symbol(symbol: str) -> str:
@@ -113,12 +128,16 @@ def _download_yahoo_frame(
         "includeAdjustedClose": "true",
         "events": "div,splits",
     }
-    headers = {"User-Agent": "rebalancing-market-report/1.0 data-pipeline"}
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "rebalancing-market-report/1.0 data-pipeline",
+    }
     last_error: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
+            endpoint = YAHOO_CHART_URL if attempt % 2 else YAHOO_CHART_FALLBACK_URL
             response = requests.get(
-                YAHOO_CHART_URL.format(symbol=mapped),
+                endpoint.format(symbol=mapped),
                 params=params,
                 headers=headers,
                 timeout=timeout,
@@ -153,7 +172,7 @@ def _download_yahoo_frame(
         except Exception as error:  # noqa: BLE001
             last_error = error
             if attempt < max_retries:
-                time.sleep(0.5 * attempt)
+                time.sleep(_retry_delay_seconds(error, attempt))
     raise RuntimeError(f"Yahoo {symbol} 수집 실패: {last_error}") from last_error
 
 
