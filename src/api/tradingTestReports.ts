@@ -1,3 +1,5 @@
+import { reportJson as fetchJson } from "./reportTransport";
+
 export type StrategyName =
   | "IRCS-BBCCI-M-G55"
   | "IRCS-BBCCI-M-R2"
@@ -16,6 +18,7 @@ export interface TradingTestIndexItem {
 }
 
 export interface TradingTestIndex {
+  releaseId?: string;
   schemaVersion: number;
   updatedAt: string;
   latestReportDate: string;
@@ -118,22 +121,6 @@ export interface TradingTestReport {
   disclaimer: string;
 }
 
-async function fetchJson<T>(primary: string, fallback: string): Promise<T> {
-  let lastError: unknown;
-  for (const path of [primary, fallback]) {
-    try {
-      const response = await fetch(path, { headers: { accept: "application/json" } });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return (await response.json()) as T;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("매매테스트 보고서를 불러오지 못했습니다.");
-}
-
 function assertIndex(value: TradingTestIndex): TradingTestIndex {
   if (![1, 2].includes(value.schemaVersion) || !Array.isArray(value.reports)) {
     throw new Error("지원하지 않는 매매테스트 목록 형식입니다.");
@@ -164,11 +151,12 @@ export async function loadTradingTestIndex(): Promise<TradingTestIndex> {
 export async function loadTradingTestReport(
   reportDate: string,
   generatedAt?: string,
+  releaseId?: string,
 ): Promise<TradingTestReport> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
     throw new Error("잘못된 보고서 날짜입니다.");
   }
-  const version = generatedAt ? `?v=${encodeURIComponent(generatedAt)}` : "";
+  const version = releaseId ? `?release=${encodeURIComponent(releaseId)}` : generatedAt ? `?v=${encodeURIComponent(generatedAt)}` : "";
   return assertReport(await fetchJson(
     `/api/trading-test-reports/${reportDate}${version}`,
     `/data/trading-test-reports/${reportDate}.json${version}`,

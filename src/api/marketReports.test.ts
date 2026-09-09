@@ -65,13 +65,13 @@ describe("market report Korea-date selection", () => {
     expect(selected).toBeUndefined();
   });
 
-  it("rejects a report generated before its display date", () => {
+  it("preserves an older report whose legacy display-date rule differed", () => {
     const premature = [{
       ...reports[0],
       generatedAt: "2026-08-16T02:52:46+09:00",
     }];
     expect(selectReportForKoreaDate(premature, new Date("2026-08-17T01:00:00Z")))
-      .toBeUndefined();
+      .toEqual(premature[0]);
   });
 
   it("does not expose weekend report dates", () => {

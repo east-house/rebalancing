@@ -11,6 +11,8 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useReportRefresh } from "../../api/useReportRefresh";
+import ReportPublicationStatus from "../../components/ReportPublicationStatus";
 
 import {
   loadTradingTestIndex,
@@ -118,6 +120,7 @@ export default function TradingTestReportPage({
   onOpenReport, onOpenPortfolio, onOpenPortfolioReport,
   onOpenTradingTestReport, onOpenEtfCompare,
 }: Props) {
+  const refresh = useReportRefresh();
   const [index, setIndex] = useState<TradingTestIndex | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [report, setReport] = useState<TradingTestReport | null>(null);
@@ -129,19 +132,20 @@ export default function TradingTestReportPage({
     loadTradingTestIndex().then((value) => {
       if (!active) return;
       setIndex(value);
-      setSelectedDate(value.latestReportDate || value.reports[0]?.reportDate || "");
+      setSelectedDate((previous) => previous && previous !== index?.latestReportDate ? previous : value.latestReportDate || value.reports[0]?.reportDate || "");
+      setError("");
     }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : "목록을 불러오지 못했습니다.");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     if (!selectedDate) return;
     let active = true;
     setLoading(true); setError("");
     const generatedAt = index?.reports.find((item) => item.reportDate === selectedDate)?.generatedAt;
-    loadTradingTestReport(selectedDate, generatedAt)
+    loadTradingTestReport(selectedDate, generatedAt, index?.releaseId)
       .then((value) => { if (active) setReport(value); })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "보고서를 불러오지 못했습니다.");
@@ -187,7 +191,7 @@ export default function TradingTestReportPage({
           {error ? <div className="trading-report-state is-error"><CircleAlert size={18} />{error}</div> : null}
           {report ? <>
             <section className="trading-report-hero">
-              <div><span>{dateLabel(report.reportDate)} · 미국장 {dateLabel(report.marketDate)}</span><h1>어제 정한 행동의 결과와<br />다음 거래일 행동</h1><p>{isLegacyReport ? "이전 M" : "G55"}과 R2를 각각 $21,000 독립 계좌로 추적합니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p></div>
+              <div><span>{dateLabel(report.reportDate)} · 미국장 {dateLabel(report.marketDate)}</span><h1>어제 정한 행동의 결과와<br />다음 거래일 행동</h1><p>{isLegacyReport ? "이전 M" : "G55"}과 R2를 각각 $21,000 독립 계좌로 추적합니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
               <dl><div><dt>IVV 누적수익률</dt><dd>{pct(report.benchmark.totalReturn)}</dd></div><div><dt>가격 기준</dt><dd>조정종가</dd></div><div><dt>매매비용 가정</dt><dd>{costDescription}</dd></div><div><dt>데이터 완전성</dt><dd>{pct(report.dataQuality.latestCoverage, 1)}</dd></div></dl>
             </section>
             <section className="trading-account-grid">{strategies.map((strategy) => <AccountCard key={strategy} name={strategy} account={report.accounts[strategy]} />)}</section>

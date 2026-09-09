@@ -155,4 +155,4 @@ def test_morning_payload_can_use_latest_completed_session() -> None:
 
     assert payload["report_date_kst"] == str(report_date.date())
     assert payload["signal_market_date"] == str(data.calendar[-1].date())
-    assert payload["stale_preview"] is True
+    assert payload["stale_preview"] is False

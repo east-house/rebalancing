@@ -99,7 +99,8 @@ export function upsertSnapshotForDate(
     return snapshots.map((snapshot) => ({ ...snapshot }));
   }
 
-  const cutoff = new Date(`${priceDate}T00:00:00Z`);
+  const newestDate = snapshots.reduce((latest, item) => item.date > latest ? item.date : latest, priceDate);
+  const cutoff = new Date(`${newestDate}T00:00:00Z`);
   cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
   const cutoffDate = cutoff.toISOString().slice(0, 10);
 
@@ -108,11 +109,10 @@ export function upsertSnapshotForDate(
       .filter(
         (snapshot) =>
           snapshot.date >= cutoffDate &&
-          snapshot.date <= priceDate &&
           snapshot.date !== priceDate,
       )
       .map((snapshot) => ({ ...snapshot })),
-    { date: priceDate, totalValue },
+    ...(priceDate >= cutoffDate ? [{ date: priceDate, totalValue }] : []),
   ].sort((left, right) => left.date.localeCompare(right.date));
 }
 

@@ -2,14 +2,22 @@ name: Generate and publish daily US market report
 
 on:
   schedule:
-    - cron: "30 7 * * 1-5"
+    - cron: "30 7,9,11 * * 1-5"
       timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
       as_of:
-        description: "Korean run date (YYYY-MM-DD); leave empty for today"
+        description: "Explicit Korean date; empty reconciles missing slots"
         required: false
         type: string
+      revise:
+        description: "Preserved revision/rebuild; requires explicit as_of"
+        default: false
+        type: boolean
+      repair_index:
+        description: "Recover the archive index without new collection"
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generate:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -29,114 +37,54 @@ jobs:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements-market-report.txt
-
-      - name: Restore incremental market-data cache
-        id: market-cache
-        uses: actions/cache/restore@v5
+      - uses: actions/cache/restore@v5
         with:
           path: |
             data/cache/market-report
             data/raw/us_market
-          key: market-report-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            market-report-${{ runner.os }}-
-
-      - name: Install report dependencies and Korean fonts
-        shell: bash
+          key: market-report-${{ runner.os }}-morning-${{ github.run_id }}
+          restore-keys: market-report-${{ runner.os }}-
+      - name: Install dependencies and fonts
         run: |
           sudo apt-get update
           sudo apt-get install --yes fonts-noto-cjk
           python -m pip install --requirement requirements-market-report.txt
-
       - name: Validate report pipeline
         run: python -m pytest tests/market_report_pipeline -q
-
-      - name: Resolve Korean run date
+      - name: Reconcile and publish complete releases
         shell: bash
         env:
           REQUESTED_DATE: ${{ inputs.as_of }}
+          REVISE: ${{ inputs.revise || false }}
+          RESET_LEDGER: ${{ inputs.reset_ledger || false }}
+          REPAIR_INDEX: ${{ inputs.repair_index || false }}
         run: |
-          if [[ -n "${REQUESTED_DATE}" ]]; then
-            run_date="${REQUESTED_DATE}"
-          else
-            run_date="$(TZ=Asia/Seoul date +%F)"
-          fi
-          if [[ ! "${run_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            echo "::error::Invalid as_of date: ${run_date}"
-            exit 1
-          fi
-          day_of_week="$(date -d "${run_date}" +%u)"
-          if (( day_of_week >= 6 )); then
-            echo "::error::Weekend reports are not published: ${run_date}"
-            exit 1
-          fi
-          echo "RUN_DATE=${run_date}" >> "${GITHUB_ENV}"
-          echo "REPORT_OUTPUT=action-output/market-report/${run_date}" >> "${GITHUB_ENV}"
-
-      - name: Validate R2 configuration
-        shell: bash
-        run: |
-          missing=0
-          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::Missing GitHub Actions secret or variable: ${name}"
-              missing=1
-            fi
-          done
-          exit "${missing}"
-
-      - name: Collect data and generate report
-        shell: bash
-        run: |
-          mkdir -p "${REPORT_OUTPUT}"
+          args=(morning)
+          if [[ -n "${REQUESTED_DATE}" ]]; then args+=(--as-of "${REQUESTED_DATE}"); fi
+          if [[ "${REVISE}" == "true" ]]; then args+=(--revise); fi
+          if [[ "${RESET_LEDGER}" == "true" ]]; then args+=(--reset-ledger); fi
+          if [[ "${REPAIR_INDEX}" == "true" ]]; then args+=(--repair-index); fi
+          mkdir -p action-output
           set -o pipefail
-          python -m market_report_pipeline.us_market_report run \
-            --as-of "${RUN_DATE}" \
-            --output "${REPORT_OUTPUT}" \
-            2>&1 | tee "${REPORT_OUTPUT}/pipeline.log"
-
-      - name: Build and publish portfolio decision report
-        run: >-
-          python -m market_report_pipeline.us_daily_portfolio_report
-          --as-of "${{ env.RUN_DATE }}"
-          --output "action-output/portfolio-report/latest.json"
-          --allow-stale-preview
-          --upload-r2
-
-      - name: Build web bundle and publish to R2
-        run: >-
-          python -m market_report_pipeline.publish_market_report_web
-          --source "${{ env.REPORT_OUTPUT }}"
-          --project-root .
-          --upload-r2
-
-      - name: Save incremental market-data cache
+          python -m market_report_pipeline.daily_reports "${args[@]}" 2>&1 | tee action-output/daily.log
+      - uses: actions/cache/save@v5
         if: always()
-        uses: actions/cache/save@v5
         with:
           path: |
             data/cache/market-report
             data/raw/us_market
-          key: market-report-${{ runner.os }}-${{ github.run_id }}
-
-      - name: Upload report diagnostics
+          key: market-report-${{ runner.os }}-morning-${{ github.run_id }}
+      - uses: actions/upload-artifact@v6
         if: always()
-        uses: actions/upload-artifact@v6
         with:
-          name: market-report-${{ github.run_id }}
-          path: |
-            action-output/market-report/
-            action-output/portfolio-report/
+          name: morning-report-${{ github.run_id }}
+          path: action-output/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30

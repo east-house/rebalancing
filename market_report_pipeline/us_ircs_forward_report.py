@@ -25,6 +25,8 @@ import yaml
 
 from .io_utils import write_json
 from .support import PROJECT_ROOT, STOCK_CACHE, UNIVERSE_CACHE, safe_symbol
+from .report_store import ReportStore
+from .report_time import expected_market_date, korean_today, report_context, market_calendar
 
 
 CONFIG_PATH = PROJECT_ROOT / "config" / "ircs-forward.yaml"
@@ -87,6 +89,7 @@ class R2JsonStore:
         self.client = client
         self.bucket = bucket
         self.prefix = prefix.strip("/")
+        self.release = ReportStore(client, bucket, "trading")
 
     @classmethod
     def from_environment(cls, prefix: str) -> "R2JsonStore":
@@ -116,37 +119,13 @@ class R2JsonStore:
         return f"{self.prefix}/{suffix.lstrip('/')}"
 
     def load(self, suffix: str) -> dict[str, Any] | None:
-        try:
-            response = self.client.get_object(Bucket=self.bucket, Key=self.key(suffix))
-        except Exception as error:  # provider exception types vary
-            code = str(getattr(error, "response", {}).get("Error", {}).get("Code", ""))
-            if code in {"404", "NoSuchKey", "NotFound"}:
-                return None
-            raise
-        body = response["Body"]
-        try:
-            return json.loads(body.read().decode("utf-8"))
-        finally:
-            if hasattr(body, "close"):
-                body.close()
+        return self.release.load(self.key(suffix))
 
     def save(self, suffix: str, payload: dict[str, Any]) -> None:
-        body = json.dumps(
-            payload, ensure_ascii=False, separators=(",", ":"), default=str
-        ).encode("utf-8")
-        self.client.put_object(
-            Bucket=self.bucket,
-            Key=self.key(suffix),
-            Body=body,
-            ContentType="application/json; charset=utf-8",
-            CacheControl=(
-                "private, no-store"
-                if suffix.startswith("state/")
-                else "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
-                if suffix in {"index.json", "latest.json"}
-                else "public, max-age=31536000, immutable"
-            ),
-        )
+        self.release.stage(self.key(suffix), payload)
+
+    def commit(self, day: str, status: str = "published") -> None:
+        self.release.commit(job_date=day, status=status)
 
 
 def _read_price(path: Path, ticker: str) -> pd.DataFrame:
@@ -176,7 +155,9 @@ def load_market_panel(as_of: pd.Timestamp) -> tuple[MarketPanel, dict[str, Any]]
         path for path in snapshots
         if pd.Timestamp(path.stem.split("_")[-1]) <= as_of
     ]
-    snapshot_path = eligible_snapshots[-1] if eligible_snapshots else snapshots[-1]
+    if not eligible_snapshots:
+        raise RuntimeError("No universe snapshot exists on or before the requested date")
+    snapshot_path = eligible_snapshots[-1]
     universe = pd.read_parquet(snapshot_path).copy()
     universe["ticker"] = universe["ticker"].astype(str).str.upper()
     symbols = set(universe["ticker"]) | _required_proxy_symbols()
@@ -204,7 +185,11 @@ def load_market_panel(as_of: pd.Timestamp) -> tuple[MarketPanel, dict[str, Any]]
         raise RuntimeError("IVV market date is unavailable")
     # A report runs at 19:00 KST while the same-calendar-date US session has
     # not closed.  Never accept Yahoo's live partial daily candle as a close.
-    latest = min(pd.Timestamp(latest), as_of.normalize() - pd.offsets.Day(1))
+    expected = expected_market_date(as_of)
+    available = prices.loc[prices["ticker"].eq("IVV") & prices["date"].le(expected), "date"]
+    latest = available.max()
+    if pd.isna(latest) or latest != expected:
+        raise RuntimeError(f"IVV is not current through completed session {expected.date()}")
     calendar = pd.DatetimeIndex(
         prices.loc[prices["ticker"].eq("IVV") & prices["date"].le(latest), "date"]
         .drop_duplicates()
@@ -800,16 +785,41 @@ def run(
     signals = _signals(panel, indicators)
     prefix = str(CONFIG["storage"]["prefix"])
     store = R2JsonStore.from_environment(prefix) if upload_r2 else None
-    stored_state = None if reset_ledger else (store.load("state/latest.json") if store else None)
+    local_state = output_dir / "state.json"
+    persisted = store.load("state/latest.json") if store else (json.loads(local_state.read_text()) if local_state.exists() else None)
+    stored_state = None if reset_ledger else persisted
     version_changed = bool(
         stored_state
         and stored_state.get("strategyVersion") != CONFIG["strategy"]["version"]
     )
     if version_changed:
         stored_state = None
+    if persisted and stored_state is None and latest < pd.Timestamp(persisted["lastProcessedMarketDate"]):
+        raise ValueError("A ledger rebuild cannot move the latest processed session backwards")
     state = stored_state or load_seed_state()
     is_new_ledger = stored_state is None
     last = pd.Timestamp(state["lastProcessedMarketDate"])
+    if stored_state and latest <= last:
+        report_date = str((latest + pd.offsets.Day(1)).date())
+        path = output_dir / f"{report_date}.json"
+        previous = store.load(f"reports/{report_date}.json") if store else (json.loads(path.read_text()) if path.exists() else None)
+        if previous is None:
+            raise RuntimeError("Processed session has no preserved report; explicit archive recovery is required")
+        index_path = output_dir / "index.json"
+        index = store.load("index.json") if store else json.loads(index_path.read_text())
+        if store:
+            store.commit(str(as_of.date()), "no-new-session")
+        return {"state": state, "reports": [previous], "index": index, "ledgerReset": False, "unchanged": True}
+    if latest > last:
+        expected_sessions = market_calendar(latest.year).sessions_in_range(last + pd.offsets.Day(1), latest)
+        missing_sessions = pd.DatetimeIndex(expected_sessions).tz_localize(None).difference(panel.calendar)
+        if not missing_sessions.empty:
+            raise RuntimeError(f"Cannot advance ledger across missing sessions: {missing_sessions.tolist()}")
+    if reset_ledger or version_changed:
+        # Old releases remain addressable; never erase the prior ledger during a rebuild.
+        if persisted and store:
+            archive_id = hashlib.sha256(json.dumps(persisted, sort_keys=True).encode()).hexdigest()
+            store.save(f"state/archive/{archive_id}.json", persisted)
     pending = state.get("pendingDecisions", {})
     candidate_snapshots = state.setdefault("candidateSnapshots", {})
     if not all(
@@ -872,8 +882,8 @@ def run(
         raise RuntimeError("No report could be generated")
     # A strategy-version change starts a fresh ledger, but the dated M/R2
     # reports remain in the archive as immutable legacy records.  Only an
-    # explicit rebuild replaces the archive index.
-    existing_index = None if reset_ledger else (store.load("index.json") if store else None)
+    # explicit rebuild publishes a new release while retaining the old archive.
+    existing_index = store.load("index.json") if store else (json.loads((output_dir / "index.json").read_text()) if (output_dir / "index.json").exists() else None)
     index = _merge_index(existing_index, reports)
     output_dir.mkdir(parents=True, exist_ok=True)
     for report in reports:
@@ -894,6 +904,13 @@ def run(
         store.save("latest.json", reports[-1])
         store.save("index.json", index)
         store.save("state/latest.json", state)
+        store.save(f"inputs/{as_of.date()}.json", {"context": report_context(as_of, "trading"), "quality": quality})
+        import io
+        for name in ("close", "open", "high", "low", "volume", "universe"):
+            buffer = io.BytesIO()
+            getattr(panel, name).to_parquet(buffer)
+            store.release.stage(store.key(f"inputs/{as_of.date()}/{name}.parquet"), buffer.getvalue(), "application/octet-stream")
+        store.commit(str(as_of.date()))
     return {
         "state": state,
         "reports": reports,
@@ -914,7 +931,7 @@ def main() -> None:
         help="Ignore the stored R2 ledger and rebuild every report from the frozen seed.",
     )
     args = parser.parse_args()
-    as_of = pd.Timestamp.today().normalize() if args.as_of == "today" else pd.Timestamp(args.as_of)
+    as_of = pd.Timestamp(korean_today()) if args.as_of == "today" else pd.Timestamp(args.as_of)
     validate_publication_time(as_of)
     result = run(
         as_of,

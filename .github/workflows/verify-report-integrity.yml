@@ -1,0 +1,29 @@
+name: Verify report dates and integrity
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        timezone: [UTC, Asia/Seoul, America/New_York]
+    env:
+      TZ: ${{ matrix.timezone }}
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: python -m pip install --requirement requirements-market-report.txt
+      - run: python -m pytest tests/market_report_pipeline -q
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

@@ -95,10 +95,12 @@ def _read_price(path: Path, ticker: str) -> pd.DataFrame:
     return result.dropna(subset=["date", "close"]).sort_values("date")
 
 
-def load_market_data() -> MarketData:
+def load_market_data(as_of: pd.Timestamp | None = None) -> MarketData:
     """Load the cache produced by this repository's market-report collector."""
 
     snapshots = sorted(UNIVERSE_CACHE.glob("sp500_*.parquet"))
+    if as_of is not None:
+        snapshots = [path for path in snapshots if pd.Timestamp(path.stem.split("_")[-1]) <= as_of]
     if not snapshots:
         raise FileNotFoundError("S&P 500 universe snapshot is missing")
     snapshot_path = snapshots[-1]
@@ -179,11 +181,12 @@ def report_market_dates(
     report_date = pd.Timestamp(report_date).normalize()
     if report_date.dayofweek >= 5:
         raise ValueError("Reports are generated only Monday through Friday (KST)")
-    completed = calendar[calendar < report_date]
-    executable = calendar[calendar >= report_date]
-    if completed.empty or executable.empty:
-        raise ValueError(f"No cached US session can bracket report date {report_date.date()}")
-    return pd.Timestamp(completed[-1]), pd.Timestamp(executable[0])
+    from .report_time import expected_market_date, next_execution_date
+
+    expected = expected_market_date(report_date)
+    if expected not in calendar:
+        raise ValueError(f"Missing completed US session {expected.date()}")
+    return expected, next_execution_date(report_date)
 
 
 def members_on_date(data: MarketData, _signal_date: pd.Timestamp) -> set[str]:
@@ -382,7 +385,8 @@ def build_device_payload(
         if completed.empty:
             raise ValueError("No completed US session is available for the preview")
         signal_date = pd.Timestamp(completed[-1])
-        execution_date = report_date
+        from .report_time import next_execution_date
+        execution_date = next_execution_date(report_date)
         stale_preview = True
 
     ranking = build_daily_ranking(data, signal_date)
@@ -456,6 +460,7 @@ def build_device_payload(
     ]
     return {
         "schema_version": SCHEMA_VERSION,
+        "generated_at": pd.Timestamp.now(tz="UTC").isoformat(),
         "report_date_kst": str(report_date.date()),
         "report_time_kst": "07:30",
         "signal_market_date": str(signal_date.date()),
@@ -508,21 +513,10 @@ def build_device_payload(
 
 
 def upload_r2(path: Path, bucket: str) -> None:
-    from .publish_market_report_web import _r2_client
-
-    client = _r2_client()
-    body = path.read_bytes()
-    object_key = "portfolio-reports/latest.json"
-    client.put_object(
-        Bucket=bucket,
-        Key=object_key,
-        Body=body,
-        ContentType="application/json; charset=utf-8",
-        CacheControl="public, max-age=60, stale-while-revalidate=3600",
+    raise RuntimeError(
+        "Direct mutable report uploads are disabled. Use "
+        "python -m market_report_pipeline.daily_reports morning --as-of YYYY-MM-DD"
     )
-    metadata = client.head_object(Bucket=bucket, Key=object_key)
-    if int(metadata.get("ContentLength", -1)) != len(body):
-        raise RuntimeError(f"R2 upload verification failed: {object_key}")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -539,7 +533,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     payload = build_device_payload(
-        load_market_data(),
+        load_market_data(args.as_of),
         args.as_of,
         default_capital=float(args.default_capital),
         allow_stale_preview=bool(args.allow_stale_preview),

@@ -696,7 +696,8 @@ function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenTradi
       purchaseDataComplete,
     ],
   );
-  const chartData = historicalTrend.length > 0 ? historicalTrend : snapshots;
+  const [simulateHistory, setSimulateHistory] = useState(false);
+  const chartData = simulateHistory ? historicalTrend : snapshots;
 
   useEffect(() => {
     if (
@@ -1748,10 +1749,15 @@ function App({ onOpenReport, onOpenPortfolio, onOpenPortfolioReport, onOpenTradi
         )}
 
         <div className="chart-wrap">
+          <fieldset aria-label="자산 추이 기준">
+            <label><input type="radio" name="history-basis" checked={!simulateHistory} onChange={() => setSimulateHistory(false)} />저장된 평가 기록</label>
+            <label><input type="radio" name="history-basis" checked={simulateHistory} onChange={() => setSimulateHistory(true)} />현재 보유 기준 시뮬레이션</label>
+          </fieldset>
           <AssetChart data={chartData} currency="KRW" initialPeriod="1Y" />
           <div className="chart-demo-note">
             <Database size={14} />
-            {historicalTrend.length > 0
+            {!simulateHistory ? "이 브라우저에서 종가 기준일별로 저장한 평가 기록입니다."
+              : historicalTrend.length > 0
               ? `현재 보유수량과 현금을 고정해 R2 과거 종가 ${NUMBER.format(
                   historicalTrend.length,
                 )}개 기준일을 재계산했습니다.`

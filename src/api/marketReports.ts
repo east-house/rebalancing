@@ -1,4 +1,7 @@
+import { reportJson as fetchJson } from "./reportTransport";
+
 export interface MarketReportIndexItem {
+  publicationStatus?: string;
   displayDate: string;
   marketDate: string;
   generatedAt: string;
@@ -9,6 +12,7 @@ export interface MarketReportIndexItem {
 }
 
 export interface MarketReportIndex {
+  releaseId?: string;
   schemaVersion: number;
   updatedAt: string;
   latestDisplayDate: string;
@@ -21,6 +25,8 @@ export type MarketReportRow = Record<
 >;
 
 export interface MarketReportBundle {
+  releaseId?: string;
+  reconstructed?: boolean;
   schemaVersion: number;
   displayDate: string;
   marketDate: string;
@@ -46,25 +52,6 @@ export interface MarketReportBundle {
   newsClusters?: MarketReportRow[];
   transmissions?: MarketReportRow[];
   quality: Record<string, unknown>;
-}
-
-async function fetchJson<T>(primary: string, fallback: string): Promise<T> {
-  const paths = [primary, fallback];
-  let lastError: unknown;
-  for (const path of paths) {
-    try {
-      const response = await fetch(path, { headers: { accept: "application/json" } });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        throw new Error("JSON 응답이 아닙니다.");
-      }
-      return (await response.json()) as T;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("리포트 데이터를 불러오지 못했습니다.");
 }
 
 function assertIndex(value: MarketReportIndex): MarketReportIndex {
@@ -95,13 +82,13 @@ export async function loadMarketReportIndex(): Promise<MarketReportIndex> {
   );
 }
 
-export async function loadMarketReport(displayDate: string): Promise<MarketReportBundle> {
+export async function loadMarketReport(displayDate: string, releaseId?: string): Promise<MarketReportBundle> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(displayDate)) {
     throw new Error("잘못된 리포트 날짜입니다.");
   }
   return assertBundle(
     await fetchJson<MarketReportBundle>(
-      `/api/market-reports/${displayDate}`,
+      `/api/market-reports/${displayDate}${releaseId ? `?release=${encodeURIComponent(releaseId)}` : ""}`,
       `/data/market-reports/${displayDate}.json`,
     ),
   );
@@ -126,19 +113,12 @@ export function selectReportForKoreaDate(
 }
 
 function isReportAvailable(report: MarketReportIndexItem, now: Date): boolean {
+  if (report.publicationStatus === "published") return true;
   const displayDay = new Date(`${report.displayDate}T12:00:00+09:00`).getUTCDay();
   if (displayDay === 0 || displayDay === 6) return false;
   const releaseTime = Date.parse(`${report.displayDate}T07:30:00+09:00`);
   if (!Number.isFinite(releaseTime) || releaseTime > now.getTime()) return false;
 
-  const normalizedGeneratedAt = report.generatedAt.includes("T")
-    ? report.generatedAt
-    : report.generatedAt.replace(" ", "T");
-  const generatedAt = new Date(normalizedGeneratedAt);
-  if (!Number.isNaN(generatedAt.getTime())) {
-    const generatedDate = koreaCalendarDate(generatedAt);
-    if (generatedDate < report.displayDate) return false;
-  }
   return true;
 }
 

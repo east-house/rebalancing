@@ -6,7 +6,8 @@ import type { PortfolioReportPayload } from "../../api/portfolioReport";
 import PortfolioReportPage from "./PortfolioReportPage";
 
 vi.mock("../../api/portfolioReport", () => ({
-  loadPortfolioReport: vi.fn(() => Promise.resolve(reportJson as PortfolioReportPayload)),
+  loadPortfolioReportIndex: vi.fn(() => Promise.resolve({ reports: [] })),
+  loadPortfolioReport: vi.fn(() => Promise.resolve({ ...reportJson, stale_preview: false } as PortfolioReportPayload)),
 }));
 
 const navigation = {

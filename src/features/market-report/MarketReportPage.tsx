@@ -1,4 +1,6 @@
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { useReportRefresh } from "../../api/useReportRefresh";
+import ReportPublicationStatus from "../../components/ReportPublicationStatus";
 import {
   Activity,
   ArrowDown,
@@ -165,7 +167,8 @@ export default function MarketReportPage({
   onOpenEtfCompare,
   now,
 }: MarketReportPageProps) {
-  const [currentTime] = useState(() => now ?? new Date());
+  const refresh = useReportRefresh();
+  const currentTime = useMemo(() => now ?? new Date(), [now, refresh]);
   const [index, setIndex] = useState<MarketReportIndex | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [report, setReport] = useState<MarketReportBundle | null>(null);
@@ -180,7 +183,8 @@ export default function MarketReportPage({
         if (!active) return;
         const initial = selectReportForKoreaDate(value.reports, currentTime);
         setIndex(value);
-        setSelectedDate(initial?.displayDate ?? "");
+        setSelectedDate((previous) => previous && previous !== index?.latestDisplayDate ? previous : initial?.displayDate ?? "");
+        setError("");
       })
       .catch((reason: unknown) => {
         if (active) {
@@ -198,7 +202,7 @@ export default function MarketReportPage({
     let active = true;
     setLoading(true);
     setError("");
-    loadMarketReport(selectedDate)
+    loadMarketReport(selectedDate, index?.releaseId)
       .then((value) => {
         if (active) setReport(value);
       })
@@ -211,7 +215,7 @@ export default function MarketReportPage({
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [selectedDate]);
+  }, [selectedDate, index?.releaseId, refresh]);
 
   useEffect(() => {
     if (!dashboardExpanded) return;
@@ -308,6 +312,8 @@ export default function MarketReportPage({
               <section className="report-hero">
                 <div>
                   <span className="report-eyebrow">{koreanDate(report.displayDate)} · KOREA VIEW</span>
+                  <ReportPublicationStatus product="market-reports" />
+                  {report.reconstructed && <p role="status">과거일 재구성 보고서</p>}
                   <h1>전 거래일의 시장을<br />한 흐름으로 읽습니다.</h1>
                   <p>{text(state, "interpretation")}</p>
                 </div>

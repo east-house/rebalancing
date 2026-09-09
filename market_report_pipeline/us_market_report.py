@@ -26,7 +26,6 @@ from urllib.parse import quote_plus
 
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
-import exchange_calendars as xcals
 import numpy as np
 import pandas as pd
 import requests
@@ -150,9 +149,9 @@ def _expected_market_date(as_of: pd.Timestamp) -> pd.Timestamp:
     use Friday instead of requesting an in-progress Monday candle.
     """
 
-    candidate = as_of.normalize() - pd.offsets.Day(1)
-    session = xcals.get_calendar("XNYS").date_to_session(candidate, direction="previous")
-    return pd.Timestamp(session).tz_localize(None).normalize()
+    from .report_time import expected_market_date
+
+    return expected_market_date(as_of)
 
 
 def _completed_price_rows(frame: pd.DataFrame) -> pd.DataFrame:
@@ -201,7 +200,7 @@ def collect_context_prices(
                 atomic_write_parquet(cached, target)
             return (
                 symbol,
-                cached.loc[cached["date"].ge(settings.history_start)].copy(),
+                cached.loc[cached["date"].between(settings.history_start, expected_latest)].copy(),
                 True,
                 None,
             )
@@ -225,19 +224,20 @@ def collect_context_prices(
                 raise
             return (
                 symbol,
-                cached.loc[cached["date"].ge(settings.history_start)].copy(),
+                cached.loc[cached["date"].between(settings.history_start, expected_latest)].copy(),
                 True,
                 str(error),
             )
         result = _merge_cache(cached, update) if not cached.empty else update
         result = _completed_price_rows(result)
-        result = result.loc[result["date"].between(settings.history_start, settings.as_of)]
+        # Preserve the full download cache, but return only this report's completed sessions.
+        atomic_write_parquet(result, target)
+        result = result.loc[result["date"].between(settings.history_start, expected_latest)]
         if result.empty:
             raise RuntimeError(
                 f"No completed OHLC rows are available for {symbol} through "
                 f"{expected_latest.date()}"
             )
-        atomic_write_parquet(result, target)
         latest = pd.to_datetime(result["date"]).max()
         stale_reason = (
             f"Provider returned no completed OHLC through {expected_latest.date()}"
@@ -1844,6 +1844,8 @@ def run_market_report(settings: MarketRunSettings) -> dict[str, Any]:
         raise RuntimeError(f"Market report validation failed: {validation}")
 
     LOGGER.info("9/10 Writing market-only source artifacts")
+    atomic_write_parquet(prices, settings.output_dir / "input_prices.parquet")
+    atomic_write_parquet(universe, settings.output_dir / "input_universe.parquet")
     overview = pd.concat([indices, risks], ignore_index=True)
     atomic_write_csv(overview, settings.output_dir / "market_overview.csv")
     atomic_write_csv(sectors, settings.output_dir / "sector_leadership.csv")
@@ -2013,7 +2015,8 @@ def rerender_market_html(output_dir: Path, as_of: pd.Timestamp) -> dict[str, Any
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", choices=["run", "render-html"], default="run")
-    parser.add_argument("--as-of", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
+    from .report_time import korean_today
+    parser.add_argument("--as-of", default=korean_today().isoformat())
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--refresh", action="store_true")

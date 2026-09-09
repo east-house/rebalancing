@@ -241,4 +241,10 @@ describe("portfolioStorage", () => {
       { date: "2026-07-24", totalValue: 200 },
     ]);
   });
+
+  it("keeps newer snapshots when an older price response arrives", () => {
+    expect(upsertSnapshotForDate([{ date: "2026-09-09", totalValue: 300 }], 200, "2026-09-08")).toEqual([
+      { date: "2026-09-08", totalValue: 200 }, { date: "2026-09-09", totalValue: 300 },
+    ]);
+  });
 });

@@ -154,7 +154,7 @@ describe("market report Worker API", () => {
     };
     const env = {
       MARKET_DATA: {
-        get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }),
+        get: vi.fn().mockImplementation(async (key) => key.endsWith("/current.json") ? null : { body: JSON.stringify(payload) }),
       },
       ASSETS: { fetch: vi.fn() },
     };
@@ -188,7 +188,7 @@ describe("market report Worker API", () => {
     const image = new Uint8Array([137, 80, 78, 71]);
     const env = {
       MARKET_DATA: {
-        get: vi.fn().mockResolvedValue({ body: image }),
+        get: vi.fn().mockImplementation(async (key) => key.endsWith("/current.json") ? null : { body: image }),
       },
       ASSETS: { fetch: vi.fn() },
     };
@@ -210,7 +210,7 @@ describe("portfolio report Worker API", () => {
     const payload = { schema_version: 1, report_date_kst: "2026-08-17" };
     const env = {
       MARKET_DATA: {
-        get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }),
+        get: vi.fn().mockImplementation(async (key) => key.endsWith("/current.json") ? null : { body: JSON.stringify(payload) }),
       },
       ASSETS: { fetch: vi.fn() },
     };
@@ -231,7 +231,7 @@ describe("trading-test report Worker API", () => {
   it("serves the dated IRCS paper-account report from R2", async () => {
     const payload = { schemaVersion: 1, reportDate: "2026-08-27", marketDate: "2026-08-26" };
     const env = {
-      MARKET_DATA: { get: vi.fn().mockResolvedValue({ body: JSON.stringify(payload) }) },
+      MARKET_DATA: { get: vi.fn().mockImplementation(async (key) => key.endsWith("/current.json") ? null : { body: JSON.stringify(payload) }) },
       ASSETS: { fetch: vi.fn() },
     };
     const worker = (await import("./index.js")).default;
@@ -254,6 +254,48 @@ describe("trading-test report Worker API", () => {
       { MARKET_DATA: { get } },
       {},
     );
+    expect(response.status).toBe(400);
+    expect(get).not.toHaveBeenCalled();
+  });
+});
+
+describe("committed report releases", () => {
+  const manifest = { releaseId: "abc", objects: {
+    "market-reports/2026-09-09.json": { key: "report-publications/morning/objects/digest", contentType: "application/json" },
+  }, jobs: {} };
+
+  it("reads only the committed version and identifies its release", async () => {
+    const worker = (await import("./index.js")).default;
+    const get = vi.fn(async (key) => ({ body: JSON.stringify(key.endsWith("current.json") ? manifest : { displayDate: "2026-09-09" }) }));
+    const response = await worker.fetch(new Request("https://example.com/api/market-reports/2026-09-09?release=abc"), { MARKET_DATA: { get } }, {});
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-report-release")).toBe("abc");
+    expect(response.headers.get("cache-control")).not.toContain("immutable");
+    expect(get).toHaveBeenLastCalledWith("report-publications/morning/objects/digest");
+  });
+
+  it("rejects a mixed-release request", async () => {
+    const worker = (await import("./index.js")).default;
+    const get = vi.fn(async () => ({ body: JSON.stringify(manifest) }));
+    const response = await worker.fetch(new Request("https://example.com/api/market-reports/2026-09-09?release=old"), { MARKET_DATA: { get } }, {});
+    expect(response.status).toBe(409);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not conceal production storage failures with static data", async () => {
+    const worker = (await import("./index.js")).default;
+    const fallback = vi.fn();
+    const response = await worker.fetch(new Request("https://example.com/api/portfolio-reports/latest"), {
+      MARKET_DATA: { get: vi.fn().mockRejectedValue(new Error("outage")) }, ASSETS: { fetch: fallback },
+    }, {});
+    expect(response.status).toBe(502);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it.each(["2026-02-30", "2026-13-01", "state/latest.json"])("rejects invalid/private report path %s", async (path) => {
+    const worker = (await import("./index.js")).default;
+    const get = vi.fn();
+    const response = await worker.fetch(new Request(`https://example.com/api/trading-test-reports/${path}`), { MARKET_DATA: { get } }, {});
     expect(response.status).toBe(400);
     expect(get).not.toHaveBeenCalled();
   });

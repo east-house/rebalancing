@@ -15,7 +15,6 @@ import pandas as pd
 
 
 SCHEMA_VERSION = 2
-MAX_INDEX_REPORTS = 520
 
 
 def report_display_date(manifest: dict[str, Any]) -> pd.Timestamp:
@@ -161,21 +160,12 @@ def update_index(target_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
     existing = index.get("reports", [])
     if not isinstance(existing, list):
         existing = []
-    valid_existing = []
-    for item in existing:
-        display_date = str(item.get("displayDate", ""))
-        generated_at = item.get("generatedAt")
-        if display_date and generated_at:
-            generated = pd.Timestamp(generated_at)
-            if generated.tzinfo is not None:
-                generated = generated.tz_convert("Asia/Seoul")
-            if generated.strftime("%Y-%m-%d") < display_date:
-                continue
-        valid_existing.append(item)
+    valid_existing = [item for item in existing if isinstance(item, dict) and item.get("displayDate")]
     state = bundle["summary"]["state"]
     top_sector = bundle["summary"].get("topSector") or {}
     top_theme = bundle["summary"].get("topTheme") or {}
     entry = {
+        **({"publicationStatus": "published"} if bundle.get("publicationStatus") == "published" else {}),
         "displayDate": bundle["displayDate"],
         "marketDate": bundle["marketDate"],
         "generatedAt": bundle["generatedAt"],
@@ -188,9 +178,7 @@ def update_index(target_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
         item for item in valid_existing if item.get("displayDate") != bundle["displayDate"]
     ]
     reports.append(entry)
-    reports = sorted(reports, key=lambda item: str(item.get("displayDate", "")), reverse=True)[
-        :MAX_INDEX_REPORTS
-    ]
+    reports = sorted(reports, key=lambda item: str(item.get("displayDate", "")), reverse=True)
     result = {
         "schemaVersion": SCHEMA_VERSION,
         "updatedAt": bundle["generatedAt"],
@@ -255,32 +243,10 @@ def hydrate_index_from_r2(project_root: Path, bucket: str) -> bool:
 
 
 def upload_r2(report_path: Path, index_path: Path, bucket: str) -> None:
-    client = _r2_client()
-    objects = [
-        (report_path, f"market-reports/{report_path.name}", "application/json; charset=utf-8", "public, max-age=31536000, immutable"),
-    ]
-    html_path = report_path.with_suffix(".html")
-    if html_path.exists():
-        objects.append(
-            (html_path, f"market-reports/{html_path.name}", "text/html; charset=utf-8", "public, max-age=31536000, immutable")
-        )
-    image_path = report_path.with_suffix(".png")
-    if image_path.exists():
-        objects.append((image_path, f"market-reports/{image_path.name}", "image/png", "public, max-age=31536000, immutable"))
-    # Publish the index last so readers never see an entry before its assets exist.
-    objects.append((index_path, "market-reports/index.json", "application/json; charset=utf-8", "public, max-age=60"))
-    for local_path, object_key, content_type, cache_control in objects:
-        body = local_path.read_bytes()
-        client.put_object(
-            Bucket=bucket,
-            Key=object_key,
-            Body=body,
-            ContentType=content_type,
-            CacheControl=cache_control,
-        )
-        metadata = client.head_object(Bucket=bucket, Key=object_key)
-        if int(metadata.get("ContentLength", -1)) != len(body):
-            raise RuntimeError(f"R2 upload verification failed: {object_key}")
+    raise RuntimeError(
+        "Direct mutable report uploads are disabled. Use "
+        "python -m market_report_pipeline.daily_reports morning --as-of YYYY-MM-DD"
+    )
 
 
 def parse_args() -> argparse.Namespace:

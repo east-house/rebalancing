@@ -295,3 +295,6 @@
   .portfolio-report-controls input[type="number"] { width: 100%; }
   .portfolio-report-controls button { width: 100%; }
 }
+.portfolio-report-main > label { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.portfolio-report-main > label select { min-height: 36px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: white; color: var(--text); }
+.portfolio-report-main button:disabled { opacity: .45; cursor: not-allowed; }

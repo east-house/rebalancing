@@ -17,6 +17,7 @@ export interface DevicePosition {
 }
 
 export interface DeviceHistory {
+  sourceRevision?: string;
   reportDate: string;
   marketDate: string;
   type: "INITIAL" | "DAILY" | "APPLY" | "CAPITAL_CHANGE";

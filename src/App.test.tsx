@@ -124,6 +124,8 @@ describe("App", () => {
     expect(screen.getByText("당일 종가 우선")).toBeTruthy();
     expect(screen.getAllByText("$500.00").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "현재 비중" })).toBeNull();
+    expect(screen.getByText("이 브라우저에서 종가 기준일별로 저장한 평가 기록입니다.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "현재 보유 기준 시뮬레이션" }));
     expect(
       await screen.findByText(/현재 보유수량과 현금을 고정해 R2 과거 종가/),
     ).toBeTruthy();

@@ -1,3 +1,5 @@
+import { reportJson } from "./reportTransport";
+
 export interface PortfolioReportQuote {
   ticker: string;
   name: string;
@@ -34,6 +36,9 @@ export interface PortfolioReportCandidate extends PortfolioReportQuote {
 }
 
 export interface PortfolioReportPayload {
+  releaseId?: string;
+  reconstructed?: boolean;
+  dataSource?: string;
   schema_version: number;
   generated_at?: string;
   report_date_kst: string;
@@ -100,16 +105,16 @@ function parsePayload(value: unknown): PortfolioReportPayload {
   return payload;
 }
 
-async function fetchPayload(path: string): Promise<PortfolioReportPayload> {
-  const response = await fetch(path, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-  return parsePayload(await response.json());
+export interface PortfolioReportIndex {
+  releaseId?: string;
+  reports: { reportDate: string; marketDate: string }[];
 }
 
-export async function loadPortfolioReport(): Promise<PortfolioReportPayload> {
-  try {
-    return await fetchPayload("/api/portfolio-reports/latest");
-  } catch {
-    return fetchPayload("/data/portfolio-reports/latest.json");
-  }
+export async function loadPortfolioReportIndex(): Promise<PortfolioReportIndex> {
+  return reportJson("/api/portfolio-reports", "/data/portfolio-reports/index.json");
+}
+
+export async function loadPortfolioReport(day = "latest", releaseId?: string): Promise<PortfolioReportPayload> {
+  if (day !== "latest" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
+  return parsePayload(await reportJson(`/api/portfolio-reports/${day}${releaseId ? `?release=${releaseId}` : ""}`, `/data/portfolio-reports/${day}.json`));
 }

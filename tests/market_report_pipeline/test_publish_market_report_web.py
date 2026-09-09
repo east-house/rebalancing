@@ -55,7 +55,7 @@ def test_update_index_replaces_same_display_date_and_sorts(tmp_path: Path) -> No
     assert result["reports"][0]["topTheme"] == "사이버보안"
 
 
-def test_update_index_removes_report_generated_before_its_display_date(tmp_path: Path) -> None:
+def test_update_index_preserves_legacy_report_generated_before_its_display_date(tmp_path: Path) -> None:
     target = tmp_path / "market-reports"
     target.mkdir()
     (target / "index.json").write_text(
@@ -86,7 +86,7 @@ def test_update_index_removes_report_generated_before_its_display_date(tmp_path:
 
     result = MODULE.update_index(target, bundle)
 
-    assert [item["displayDate"] for item in result["reports"]] == ["2026-08-16"]
+    assert [item["displayDate"] for item in result["reports"]] == ["2026-08-17", "2026-08-16"]
 
 
 def test_hydrate_index_restores_durable_r2_history(tmp_path: Path, monkeypatch) -> None:
@@ -130,7 +130,6 @@ def test_upload_r2_publishes_index_after_immutable_assets(tmp_path: Path, monkey
 
     monkeypatch.setattr(MODULE, "_r2_client", lambda: FakeClient())
 
-    MODULE.upload_r2(report, index, "bucket")
-
-    assert uploaded[-1] == "market-reports/index.json"
-    assert "market-reports/2026-08-17.png" in uploaded
+    with pytest.raises(RuntimeError, match="Direct mutable report uploads are disabled"):
+        MODULE.upload_r2(report, index, "bucket")
+    assert uploaded == []
