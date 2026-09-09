@@ -97,6 +97,20 @@ def generate_morning(day: str, output: Path):
     write_json(payload, output / "portfolio.json")
 
 
+def initialize_daily_policy(store: ReportStore, legacy_dates: list[str], now) -> None:
+    if store.product != "morning" or store.manifest.get("dailyStartDate"):
+        return
+    jobs = store.manifest.get("jobs", {})
+    successful = [day for day, item in jobs.items() if item["status"] == "published"]
+    # Freeze this boundary once: advancing it later would hide new daily failures.
+    start = min(successful) if successful else max(legacy_dates, default=korean_today(now).isoformat())
+    completed = set(legacy_dates) | set(successful)
+    earliest = min([*jobs, *legacy_dates, start])
+    recovery = [day for day in due_dates("morning", earliest, completed, now) if day < start]
+    store.manifest.update(dailyStartDate=start, recoveryDates=recovery)
+    store.commit()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kind", choices=["morning", "trading"])
@@ -104,9 +118,12 @@ def main():
     parser.add_argument("--revise", action="store_true")
     parser.add_argument("--reset-ledger", action="store_true")
     parser.add_argument("--repair-index", action="store_true")
+    parser.add_argument("--recover-history", action="store_true")
     args = parser.parse_args()
-    if args.kind == "trading" and (args.repair_index or args.revise):
-        parser.error("--repair-index and --revise apply only to morning reports")
+    if args.kind == "trading" and (args.repair_index or args.revise or args.recover_history):
+        parser.error("Archive recovery and --revise apply only to morning reports")
+    if args.recover_history and (args.as_of or args.revise or args.repair_index):
+        parser.error("--recover-history cannot be combined with other recovery options")
     if args.kind == "morning" and args.reset_ledger:
         parser.error("--reset-ledger applies only to trading reports")
     store = ReportStore.from_environment(args.kind)
@@ -136,7 +153,19 @@ def main():
     else:
         if args.reset_ledger or args.revise:
             raise ValueError("A revision or ledger rebuild requires an explicit --as-of date")
-        targets = due_dates(args.kind, start, completed, now)
+        initialize_daily_policy(store, legacy_dates, now)
+        if args.recover_history:
+            targets = [day for day in store.manifest.get("recoveryDates", []) if day not in completed]
+        else:
+            start = store.manifest.get("dailyStartDate", start)
+            targets = due_dates(args.kind, start, completed, now)
+    pending_recovery = [day for day in store.manifest.get("recoveryDates", []) if day not in completed]
+    if pending_recovery and not args.recover_history:
+        message = "Historical recovery pending (separate from daily publication): " + ", ".join(pending_recovery)
+        print(message)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as file:
+                file.write("\n" + message + "\n")
     failures = []
     for day in targets:
         try:

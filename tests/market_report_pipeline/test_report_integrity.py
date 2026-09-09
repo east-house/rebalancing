@@ -199,7 +199,7 @@ def test_ircs_holiday_rerun_preserves_completed_trades_and_original_timestamp(tm
         ircs.run(pd.Timestamp("2026-09-05"), tmp_path, upload_r2=True, reset_ledger=True)
 
 
-def test_runner_recovers_legacy_holes_even_when_job_history_starts_later(monkeypatch):
+def test_runner_separates_legacy_holes_from_daily_publication(monkeypatch):
     import sys
     from market_report_pipeline import daily_reports as daily
 
@@ -214,7 +214,68 @@ def test_runner_recovers_legacy_holes_even_when_job_history_starts_later(monkeyp
     monkeypatch.setattr(daily, "publish_morning", lambda *args, **kwargs: None)
     monkeypatch.setattr(sys, "argv", ["reports", "morning"])
     daily.main()
-    assert seen == ["2026-09-07", "2026-09-09"]
+    assert seen == ["2026-09-09"]
+    saved = ReportStore(client, "b", "morning")
+    assert saved.manifest["dailyStartDate"] == "2026-09-08"
+    assert saved.manifest["recoveryDates"] == ["2026-09-07"]
+    seen.clear()
+    monkeypatch.setattr(sys, "argv", ["reports", "morning", "--recover-history"])
+    daily.main()
+    assert seen == ["2026-09-07"]
+
+
+def test_daily_failures_remain_retryable_after_a_later_success(tmp_path, monkeypatch):
+    import sys
+    from market_report_pipeline import daily_reports as daily
+
+    monkeypatch.chdir(tmp_path)
+    client = FakeS3()
+    store = ReportStore(client, "b", "morning")
+    store.stage("market-reports/index.json", {"reports": [{"displayDate": "2026-09-09"}]})
+    store.commit(job_date="2026-09-03", status="failed", details={"error": "news missing"})
+    store.commit(job_date="2026-09-09")
+    monkeypatch.setattr(ReportStore, "from_environment", lambda _: ReportStore(client, "b", "morning"))
+    monkeypatch.setattr(daily, "utc_now", lambda: datetime(2026, 9, 11, 0, tzinfo=timezone.utc))
+    seen = []
+
+    def generate(day, _):
+        seen.append(day)
+        if day == "2026-09-10":
+            raise ValueError("daily provider failure")
+
+    monkeypatch.setattr(daily, "generate_morning", generate)
+    monkeypatch.setattr(daily, "publish_morning", lambda store, day, *args, **kwargs: store.commit(job_date=day))
+    monkeypatch.setattr(sys, "argv", ["reports", "morning"])
+    with pytest.raises(RuntimeError, match="daily provider failure"):
+        daily.main()
+    assert seen == ["2026-09-10", "2026-09-11"]
+    saved = ReportStore(client, "b", "morning")
+    assert saved.manifest["dailyStartDate"] == "2026-09-09"
+    assert saved.manifest["jobs"]["2026-09-03"]["error"] == "news missing"
+    assert saved.manifest["jobs"]["2026-09-11"]["status"] == "published"
+    seen.clear()
+    with pytest.raises(RuntimeError, match="daily provider failure"):
+        daily.main()
+    assert seen == ["2026-09-10"]
+
+
+def test_daily_noop_succeeds_without_erasing_failed_historical_recovery(monkeypatch):
+    import sys
+    from market_report_pipeline import daily_reports as daily
+
+    client = FakeS3()
+    store = ReportStore(client, "b", "morning")
+    store.stage("market-reports/index.json", {"reports": [{"displayDate": "2026-09-09"}]})
+    store.commit(job_date="2026-09-03", status="failed", details={"error": "news missing"})
+    store.commit(job_date="2026-09-09")
+    monkeypatch.setattr(ReportStore, "from_environment", lambda _: ReportStore(client, "b", "morning"))
+    monkeypatch.setattr(daily, "utc_now", lambda: datetime(2026, 9, 9, 0, tzinfo=timezone.utc))
+    monkeypatch.setattr(daily, "generate_morning", lambda *_: pytest.fail("No daily generation is due"))
+    monkeypatch.setattr(sys, "argv", ["reports", "morning"])
+    daily.main()
+    saved = ReportStore(client, "b", "morning")
+    assert "2026-09-03" in saved.manifest["recoveryDates"]
+    assert saved.manifest["jobs"]["2026-09-03"]["status"] == "failed"
 
 
 def test_runner_records_generation_error_even_if_failure_status_upload_fails(tmp_path, monkeypatch):

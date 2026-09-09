@@ -40,6 +40,11 @@ npm run portfolio-report:update
 
 R2 환경변수가 설정된 운영 환경에서는 `npm run report:publish-r2`로 누락분을 생성·검증·게시합니다.
 `npm run report:repair-index`는 원본이 남아 있는 시장 보고서를 목록에 복구합니다.
+일일 운영 시작일은 첫 정상 게시 기록(없으면 최신 기존 보고일)을 기준으로 한 번만 저장합니다.
+그 이후 누락분은 자동 재시도하며, 이전 누락분은 별도 `recoveryDates` 목록에 보존합니다.
+과거 자료 재구성은 수동 실행의 `Retry historical recovery only (not daily publication)` 옵션 또는
+`python -m market_report_pipeline.daily_reports morning --recover-history`로 별도 실행합니다.
+과거 복구 실패는 일일 작업 성공 여부와 분리되지만 화면과 상태 API에서 미완료로 계속 표시됩니다.
 개별 생성기의 직접 R2 업로드는 차단했습니다. GitHub Actions는 기존 종가 수집 작업과 동일한
 `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`을
 사용합니다.

@@ -44,7 +44,9 @@ export async function handlePublishedReport(request, env) {
     if (manifest && (!manifest.releaseId || !manifest.objects)) return jsonError("Invalid publication manifest.", 502);
     if (route.status) {
       return new Response(JSON.stringify({ releaseId: manifest?.releaseId ?? null, codeSha: manifest?.codeSha ?? null,
-        publishedAt: manifest?.publishedAt ?? null, jobs: manifest?.jobs ?? {}, serverTime: new Date().toISOString() }),
+        publishedAt: manifest?.publishedAt ?? null, jobs: manifest?.jobs ?? {},
+        dailyStartDate: manifest?.dailyStartDate ?? null, recoveryDates: manifest?.recoveryDates ?? [],
+        serverTime: new Date().toISOString() }),
       { headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }
     const expectedRelease = url.searchParams.get("release");

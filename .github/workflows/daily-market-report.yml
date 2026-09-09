@@ -18,6 +18,10 @@ on:
         description: "Recover the archive index without new collection"
         default: false
         type: boolean
+      recover_history:
+        description: "Retry historical recovery only (not daily publication)"
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -65,12 +69,14 @@ jobs:
           REVISE: ${{ inputs.revise || false }}
           RESET_LEDGER: ${{ inputs.reset_ledger || false }}
           REPAIR_INDEX: ${{ inputs.repair_index || false }}
+          RECOVER_HISTORY: ${{ inputs.recover_history || false }}
         run: |
           args=(morning)
           if [[ -n "${REQUESTED_DATE}" ]]; then args+=(--as-of "${REQUESTED_DATE}"); fi
           if [[ "${REVISE}" == "true" ]]; then args+=(--revise); fi
           if [[ "${RESET_LEDGER}" == "true" ]]; then args+=(--reset-ledger); fi
           if [[ "${REPAIR_INDEX}" == "true" ]]; then args+=(--repair-index); fi
+          if [[ "${RECOVER_HISTORY}" == "true" ]]; then args+=(--recover-history); fi
           mkdir -p action-output
           set -o pipefail
           python -m market_report_pipeline.daily_reports "${args[@]}" 2>&1 | tee action-output/daily.log

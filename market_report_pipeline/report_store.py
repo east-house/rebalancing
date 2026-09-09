@@ -88,6 +88,9 @@ class ReportStore:
         manifest = {"schemaVersion": 1, "objects": objects, "jobs": jobs,
                     "publishedAt": utc_now().isoformat(), "codeSha": os.environ.get("GITHUB_SHA", "local"),
                     "previousReleaseId": self.manifest.get("releaseId")}
+        for field in ("dailyStartDate", "recoveryDates"):
+            if field in self.manifest:
+                manifest[field] = self.manifest[field]
         release_id = hashlib.sha256(encode(manifest)).hexdigest()
         manifest["releaseId"] = release_id
         body = encode(manifest)
