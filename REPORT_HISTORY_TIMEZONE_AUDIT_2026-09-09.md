@@ -73,7 +73,14 @@ R2 쓰기 성공을 입증하지는 않지만, 이번 실패는 게시 단계보
 문서화한다. `timezone: Asia/Seoul`을 무효 문법으로 진단하거나 UTC로 중복 보정하면 안 된다.
 [GitHub 공식 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 
-### 직접 예외는 아직 미확정
+### 직접 예외 확인 (2026-09-10 정정)
+
+인증된 로그와 artifact를 확보하여 `fresh=6, required=490` 가격 신선도 검증 실패를 확인했습니다.
+547종목에 기대 거래일 2026-09-08의 완성 가격이 없었습니다.
+아래는 최초 조사 당시의 제약과 가설이며, 구성목록 타임아웃 가설은 이번 실패 원인에서 제외합니다.
+상세 근거는 [실패 원인 확인 보고서](./ACTIONS_FAILURE_RCA_2026-09-10.md)를 참고하세요.
+
+### 최초 조사 당시 상태
 
 공개 annotation에는 `Process completed with exit code 1.`만 있다.
 상세 로그 API는 HTTP 403, 진단 artifact 다운로드는 HTTP 401을 반환했다.

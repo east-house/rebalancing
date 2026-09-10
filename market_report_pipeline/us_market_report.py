@@ -218,6 +218,7 @@ def collect_context_prices(
                 expected_latest + pd.offsets.Day(1),
                 timeout=int(data_cfg["request_timeout_seconds"]),
                 max_retries=int(data_cfg["max_retries"]),
+                expected_latest=expected_latest,
             ))
         except Exception as error:  # noqa: BLE001
             if cached.empty:
