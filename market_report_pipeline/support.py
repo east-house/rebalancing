@@ -120,6 +120,7 @@ def _download_yahoo_frame(
     timeout: int,
     max_retries: int,
     expected_latest: pd.Timestamp | None = None,
+    single_attempt: int | None = None,
 ) -> pd.DataFrame:
     """Download split/dividend-adjusted daily OHLCV from Yahoo Chart."""
 
@@ -140,7 +141,10 @@ def _download_yahoo_frame(
         "User-Agent": "rebalancing-market-report/1.0 data-pipeline",
     }
     last_error: Exception | None = None
-    for attempt in range(1, max_retries + 1):
+    if single_attempt is not None and not 1 <= single_attempt <= max_retries:
+        raise ValueError("single_attempt must be within the shared retry budget")
+    attempts = [single_attempt] if single_attempt is not None else range(1, max_retries + 1)
+    for attempt in attempts:
         try:
             endpoint = YAHOO_CHART_URL if attempt % 2 else YAHOO_CHART_FALLBACK_URL
             response = requests.get(
@@ -194,7 +198,7 @@ def _download_yahoo_frame(
             last_error = error
             if isinstance(error, PriceDataNotReady):
                 LOGGER.warning("Yahoo %s: %s", symbol, error)
-            if attempt < max_retries:
+            if single_attempt is None and attempt < max_retries:
                 time.sleep(_retry_delay_seconds(error, attempt))
     raise RuntimeError(f"Yahoo {symbol} 수집 실패: {last_error}") from last_error
 

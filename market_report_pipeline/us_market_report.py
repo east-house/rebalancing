@@ -189,13 +189,24 @@ def collect_context_prices(
 
     data_cfg = config["data"]
     expected_latest = _expected_market_date(settings.as_of)
+    required_fresh_symbols = (
+        len(set(symbols)) if data_cfg.get("require_all_fresh_symbols", False)
+        else min(int(data_cfg.get("minimum_fresh_symbols", 490)), len(set(symbols))))
+    max_attempts = int(data_cfg.get("max_retries", 4))
+    delay = float(data_cfg.get("freshness_retry_delay_seconds", 30))
+    time_budget = float(data_cfg.get("collection_time_budget_seconds", 900))
+    if max_attempts < 1 or not math.isfinite(delay) or delay < 0 or not math.isfinite(time_budget) or time_budget <= 0:
+        raise ValueError("Invalid price collection retry limits")
+    deadline = time.monotonic() + time_budget
     STOCK_CACHE.mkdir(parents=True, exist_ok=True)
 
-    def one(symbol: str) -> tuple[str, pd.DataFrame, bool, str | None]:
+    def one(symbol: str, attempt: int) -> tuple[str, pd.DataFrame, bool, str | None]:
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Price collection time budget exhausted")
         target = STOCK_CACHE / f"{safe_symbol(symbol)}.parquet"
         raw_cached = pd.read_parquet(target) if target.exists() else pd.DataFrame()
         cached = _completed_price_rows(raw_cached)
-        if not settings.refresh and not cached.empty and cached["date"].max() >= expected_latest:
+        if not settings.refresh and not cached.empty and cached["date"].eq(expected_latest).any():
             if len(cached) != len(raw_cached):
                 atomic_write_parquet(cached, target)
             return (
@@ -205,10 +216,11 @@ def collect_context_prices(
                 None,
             )
         request_start = settings.history_start
-        if not settings.refresh and not cached.empty:
+        eligible_cache = cached.loc[cached["date"].le(expected_latest)] if not cached.empty else cached
+        if not settings.refresh and not eligible_cache.empty:
             request_start = max(
                 settings.history_start,
-                cached["date"].max()
+                eligible_cache["date"].max()
                 - pd.offsets.Day(int(data_cfg["cache_overlap_days"])),
             )
         try:
@@ -217,8 +229,9 @@ def collect_context_prices(
                 request_start,
                 expected_latest + pd.offsets.Day(1),
                 timeout=int(data_cfg["request_timeout_seconds"]),
-                max_retries=int(data_cfg["max_retries"]),
+                max_retries=max_attempts,
                 expected_latest=expected_latest,
+                single_attempt=attempt,
             ))
         except Exception as error:  # noqa: BLE001
             if cached.empty:
@@ -247,44 +260,63 @@ def collect_context_prices(
         )
         return symbol, result, not cached.empty, stale_reason
 
-    frames: list[pd.DataFrame] = []
-    failures: list[dict[str, str]] = []
-    cache_hits = 0
-    stale_cache_fallbacks = 0
+    frames_by_symbol: dict[str, pd.DataFrame] = {}
+    errors: dict[str, dict[str, str]] = {}
+    cached_symbols: set[str] = set()
+    pending = sorted(set(symbols))
+    rounds: list[dict[str, Any]] = []
+    passes: dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=int(data_cfg["request_workers"])) as executor:
-        futures = {executor.submit(one, symbol): symbol for symbol in sorted(set(symbols))}
-        for future in as_completed(futures):
-            symbol = futures[future]
-            try:
-                _, frame, cached, fallback_error = future.result()
-                frames.append(frame)
-                cache_hits += int(cached)
-                if fallback_error:
-                    stale_cache_fallbacks += 1
-                    failures.append(
-                        {
-                            "ticker": symbol,
-                            "error": fallback_error,
-                            "used_cached_data": "true",
-                        }
-                    )
-            except Exception as error:  # noqa: BLE001
-                failures.append(
-                    {
-                        "ticker": symbol,
-                        "error": str(error),
-                        "used_cached_data": "false",
-                    }
-                )
+        for attempt in range(1, max_attempts + 1):
+            if attempt > 1:
+                if time.monotonic() + delay >= deadline:
+                    break
+                LOGGER.warning("Retrying %s incomplete price series in %.1f seconds (round %s/%s)", len(pending), delay, attempt, max_attempts)
+                # Wait once per batch, never once per missing ticker.
+                time.sleep(delay)
+            checked = list(pending)
+            futures = {executor.submit(one, symbol, attempt): symbol for symbol in checked}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                passes[symbol] = attempt
+                try:
+                    _, frame, cached, fallback_error = future.result()
+                    frames_by_symbol[symbol] = frame
+                    if cached:
+                        cached_symbols.add(symbol)
+                    if fallback_error:
+                        errors[symbol] = {"ticker": symbol, "error": fallback_error, "used_cached_data": "true"}
+                    else:
+                        errors.pop(symbol, None)
+                except Exception as error:  # noqa: BLE001
+                    errors[symbol] = {"ticker": symbol, "error": str(error), "used_cached_data": "false"}
+            pending = sorted(errors)
+            rounds.append({"attempt": attempt, "checked_symbols": len(checked), "unresolved_symbols": pending})
+            write_json({"expected_latest": expected_latest, "rounds": rounds}, settings.output_dir / "price_collection_progress.json")
+            if not pending or time.monotonic() >= deadline:
+                break
+    frames = [frames_by_symbol[symbol] for symbol in sorted(frames_by_symbol)]
+    failures = [errors[symbol] for symbol in sorted(errors)]
+    cache_hits = len(cached_symbols)
+    stale_cache_fallbacks = sum(item["used_cached_data"] == "true" for item in failures)
+    symbol_checks = []
+    for symbol in sorted(set(symbols)):
+        frame = frames_by_symbol.get(symbol)
+        latest = frame["date"].max() if frame is not None and not frame.empty else None
+        symbol_checks.append({"ticker": symbol, "latest_complete_date": latest,
+                              "fresh": bool(latest is not None and latest == expected_latest),
+                              "collection_passes": passes.get(symbol, 0), "error": errors.get(symbol, {}).get("error")})
+    retry_audit = {"rounds": rounds, "symbol_checks": symbol_checks,
+                   "collection_time_budget_seconds": time_budget,
+                   "time_budget_exhausted": time.monotonic() >= deadline}
     if not frames:
         audit = {
+            **retry_audit,
             "expected_latest": expected_latest,
             "requested": len(set(symbols)),
             "successful": 0,
             "fresh_symbols": 0,
-            "required_fresh_symbols": min(
-                int(data_cfg.get("minimum_fresh_symbols", 490)), len(set(symbols))
-            ),
+            "required_fresh_symbols": required_fresh_symbols,
             "failures": failures,
             "cache_hits": cache_hits,
             "stale_cache_fallbacks": stale_cache_fallbacks,
@@ -298,9 +330,6 @@ def collect_context_prices(
         str(ticker) for ticker, latest in latest_by_ticker.items() if latest < expected_latest
     )
     fresh_symbols = int(latest_by_ticker.ge(expected_latest).sum())
-    required_fresh_symbols = min(
-        int(data_cfg.get("minimum_fresh_symbols", 490)), len(set(symbols))
-    )
     benchmark_symbol = str(config.get("indices", {}).get("S&P 500", "")).upper()
     benchmark_is_fresh = (
         not benchmark_symbol
@@ -310,6 +339,7 @@ def collect_context_prices(
         )
     )
     audit = {
+        **retry_audit,
         "expected_latest": expected_latest,
         "requested": len(set(symbols)),
         "successful": int(result["ticker"].nunique()),

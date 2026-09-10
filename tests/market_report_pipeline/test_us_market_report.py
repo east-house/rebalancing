@@ -119,7 +119,7 @@ def test_context_price_collection_repairs_placeholder_cache(
     ).to_parquet(cache / "IVV.parquet", index=False)
     request: dict[str, pd.Timestamp] = {}
 
-    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries, expected_latest):
+    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries, expected_latest, single_attempt):
         request["start"] = pd.Timestamp(start)
         request["end"] = pd.Timestamp(end_exclusive)
         return pd.DataFrame(
@@ -182,7 +182,7 @@ def test_context_price_collection_uses_cached_fallback_and_records_audit(
             columns=columns,
         ).to_parquet(cache / f"{ticker}.parquet", index=False)
 
-    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries, expected_latest):
+    def fake_download(symbol, start, end_exclusive, *, timeout, max_retries, expected_latest, single_attempt):
         raise RuntimeError(f"rate limited: {symbol}")
 
     monkeypatch.setattr(market_report, "STOCK_CACHE", cache)

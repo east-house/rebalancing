@@ -49,9 +49,7 @@ jobs:
           restore-keys: market-report-${{ runner.os }}-
       - name: Install dependencies and fonts
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes fonts-noto-cjk
-          python -m pip install --requirement requirements-market-report.txt
+          bash scripts/install-report-dependencies.sh
       - name: Validate report pipeline
         run: python -m pytest tests/market_report_pipeline -q
       - name: Reconcile and publish complete releases

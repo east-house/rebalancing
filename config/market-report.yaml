@@ -6,6 +6,9 @@ data:
   request_workers: 4
   request_timeout_seconds: 20
   max_retries: 4
+  freshness_retry_delay_seconds: 30
+  collection_time_budget_seconds: 900
+  require_all_fresh_symbols: true
   cache_overlap_days: 10
   minimum_fresh_symbols: 490
 
