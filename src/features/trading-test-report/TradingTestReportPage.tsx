@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { loadReplayIndex, loadReplay, type ReplayBundle, type ReplayIndex } from "../../api/tradingReplays";
 import { useReportRefresh } from "../../api/useReportRefresh";
 import ReportPublicationStatus from "../../components/ReportPublicationStatus";
 
@@ -137,10 +138,10 @@ function StrategyHistory({ report, strategy }: { report: TradingTestReport; stra
   </>;
 }
 
-export default function TradingTestReportPage({
+function TradingTestReportView({
   onOpenReport, onOpenPortfolio, onOpenPortfolioReport,
-  onOpenTradingTestReport, onOpenEtfCompare,
-}: Props) {
+  onOpenTradingTestReport, onOpenEtfCompare, controls, replayData, suspended,
+}: Props & { controls?: ReactNode; replayData?: ReplayBundle; suspended?: boolean }) {
   const refresh = useReportRefresh();
   const [index, setIndex] = useState<TradingTestIndex | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -150,6 +151,15 @@ export default function TradingTestReportPage({
   const [selectedStrategy, setSelectedStrategy] = useState("");
 
   useEffect(() => {
+    if (suspended) { setLoading(false); return; }
+    if (replayData) {
+      const reports = replayData.reports.slice().reverse();
+      setIndex({ schemaVersion: 2, updatedAt: reports[0].generatedAt, latestReportDate: reports[0].reportDate,
+        reports: reports.map((r) => ({ reportDate: r.reportDate, marketDate: r.marketDate, generatedAt: r.generatedAt, r2Equity: 0, r2NextActionCount: 0 })) });
+      setSelectedDate(reports[0].reportDate);
+      setLoading(false);
+      return;
+    }
     let active = true;
     loadTradingTestIndex().then((value) => {
       if (!active) return;
@@ -160,9 +170,15 @@ export default function TradingTestReportPage({
       if (active) setError(reason instanceof Error ? reason.message : "목록을 불러오지 못했습니다.");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [refresh]);
+  }, [refresh, replayData, suspended]);
 
   useEffect(() => {
+    if (suspended) return;
+    if (replayData) {
+      setReport(replayData.reports.find((r) => r.reportDate === selectedDate) ?? null);
+      setLoading(false);
+      return;
+    }
     if (!selectedDate) return;
     let active = true;
     setLoading(true); setError(""); setReport(null);
@@ -173,7 +189,7 @@ export default function TradingTestReportPage({
         if (active) setError(reason instanceof Error ? reason.message : "보고서를 불러오지 못했습니다.");
       }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [index, selectedDate]);
+  }, [index, selectedDate, replayData, suspended]);
 
   const availableStrategies = useMemo(() => Object.keys(report?.accounts ?? {}).sort(), [report]);
   const activeStrategy = availableStrategies.includes(selectedStrategy) ? selectedStrategy : availableStrategies[0];
@@ -207,12 +223,14 @@ export default function TradingTestReportPage({
           ))}</nav>
         </aside>
         <main className="market-report-main trading-report-main" aria-busy={loading}>
+          {controls}
+          {replayData && <p className="trading-replay-status">과거 재현 · 시작 미국장 {dateLabel(replayData.firstSignalSession)} · 자료 기준 {dateLabel(replayData.lastMarketDate)} · 데이터·지표 검사 통과</p>}
           {loading && (!report || report.reportDate !== selectedDate) ? <div className="trading-report-state" role="status"><RefreshCw className="spin" /> 보고서를 불러오는 중입니다.</div> : null}
           {error ? <div className="trading-report-state is-error" role="alert"><CircleAlert size={18} />{error}</div> : null}
-          {!loading && !error && !report ? <div className="trading-report-state" role="status">표시할 매매테스트 보고서가 아직 없습니다.</div> : null}
+          {!loading && !error && !report && !suspended ? <div className="trading-report-state" role="status">표시할 매매테스트 보고서가 아직 없습니다.</div> : null}
           {report && report.reportDate === selectedDate ? <>
             <section className="trading-report-hero">
-              <div><span className="report-eyebrow">{dateLabel(report.reportDate)} · KOREA VIEW</span><h1>매매테스트 보고서</h1><div className="trading-date-meta"><span>미국장 <time dateTime={report.marketDate}>{dateLabel(report.marketDate)}</time></span><span>생성 <time dateTime={report.generatedAt}>{generatedLabel(report.generatedAt)}</time></span></div><p>전략별 독립 가상계좌 기록입니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
+              <div><span className="report-eyebrow">{dateLabel(report.reportDate)} · KOREA VIEW</span><h1>매매테스트 보고서</h1><div className="trading-date-meta"><span>미국장 <time dateTime={report.marketDate}>{dateLabel(report.marketDate)}</time></span><span>생성 <time dateTime={report.generatedAt}>{generatedLabel(report.generatedAt)}</time></span></div><p>전략별 독립 가상계좌 기록입니다. {replayData ? "현재 확보한 실제 과거 가격으로 재현한 결과입니다." : "실제 주문이 아닌 조정종가 기반 포워드 기록입니다."}</p>{!replayData && <ReportPublicationStatus product="trading-test-reports" />}</div>
               <dl><div><dt>IVV 누적수익률</dt><dd>{pct(report.benchmark.totalReturn)}</dd></div><div><dt>가격 기준</dt><dd>조정종가</dd></div><div><dt>매매비용 가정</dt><dd>{costDescription}</dd></div><div><dt>데이터 완전성</dt><dd>{pct(report.dataQuality.latestCoverage, 1)}</dd></div></dl>
             </section>
             <div className="trading-strategy-tabs" role="tablist" aria-label="매매 전략">{availableStrategies.map((strategy, index) => <button type="button" role="tab" id={`strategy-tab-${index}`} aria-selected={strategy === activeStrategy} aria-controls="strategy-account-panel" tabIndex={strategy === activeStrategy ? 0 : -1} key={strategy} onClick={() => setSelectedStrategy(strategy)} onKeyDown={(event) => {
@@ -246,11 +264,69 @@ export default function TradingTestReportPage({
               <StrategyHistory report={report} strategy={activeStrategy} />
             </section>
             </div>
-            <section className="trading-method"><div><Activity size={20} /><h2>검증 원칙</h2></div><ol><li>신호일 종가까지의 정보로만 다음 거래일 행동을 확정합니다.</li><li>확정 행동은 다음 완료 미국장의 조정종가로 처리하고, {report.transactionCosts?.label ?? "보고서에 표시된 비용 모형"}의 매수·매도 비용을 각각 적용합니다.</li><li>각 전략의 자산과 거래 기록은 별도 계좌로 관리합니다.</li><li>{activeStrategy ? strategyPresentation(report, activeStrategy).description : ""}</li><li>과거 체결과 신호는 이후 데이터로 다시 계산하거나 수정하지 않습니다.</li></ol><p><CircleAlert size={16} /> {report.disclaimer} {report.transactionCosts ? `비용에 포함되지 않은 항목: ${report.transactionCosts.excluded}.` : "실제 체결 가능성, 슬리피지, 세금과 환율은 별도로 고려해야 합니다."}</p></section>
+            <section className="trading-method"><div><Activity size={20} /><h2>검증 원칙</h2></div><ol><li>신호일 종가까지의 정보로만 다음 거래일 행동을 확정합니다.</li><li>확정 행동은 다음 완료 미국장의 조정종가로 처리하고, {report.transactionCosts?.label ?? "보고서에 표시된 비용 모형"}의 매수·매도 비용을 각각 적용합니다.</li><li>각 전략의 자산과 거래 기록은 별도 계좌로 관리합니다.</li><li>{activeStrategy ? strategyPresentation(report, activeStrategy).description : ""}</li><li>{replayData ? "이 재현 결과는 기존 정기 보고서와 원장을 변경하지 않습니다." : "과거 체결과 신호는 이후 데이터로 다시 계산하거나 수정하지 않습니다."}</li></ol><p><CircleAlert size={16} /> {report.disclaimer} {report.transactionCosts ? `비용에 포함되지 않은 항목: ${report.transactionCosts.excluded}.` : "실제 체결 가능성, 슬리피지, 세금과 환율은 별도로 고려해야 합니다."}</p></section>
           </> : null}
           <SiteFooter className="trading-report-footer" note="전략별 조정종가 기반 포워드 가상계좌 기록" />
         </main>
       </div>
     </div>
   );
+}
+
+export default function TradingTestReportPage(props: Props) {
+  const [mode, setMode] = useState<"forward" | "replay">("forward");
+  const [catalog, setCatalog] = useState<ReplayIndex | null>(null);
+  const [start, setStart] = useState("");
+  const [bundle, setBundle] = useState<ReplayBundle>();
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    if (mode !== "replay") return;
+    let active = true;
+    setPending(true); setMessage(""); setBundle(undefined); setCatalog(null);
+    loadReplayIndex().then((index) => {
+      if (!active) return;
+      setCatalog(index);
+      setStart((previous) => index.starts.includes(previous) ? previous : index.starts[0]);
+    }).catch((error: unknown) => {
+      if (active) setMessage(error instanceof Error ? error.message : "시작일 목록 조회 실패");
+    }).finally(() => { if (active) setPending(false); });
+    return () => { active = false; };
+  }, [mode, retry]);
+
+  useEffect(() => {
+    if (mode !== "replay" || !catalog || !start) return;
+    let active = true;
+    setBundle(undefined); setMessage("");
+    if (!catalog.starts.includes(start)) {
+      setPending(false);
+      setMessage("검증 자료가 있는 미국 거래일을 선택해 주세요. 휴장일은 시작일로 선택할 수 없습니다.");
+      return;
+    }
+    setPending(true);
+    loadReplay(catalog, start).then((data) => { if (active) setBundle(data); })
+      .catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : "재현 보고서 조회 실패"); })
+      .finally(() => { if (active) setPending(false); });
+    return () => { active = false; };
+  }, [mode, catalog, start]);
+
+  const controls = <section className="trading-replay-controls" aria-label="검증 기간">
+    <div role="group" aria-label="보고서 방식">
+      <button type="button" aria-pressed={mode === "forward"} onClick={() => setMode("forward")}>정기 기록</button>
+      <button type="button" aria-pressed={mode === "replay"} onClick={() => setMode("replay")}>시작일 검증</button>
+    </div>
+    {mode === "replay" && <>
+      <label>시작 미국 거래일<input type="date" value={start} min={catalog?.starts[0]} max={catalog?.lastMarketDate}
+        disabled={!catalog} onChange={(event) => { setBundle(undefined); setStart(event.target.value); }} /></label>
+      {catalog && <span>자료 기준 {dateLabel(catalog.lastMarketDate)}</span>}
+      <button type="button" aria-label="검증 자료 새로고침" title="검증 자료 새로고침" onClick={() => setRetry((v) => v + 1)}><RefreshCw size={16} /></button>
+      {pending && <p role="status">검증 보고서를 불러오는 중입니다.</p>}
+      {message && <p role="alert">{message}</p>}
+    </>}
+  </section>;
+  return <TradingTestReportView key={mode === "replay" ? `replay-${bundle?.startDate ?? "pending"}-${catalog?.releaseId}` : "forward"}
+    {...props} controls={controls} replayData={mode === "replay" ? bundle : undefined}
+    suspended={mode === "replay" && !bundle} />;
 }

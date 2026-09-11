@@ -5,6 +5,8 @@ import type { TradingTestReport } from "../../api/tradingTestReports";
 import TradingTestReportPage from "./TradingTestReportPage";
 
 const { loadIndex, loadReport } = vi.hoisted(() => ({ loadIndex: vi.fn(), loadReport: vi.fn() }));
+const { replayIndex, replayReport } = vi.hoisted(() => ({ replayIndex: vi.fn(), replayReport: vi.fn() }));
+vi.mock("../../api/tradingReplays", () => ({ loadReplayIndex: replayIndex, loadReplay: replayReport }));
 vi.mock("../../api/tradingTestReports", () => ({
   loadTradingTestIndex: loadIndex, loadTradingTestReport: loadReport,
 }));
@@ -85,6 +87,40 @@ describe("trading report presentation", () => {
     mount();
     expect(await screen.findByText("표시할 매매테스트 보고서가 아직 없습니다.")).toBeTruthy();
     expect(loadReport).not.toHaveBeenCalled();
+  });
+
+  it("selects independent start-date replays, rejects holidays and restores regular reports", async () => {
+    replayIndex.mockResolvedValue({ schemaVersion: 1, releaseId: "abcdef0123456789abcd", lastMarketDate: "2026-09-10", starts: ["2026-08-31", "2026-09-08"] });
+    replayReport.mockImplementation(async (_index, start) => ({ schemaVersion: 1, startDate: start, firstSignalSession: start,
+      lastMarketDate: "2026-09-10", audit: { status: "passed" }, reports: [fixture()] }));
+    mount();
+    await screen.findByRole("heading", { name: "매매테스트 보고서", level: 1 });
+    const regularCalls = loadReport.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "시작일 검증" }));
+    await screen.findByText(/과거 재현 · 시작 미국장 2026.08.31/);
+    expect(replayReport).toHaveBeenCalledWith(expect.anything(), "2026-08-31");
+    expect(loadReport.mock.calls.length).toBe(regularCalls);
+    fireEvent.change(screen.getByLabelText("시작 미국 거래일"), { target: { value: "2026-09-05" } });
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("휴장일"));
+    expect(screen.queryByRole("tabpanel")).toBeNull();
+    fireEvent.change(screen.getByLabelText("시작 미국 거래일"), { target: { value: "2026-09-08" } });
+    await screen.findByText(/과거 재현 · 시작 미국장 2026.09.08/);
+    fireEvent.click(screen.getByRole("button", { name: "정기 기록" }));
+    await screen.findByRole("tabpanel");
+    expect(screen.queryByText(/과거 재현 · 시작 미국장/)).toBeNull();
+    expect(loadReport.mock.calls.length).toBeGreaterThan(regularCalls);
+  });
+
+  it("does not display a previous replay after loading another start fails", async () => {
+    replayIndex.mockResolvedValue({ schemaVersion: 1, releaseId: "abcdef0123456789abcd", lastMarketDate: "2026-09-10", starts: ["2026-08-31", "2026-09-08"] });
+    replayReport.mockResolvedValueOnce({ startDate: "2026-08-31", firstSignalSession: "2026-08-31", lastMarketDate: "2026-09-10", reports: [fixture()] })
+      .mockRejectedValueOnce(new Error("replay unavailable"));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "시작일 검증" }));
+    await screen.findByText(/과거 재현 · 시작 미국장/);
+    fireEvent.change(screen.getByLabelText("시작 미국 거래일"), { target: { value: "2026-09-08" } });
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "replay unavailable");
+    expect(screen.queryByRole("tabpanel")).toBeNull();
   });
 
   it("isolates assets, holdings, plans and cumulative transactions by strategy", async () => {

@@ -80,3 +80,12 @@
 .trading-strategy-tabs button:focus-visible { outline: 2px solid #1765b0; outline-offset: 2px; }
 #strategy-account-panel .trading-account-grid, #strategy-account-panel .trading-next-grid { grid-template-columns: minmax(0, 1fr); }
 #strategy-account-panel .trading-account-card { border: 0; border-radius: 0; }
+.trading-replay-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 18px 0; border-bottom: 1px solid #dce2e8; }
+.trading-replay-controls [role="group"] { display: flex; gap: 4px; }
+.trading-replay-controls button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 12px; border: 1px solid #dce2e8; background: #fff; color: #374151; cursor: pointer; font: inherit; border-radius: 4px; }
+.trading-replay-controls button[aria-pressed="true"] { background: #edf5ff; border-color: #1765b0; color: #1765b0; }
+.trading-replay-controls label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.trading-replay-controls input { min-width: 0; max-width: 100%; padding: 8px; border: 1px solid #c8d2df; border-radius: 4px; font: inherit; background: white; color: #243242; }
+.trading-replay-controls p { flex-basis: 100%; margin: 0; }
+.trading-replay-controls [role="alert"] { color: #a33232; }
+.trading-replay-controls > span, .trading-replay-status { color: #526377; font-size: 12px; line-height: 1.7; }
