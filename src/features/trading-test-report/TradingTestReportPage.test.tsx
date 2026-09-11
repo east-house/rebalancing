@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import base from "../../../public/data/trading-test-reports/latest.json";
 import type { TradingTestReport } from "../../api/tradingTestReports";
@@ -85,5 +85,46 @@ describe("trading report presentation", () => {
     mount();
     expect(await screen.findByText("표시할 매매테스트 보고서가 아직 없습니다.")).toBeTruthy();
     expect(loadReport).not.toHaveBeenCalled();
+  });
+
+  it("isolates assets, holdings, plans and cumulative transactions by strategy", async () => {
+    const value = fixture();
+    value.accounts["IRCS-BBCCI-M-G55"].equity = 2200;
+    value.transactionHistory = {
+      "IRCS-BBCCI-M-G55": [{ side: "BUY", ticker: "ONLY_G55", executionDate: "2026-09-08", signalDate: "2026-09-07", reason: "ircs_entry" }],
+      "IRCS-BBCCI-M-R2": [{ side: "SELL", ticker: "ONLY_R2", executionDate: "2026-09-09", signalDate: "2026-09-08", reason: "middle_band_target" }],
+    };
+    value.nextActions["IRCS-BBCCI-M-R2"].orders = [{ side: "BUY", ticker: "R2_PLAN", reason: "ircs_entry" }];
+    loadReport.mockResolvedValue(value);
+    mount();
+    const panel = within(await screen.findByRole("tabpanel"));
+    fireEvent.click(screen.getByRole("tab", { name: "M-G55 검증형" }));
+    expect(panel.getByText("AAPL")).toBeTruthy();
+    expect(panel.getByText("50.00%")).toBeTruthy();
+    expect(panel.getByText("ONLY_G55")).toBeTruthy();
+    expect(panel.queryByText("ONLY_R2")).toBeNull();
+    expect(panel.queryByText("R2_PLAN")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "M-R2 검증형" }));
+    expect(panel.queryByText("AAPL")).toBeNull();
+    expect(panel.queryByText("ONLY_G55")).toBeNull();
+    expect(panel.getByText("ONLY_R2")).toBeTruthy();
+    expect(panel.getByText("R2_PLAN")).toBeTruthy();
+  });
+
+  it("renders a replacement strategy from report metadata without relabeling old records", async () => {
+    const value = fixture();
+    value.accounts = { CUSTOM: value.accounts["IRCS-BBCCI-M-G55"] };
+    value.accounts.CUSTOM.equity = 0;
+    value.nextActions = {};
+    value.completedActions = {};
+    value.transactionHistory = { CUSTOM: [] };
+    value.strategyDefinitions = { CUSTOM: { label: "별도 전략", description: "별도 조건" } };
+    loadReport.mockResolvedValue(value);
+    mount();
+    expect(await screen.findByRole("tab", { name: "별도 전략" })).toBeTruthy();
+    expect(screen.getByText("거래 계획 기록 없음")).toBeTruthy();
+    expect(screen.getByText("누적 체결 내역이 없습니다.")).toBeTruthy();
+    expect(screen.queryByText(/NaN|Infinity/)).toBeNull();
+    expect(screen.queryByText("M-G55 검증형")).toBeNull();
   });
 });

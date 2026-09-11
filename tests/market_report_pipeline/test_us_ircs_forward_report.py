@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -13,6 +14,7 @@ from market_report_pipeline.us_ircs_forward_report import (
     _new_account,
     _passes_entry_variant,
     account_snapshot,
+    build_report,
     execute_pending,
     load_seed_state,
     transaction_cost_model,
@@ -162,3 +164,19 @@ def test_same_day_report_is_allowed_at_1900_kst() -> None:
     now = datetime(2026, 8, 28, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
 
     validate_publication_time(pd.Timestamp("2026-08-28"), now)
+
+
+def test_report_copies_independent_ledger_history_without_replaying_trades() -> None:
+    state = load_seed_state()
+    date = pd.Timestamp("2026-09-01")
+    close = pd.DataFrame({"IVV": [100.0, 101.0]}, index=[pd.Timestamp("2026-08-31"), date])
+    transaction = {"side": "BUY", "ticker": "AAA", "executionDate": "2026-09-01", "signalDate": "2026-08-31"}
+    state["accounts"][G55_STRATEGY]["transactions"].append(transaction)
+    report = build_report(date, state, {}, {}, SimpleNamespace(close=close), {})
+    assert report["reportDate"] == "2026-09-02"
+    assert report["marketDate"] == "2026-09-01"
+    assert report["transactionHistory"][G55_STRATEGY] == [transaction]
+    assert report["transactionHistory"][R2_STRATEGY] == []
+    report["transactionHistory"][G55_STRATEGY][0]["ticker"] = "CHANGED"
+    assert transaction["ticker"] == "AAA"
+    assert state["accounts"][G55_STRATEGY]["cash"] == 21_000

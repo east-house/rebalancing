@@ -1,9 +1,6 @@
 import { reportJson as fetchJson } from "./reportTransport";
 
-export type StrategyName =
-  | "IRCS-BBCCI-M-G55"
-  | "IRCS-BBCCI-M-R2"
-  | "IRCS-BBCCI-M";
+export type StrategyName = string;
 
 export interface TradingTestIndexItem {
   reportDate: string;
@@ -68,6 +65,11 @@ export interface TradingAction {
   targetRoom?: number;
 }
 
+export interface TradingTransaction extends TradingAction {
+  signalDate: string | null;
+  executionDate: string;
+}
+
 export interface StrategyDecision {
   signalDate: string;
   candidateDate?: string;
@@ -103,6 +105,8 @@ export interface TradingTestReport {
   };
   oneWayCost?: number;
   accounts: Record<StrategyName, AccountSnapshot>;
+  strategyDefinitions?: Record<StrategyName, { label: string; description: string }>;
+  transactionHistory?: Record<StrategyName, TradingTransaction[]>;
   completedActions: Record<StrategyName, TradingAction[]>;
   nextActions: Record<StrategyName, StrategyDecision>;
   benchmark: {

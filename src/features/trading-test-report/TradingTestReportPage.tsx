@@ -27,6 +27,7 @@ import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import "../market-report/marketReportPage.css";
 import "./tradingTestReportPage.css";
+import { assetWeight, strategyPresentation } from "./strategyPresentation";
 
 interface Props {
   onOpenReport: () => void;
@@ -35,13 +36,6 @@ interface Props {
   onOpenTradingTestReport?: () => void;
   onOpenEtfCompare: () => void;
 }
-
-const CURRENT_STRATEGIES: StrategyName[] = ["IRCS-BBCCI-M-G55", "IRCS-BBCCI-M-R2"];
-const LABEL: Record<StrategyName, string> = {
-  "IRCS-BBCCI-M-G55": "M-G55 검증형",
-  "IRCS-BBCCI-M-R2": "M-R2 검증형",
-  "IRCS-BBCCI-M": "M 기본형(이전)",
-};
 
 function money(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
@@ -92,16 +86,17 @@ function reasonLabel(reason: string): string {
   return labels[reason] ?? reason;
 }
 
-function AccountCard({ name, account }: { name: StrategyName; account: AccountSnapshot }) {
+function AccountCard({ name, label, account }: { name: StrategyName; label: string; account: AccountSnapshot }) {
   return (
     <article className="trading-account-card">
       <div className="trading-account-card__head">
-        <div><span>{name}</span><h2>{LABEL[name]}</h2></div>
+        <div><span>{name}</span><h2>{label} 자산</h2></div>
         <b className={account.totalReturn < 0 ? "is-down" : "is-up"}>{pct(account.totalReturn)}</b>
       </div>
       <strong className="trading-account-equity">{money(account.equity)}</strong>
       <dl>
         <div><dt>현금</dt><dd>{money(account.cash)}</dd></div>
+        <div><dt>현금 비중</dt><dd>{assetWeight(account.cash, account.equity)}</dd></div>
         <div><dt>보유 평가액</dt><dd>{money(account.marketValue)}</dd></div>
         <div><dt>실현손익</dt><dd>{money(account.realizedPnl)}</dd></div>
         <div><dt>미실현손익</dt><dd>{money(account.unrealizedPnl)}</dd></div>
@@ -129,6 +124,19 @@ function ActionRows({ actions }: { actions: TradingAction[] }) {
   ))}</>;
 }
 
+function StrategyHistory({ report, strategy }: { report: TradingTestReport; strategy: string }) {
+  const history = report.transactionHistory?.[strategy];
+  const rows = (history ?? (report.completedActions[strategy] ?? []).map((action) => ({
+    ...action, executionDate: report.marketDate, signalDate: null,
+  }))).filter((item) => item.side !== "HOLD").slice().reverse();
+  return <>
+    {!history && <p role="status">이 보존 보고서는 당일 거래만 포함합니다. 누적 거래 기록은 다음 신규 보고서부터 원장 기준으로 제공됩니다.</p>}
+    <div className="trading-table-wrap"><table><thead><tr><th>미국 체결일</th><th>행동</th><th>종목</th><th>수량</th><th>체결가</th><th>거래금액</th><th>비용</th><th>실현손익</th></tr></thead>
+      <tbody>{rows.length ? rows.map((row, index) => <tr key={index}><td>{dateLabel(row.executionDate)}</td><td>{actionLabel(row)}</td><td>{row.ticker}</td><td>{row.shares?.toLocaleString("en-US", { maximumFractionDigits: 3 }) ?? "—"}</td><td>{money(row.price)}</td><td>{money(row.notional)}</td><td>{money(row.fee)}</td><td>{money(row.netPnl)}</td></tr>) : <tr><td colSpan={8} className="trading-empty">{history ? "누적 체결 내역이 없습니다." : "당일 체결 내역이 없습니다."}</td></tr>}</tbody>
+    </table></div>
+  </>;
+}
+
 export default function TradingTestReportPage({
   onOpenReport, onOpenPortfolio, onOpenPortfolioReport,
   onOpenTradingTestReport, onOpenEtfCompare,
@@ -139,6 +147,7 @@ export default function TradingTestReportPage({
   const [report, setReport] = useState<TradingTestReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedStrategy, setSelectedStrategy] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -166,12 +175,10 @@ export default function TradingTestReportPage({
     return () => { active = false; };
   }, [index, selectedDate]);
 
-  const strategies = useMemo(() => report
-    ? ([...CURRENT_STRATEGIES, "IRCS-BBCCI-M" as StrategyName]
-      .filter((strategy) => Boolean(report.accounts[strategy])))
-    : CURRENT_STRATEGIES, [report]);
-  const isLegacyReport = strategies.includes("IRCS-BBCCI-M")
-    && !strategies.includes("IRCS-BBCCI-M-G55");
+  const availableStrategies = useMemo(() => Object.keys(report?.accounts ?? {}).sort(), [report]);
+  const activeStrategy = availableStrategies.includes(selectedStrategy) ? selectedStrategy : availableStrategies[0];
+  const strategies = useMemo(() => activeStrategy ? [activeStrategy] : [], [activeStrategy]);
+  const LABEL = Object.fromEntries(availableStrategies.map((id) => [id, strategyPresentation(report!, id).label]));
   const allPositions = useMemo(() => report
     ? strategies.flatMap((strategy) => report.accounts[strategy].positions.map((position) => ({ strategy, ...position })))
     : [], [report, strategies]);
@@ -205,29 +212,43 @@ export default function TradingTestReportPage({
           {!loading && !error && !report ? <div className="trading-report-state" role="status">표시할 매매테스트 보고서가 아직 없습니다.</div> : null}
           {report && report.reportDate === selectedDate ? <>
             <section className="trading-report-hero">
-              <div><span className="report-eyebrow">{dateLabel(report.reportDate)} · KOREA VIEW</span><h1>매매테스트 보고서</h1><div className="trading-date-meta"><span>미국장 <time dateTime={report.marketDate}>{dateLabel(report.marketDate)}</time></span><span>생성 <time dateTime={report.generatedAt}>{generatedLabel(report.generatedAt)}</time></span></div><p>{isLegacyReport ? "이전 M" : "G55"}과 R2를 각각 $21,000 독립 계좌로 추적합니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
+              <div><span className="report-eyebrow">{dateLabel(report.reportDate)} · KOREA VIEW</span><h1>매매테스트 보고서</h1><div className="trading-date-meta"><span>미국장 <time dateTime={report.marketDate}>{dateLabel(report.marketDate)}</time></span><span>생성 <time dateTime={report.generatedAt}>{generatedLabel(report.generatedAt)}</time></span></div><p>전략별 독립 가상계좌 기록입니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
               <dl><div><dt>IVV 누적수익률</dt><dd>{pct(report.benchmark.totalReturn)}</dd></div><div><dt>가격 기준</dt><dd>조정종가</dd></div><div><dt>매매비용 가정</dt><dd>{costDescription}</dd></div><div><dt>데이터 완전성</dt><dd>{pct(report.dataQuality.latestCoverage, 1)}</dd></div></dl>
             </section>
-            <section className="trading-account-grid">{strategies.map((strategy) => <AccountCard key={strategy} name={strategy} account={report.accounts[strategy]} />)}</section>
+            <div className="trading-strategy-tabs" role="tablist" aria-label="매매 전략">{availableStrategies.map((strategy, index) => <button type="button" role="tab" id={`strategy-tab-${index}`} aria-selected={strategy === activeStrategy} aria-controls="strategy-account-panel" tabIndex={strategy === activeStrategy ? 0 : -1} key={strategy} onClick={() => setSelectedStrategy(strategy)} onKeyDown={(event) => {
+              const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+              if (!step && event.key !== "Home" && event.key !== "End") return;
+              event.preventDefault();
+              const next = event.key === "Home" ? 0 : event.key === "End" ? availableStrategies.length - 1 : (index + step + availableStrategies.length) % availableStrategies.length;
+              setSelectedStrategy(availableStrategies[next]);
+              document.getElementById(`strategy-tab-${next}`)?.focus();
+            }}>{LABEL[strategy]}</button>)}</div>
+            <div id="strategy-account-panel" role="tabpanel" aria-labelledby={`strategy-tab-${availableStrategies.indexOf(activeStrategy)}`}>
+            <section className="trading-account-grid">{strategies.map((strategy) => <AccountCard key={strategy} name={strategy} label={LABEL[strategy]} account={report.accounts[strategy]} />)}</section>
             <section className="trading-report-card">
               <div className="trading-card-head"><div><span>COMPLETED</span><h2>오늘 확인된 가상 체결</h2><p>전일에 확정된 행동을 미국장 {dateLabel(report.marketDate)} 조정종가로 처리한 결과입니다.</p></div><CircleCheck size={21} /></div>
-              {strategies.map((strategy) => <div className="trading-strategy-block" key={strategy}><h3>{LABEL[strategy]} <small>{strategy}</small></h3><div className="trading-table-wrap"><table><thead><tr><th>행동</th><th>종목</th><th>수량</th><th>체결가</th><th>거래금액</th><th>비용</th><th>이유</th></tr></thead><tbody><ActionRows actions={report.completedActions[strategy]} /></tbody></table></div></div>)}
+              {strategies.map((strategy) => <div className="trading-strategy-block" key={strategy}><h3>{LABEL[strategy]} <small>{strategy}</small></h3><div className="trading-table-wrap"><table><thead><tr><th>행동</th><th>종목</th><th>수량</th><th>체결가</th><th>거래금액</th><th>비용</th><th>이유</th></tr></thead><tbody><ActionRows actions={report.completedActions[strategy] ?? []} /></tbody></table></div></div>)}
             </section>
             <section className="trading-report-card">
               <div className="trading-card-head"><div><span>NEXT SESSION</span><h2>다음 미국 거래일 행동</h2><p>{dateLabel(report.marketDate)} 종가까지만 이용해 확정했으며 다음 장중 움직임으로 변경하지 않습니다.</p></div><ShieldCheck size={21} /></div>
-              <div className="trading-next-grid">{strategies.map((strategy) => { const decision = report.nextActions[strategy]; const gate = decision.marketGate; return <article key={strategy}>
+              <div className="trading-next-grid">{strategies.map((strategy) => { const decision = report.nextActions[strategy]; if (!decision) return <p key={strategy}>거래 계획 기록 없음</p>; const gate = decision.marketGate; return <article key={strategy}>
                 <div className="trading-next-title"><div><span>{strategy}</span><h3>{LABEL[strategy]}</h3></div><b className={gate?.open ? "is-open" : "is-closed"}>{gate?.open ? "진입 허용" : "진입 대기"}</b></div>
                 <dl><div><dt>IVV CCI</dt><dd>{gate?.ivvCci.toFixed(2) ?? "—"}</dd></div><div><dt>CCI 변화</dt><dd>{gate ? `${gate.ivvCciChange > 0 ? "+" : ""}${gate.ivvCciChange.toFixed(2)}` : "—"}</dd></div><div><dt>밴드 위치</dt><dd>{gate?.ivvBandPosition.toFixed(3) ?? "—"}</dd></div><div><dt>원신호</dt><dd>{decision.rawSignals ?? 0}개</dd></div></dl>
                 {decision.orders.length ? <ul>{decision.orders.map((order, orderIndex) => <li key={`${order.side}-${order.ticker}-${orderIndex}`}><span className={`trading-action is-${order.side.toLowerCase()}`}>{actionLabel(order)}</span><strong>{order.ticker}</strong><small>{reasonLabel(order.reason)}</small></li>)}</ul> : <div className="trading-no-action"><Landmark size={18} /><div><strong>주문 없음</strong><span>현금 또는 현재 보유종목을 유지합니다.</span></div></div>}
               </article>; })}</div>
             </section>
             <section className="trading-report-card">
-              <div className="trading-card-head"><div><span>OPEN POSITIONS</span><h2>현재 보유종목</h2><p>계좌별 수량, 매입가, 현재 평가액과 미실현손익입니다.</p></div><WalletCards size={21} /></div>
-              <div className="trading-table-wrap"><table><thead><tr><th>전략</th><th>종목</th><th>수량</th><th>매입일</th><th>매입가</th><th>현재가</th><th>평가액</th><th>미실현손익</th></tr></thead><tbody>{allPositions.length ? allPositions.map((position) => <tr key={`${position.strategy}-${position.ticker}`}><td>{LABEL[position.strategy]}</td><td><strong>{position.ticker}</strong><small>{position.themeBucket}</small></td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{dateLabel(position.entryDate)}</td><td>{money(position.entryPrice)}</td><td>{money(position.currentPrice)}</td><td>{money(position.marketValue)}</td><td className={position.unrealizedPnl < 0 ? "is-down" : "is-up"}>{money(position.unrealizedPnl)}<small>{pct(position.unrealizedReturn)}</small></td></tr>) : <tr><td colSpan={8} className="trading-empty">현재 두 계좌 모두 보유종목이 없습니다.</td></tr>}</tbody></table></div>
+              <div className="trading-card-head"><div><span>OPEN POSITIONS</span><h2>현재 보유종목</h2><p>비중은 현금을 포함한 해당 계좌 총자산 기준입니다. 가격과 평가액은 USD입니다.</p></div><WalletCards size={21} /></div>
+              <div className="trading-table-wrap"><table><thead><tr><th>전략</th><th>종목</th><th>수량</th><th>매입일</th><th>매입가</th><th>현재가</th><th>평가액</th><th>계좌 비중</th><th>미실현손익</th></tr></thead><tbody>{allPositions.length ? allPositions.map((position) => <tr key={`${position.strategy}-${position.ticker}`}><td>{LABEL[position.strategy]}</td><td><strong>{position.ticker}</strong><small>{position.themeBucket}</small></td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{dateLabel(position.entryDate)}</td><td>{money(position.entryPrice)}</td><td>{money(position.currentPrice)}</td><td>{money(position.marketValue)}</td><td>{assetWeight(position.marketValue, report.accounts[position.strategy].equity)}</td><td className={position.unrealizedPnl < 0 ? "is-down" : "is-up"}>{money(position.unrealizedPnl)}<small>{pct(position.unrealizedReturn)}</small></td></tr>) : <tr><td colSpan={9} className="trading-empty">현재 이 계좌에 보유종목이 없습니다.</td></tr>}</tbody></table></div>
             </section>
-            <section className="trading-method"><div><Activity size={20} /><h2>검증 원칙</h2></div><ol><li>신호일 종가까지의 정보로만 다음 거래일 행동을 확정합니다.</li><li>확정 행동은 다음 완료 미국장의 조정종가로 처리하고, {report.transactionCosts?.label ?? "보고서에 표시된 비용 모형"}의 매수·매도 비용을 각각 적용합니다.</li><li>두 계좌는 각각 $21,000, 최대 4종목, 동일 비중, 테마 중복 금지입니다.</li><li>{isLegacyReport ? "이 보고서는 교체 전 M 기본형과 R2 기록입니다." : "G55는 M 조건에 종목 CCI−CCI Signal 55.003489 이상을, R2는 IVV CCI 상승과 목표여유 2%를 추가합니다."}</li><li>과거 체결과 신호는 이후 데이터로 다시 계산하거나 수정하지 않습니다.</li></ol><p><CircleAlert size={16} /> {report.disclaimer} {report.transactionCosts ? `비용에 포함되지 않은 항목: ${report.transactionCosts.excluded}.` : "실제 체결 가능성, 슬리피지, 세금과 환율은 별도로 고려해야 합니다."}</p></section>
+            <section className="trading-report-card">
+              <div className="trading-card-head"><div><span>TRANSACTIONS</span><h2>거래 기록</h2></div><CircleCheck size={21} /></div>
+              <StrategyHistory report={report} strategy={activeStrategy} />
+            </section>
+            </div>
+            <section className="trading-method"><div><Activity size={20} /><h2>검증 원칙</h2></div><ol><li>신호일 종가까지의 정보로만 다음 거래일 행동을 확정합니다.</li><li>확정 행동은 다음 완료 미국장의 조정종가로 처리하고, {report.transactionCosts?.label ?? "보고서에 표시된 비용 모형"}의 매수·매도 비용을 각각 적용합니다.</li><li>각 전략의 자산과 거래 기록은 별도 계좌로 관리합니다.</li><li>{activeStrategy ? strategyPresentation(report, activeStrategy).description : ""}</li><li>과거 체결과 신호는 이후 데이터로 다시 계산하거나 수정하지 않습니다.</li></ol><p><CircleAlert size={16} /> {report.disclaimer} {report.transactionCosts ? `비용에 포함되지 않은 항목: ${report.transactionCosts.excluded}.` : "실제 체결 가능성, 슬리피지, 세금과 환율은 별도로 고려해야 합니다."}</p></section>
           </> : null}
-          <SiteFooter className="trading-report-footer" note="IRCS G55·R2 조정종가 기반 포워드 가상계좌 기록" />
+          <SiteFooter className="trading-report-footer" note="전략별 조정종가 기반 포워드 가상계좌 기록" />
         </main>
       </div>
     </div>

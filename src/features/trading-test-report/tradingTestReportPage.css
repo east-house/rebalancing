@@ -74,3 +74,9 @@
   .trading-account-card { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .trading-report-shell .spin { animation: none; } }
+.trading-strategy-tabs { display: flex; gap: 8px; padding: 20px 0; border-bottom: 1px solid #dce2e8; flex-wrap: wrap; }
+.trading-strategy-tabs button { padding: 12px 18px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #525d69; cursor: pointer; font: inherit; }
+.trading-strategy-tabs button[aria-selected="true"] { border-bottom-color: #1765b0; color: #1765b0; font-weight: 700; }
+.trading-strategy-tabs button:focus-visible { outline: 2px solid #1765b0; outline-offset: 2px; }
+#strategy-account-panel .trading-account-grid, #strategy-account-panel .trading-next-grid { grid-template-columns: minmax(0, 1fr); }
+#strategy-account-panel .trading-account-card { border: 0; border-radius: 0; }

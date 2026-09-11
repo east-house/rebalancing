@@ -721,6 +721,10 @@ def build_report(
         "executionPriceBasis": "split/dividend-adjusted close",
         "transactionCosts": transaction_cost_model(),
         "accounts": accounts,
+        "transactionHistory": {
+            strategy: [dict(item) for item in state["accounts"][strategy]["transactions"]]
+            for strategy in STRATEGIES
+        },
         "completedActions": completed,
         "nextActions": next_decisions,
         "benchmark": {
