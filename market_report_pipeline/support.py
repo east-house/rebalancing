@@ -13,6 +13,7 @@ import pandas as pd
 import requests
 
 from .io_utils import atomic_write_parquet
+from .price_observation import save_observation, utc_stamp
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -121,6 +122,7 @@ def _download_yahoo_frame(
     max_retries: int,
     expected_latest: pd.Timestamp | None = None,
     single_attempt: int | None = None,
+    diagnostics_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Download split/dividend-adjusted daily OHLCV from Yahoo Chart."""
 
@@ -145,10 +147,15 @@ def _download_yahoo_frame(
         raise ValueError("single_attempt must be within the shared retry budget")
     attempts = [single_attempt] if single_attempt is not None else range(1, max_retries + 1)
     for attempt in attempts:
+        response = None
+        ready = False
+        diagnostic_error = None
+        started = utc_stamp()
+        endpoint = YAHOO_CHART_URL if attempt % 2 else YAHOO_CHART_FALLBACK_URL
+        url = endpoint.format(symbol=mapped)
         try:
-            endpoint = YAHOO_CHART_URL if attempt % 2 else YAHOO_CHART_FALLBACK_URL
             response = requests.get(
-                endpoint.format(symbol=mapped),
+                url,
                 params=params,
                 headers=headers,
                 timeout=timeout,
@@ -193,13 +200,19 @@ def _download_yahoo_frame(
                 ["date", "ticker", "provider_symbol", "open", "high", "low", "close", "volume"]
             ].sort_values("date").drop_duplicates("date", keep="last")
             result.attrs["collection_attempts"] = attempt
+            ready = True
             return result
         except Exception as error:  # noqa: BLE001
+            diagnostic_error = f"{type(error).__name__}: {error}"
             last_error = error
             if isinstance(error, PriceDataNotReady):
                 LOGGER.warning("Yahoo %s: %s", symbol, error)
             if single_attempt is None and attempt < max_retries:
                 time.sleep(_retry_delay_seconds(error, attempt))
+        finally:
+            save_observation(diagnostics_dir, symbol=symbol, url=url, params=params,
+                             expected=expected_latest, started=started, response=response,
+                             ready=ready, error=diagnostic_error, attempt=attempt)
     raise RuntimeError(f"Yahoo {symbol} 수집 실패: {last_error}") from last_error
 
 

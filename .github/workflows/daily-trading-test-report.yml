@@ -55,6 +55,7 @@ jobs:
       - name: Reconcile and publish complete releases
         shell: bash
         env:
+          PRICE_DIAGNOSTICS_DIR: action-output/price-http-evidence
           REQUESTED_DATE: ${{ inputs.as_of }}
           REVISE: ${{ inputs.revise || false }}
           RESET_LEDGER: ${{ inputs.reset_ledger || false }}
