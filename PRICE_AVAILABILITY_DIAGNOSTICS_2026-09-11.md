@@ -61,4 +61,16 @@ R2 `price-diagnostics/raw/`에 실행별 고유 ZIP, `price-diagnostics/observat
 - 하루 관측으로 권장 시각을 제시하지 않는 상태 확인.
 - Python 86개 세 시간대 통과, 프런트엔드/Worker 117개 및 빌드 통과.
 - 원본 바이트 보존, 종가 null, 네트워크 오류, 서버 차이, 파서 실패 분리, 시각 차이 제한, 시간 증거 부족/재결측, 종목별 관측, R2 영역 격리, 예산 소진, 저장 실패 비간섭 검증.
-- 운영 배포 및 신규 workflow 실실행 결과는 완료 후 아래에 추가한다.
+
+## 운영 검증 완료
+
+- 구현 커밋 `db83dda6aa37df5d31cafbbaade5df33275bbc44` main push 완료.
+- [운영 진단 34566762225](https://github.com/east-house/rebalancing/actions/runs/34566762225) 성공.
+- 실제 관측: 2026-09-11 14:39:18~14:42:02 KST. 미국 9월 10일 전체 553개 모두 `both_ready`.
+- Artifact `price-availability-34566762225` (ID 10186352823)에서 HTTP 200 원본 1,106개 SHA256 일치 검증.
+- R2 원본 ZIP: `price-diagnostics/raw/34566762225-c3fd2ae40bfb4a918a04d03b5af47b1d.zip`.
+- R2 관측 저장 후 재조회한 시간 보고서: 관측 거래일 1개, 종목별 시간 항목 553개. 권장 시각은 `null`, 상태는 `insufficient_or_unstable_evidence`로 확인.
+- `null`은 가격/날짜 오류가 아니라 최소 10거래일 시간 근거 미충족에 따른 보류다.
+- 진단 전후 공개 시장 보고서 releaseId와 게시 코드 SHA 동일. 보고서 게시 상태를 변경하지 않았다.
+- [세 시간대 운영 CI 34566750363](https://github.com/east-house/rebalancing/actions/runs/34566750363) 및 Cloudflare 빌드 검사 성공.
+- 별도 수동 실행은 필요하지 않다. 기존 보고서 예약은 유지되며 신규 진단 예약이 다음 관측부터 독립적으로 누적한다.
