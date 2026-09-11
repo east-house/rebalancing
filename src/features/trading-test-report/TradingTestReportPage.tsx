@@ -25,6 +25,7 @@ import {
 } from "../../api/tradingTestReports";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
+import "../market-report/marketReportPage.css";
 import "./tradingTestReportPage.css";
 
 interface Props {
@@ -59,8 +60,20 @@ function feeRate(value: number): string {
 }
 
 function dateLabel(value: string): string {
-  const [year, month, day] = value.split("-");
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return "—";
+  const [year, month, day] = value.slice(0, 10).split("-");
   return `${year}.${month}.${day}`;
+}
+
+function generatedLabel(value: string): string {
+  const instant = new Date(value);
+  if (!Number.isFinite(instant.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(instant);
+  const part = (name: string) => parts.find((item) => item.type === name)?.value;
+  return `${part("year")}.${part("month")}.${part("day")} ${part("hour")}:${part("minute")} KST`;
 }
 
 function actionLabel(action: TradingAction): string {
@@ -143,7 +156,7 @@ export default function TradingTestReportPage({
   useEffect(() => {
     if (!selectedDate) return;
     let active = true;
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setReport(null);
     const generatedAt = index?.reports.find((item) => item.reportDate === selectedDate)?.generatedAt;
     loadTradingTestReport(selectedDate, generatedAt, index?.releaseId)
       .then((value) => { if (active) setReport(value); })
@@ -167,16 +180,16 @@ export default function TradingTestReportPage({
     : report?.oneWayCost !== undefined ? `매수·매도 각 ${pct(report.oneWayCost, 1)}` : "—";
 
   return (
-    <div className="trading-report-shell">
-      <header className="trading-report-topbar">
-        <div className="trading-report-brand"><FlaskConical size={19} /><div><strong>매매테스트 보고서</strong><span>IRCS PAPER FORWARD TEST</span></div></div>
+    <div className="market-report-shell trading-report-shell">
+      <header className="report-topbar">
+        <div className="report-brand"><FlaskConical size={18} /><div><strong>매매테스트 보고서</strong><span>IRCS PAPER FORWARD TEST</span></div></div>
         <ProductTabs current="trading-test-report" onOpenReport={onOpenReport}
           onOpenPortfolio={onOpenPortfolio} onOpenPortfolioReport={onOpenPortfolioReport}
           onOpenTradingTestReport={onOpenTradingTestReport} onOpenEtfCompare={onOpenEtfCompare} />
       </header>
-      <div className="trading-report-layout">
-        <aside className="trading-report-sidebar" aria-label="날짜별 매매테스트 보고서">
-          <div><span>FORWARD ARCHIVE</span><strong>날짜별 리포트</strong><p>한국시간 저녁 7시 · 완료된 미국장 기준</p></div>
+      <div className="market-report-layout">
+        <aside className="report-sidebar" aria-label="날짜별 매매테스트 보고서">
+          <div className="report-sidebar__head"><span>REPORT ARCHIVE</span><strong>날짜별 리포트</strong><p>한국 보고일 · 완료된 미국장 기준</p></div>
           <nav>{index?.reports.map((item) => (
             <button type="button" key={item.reportDate}
               className={item.reportDate === selectedDate ? "is-active" : ""}
@@ -186,21 +199,22 @@ export default function TradingTestReportPage({
             </button>
           ))}</nav>
         </aside>
-        <main className="trading-report-main">
-          {loading && !report ? <div className="trading-report-state"><RefreshCw className="spin" /> 보고서를 불러오는 중입니다.</div> : null}
-          {error ? <div className="trading-report-state is-error"><CircleAlert size={18} />{error}</div> : null}
-          {report ? <>
+        <main className="market-report-main trading-report-main" aria-busy={loading}>
+          {loading && (!report || report.reportDate !== selectedDate) ? <div className="trading-report-state" role="status"><RefreshCw className="spin" /> 보고서를 불러오는 중입니다.</div> : null}
+          {error ? <div className="trading-report-state is-error" role="alert"><CircleAlert size={18} />{error}</div> : null}
+          {!loading && !error && !report ? <div className="trading-report-state" role="status">표시할 매매테스트 보고서가 아직 없습니다.</div> : null}
+          {report && report.reportDate === selectedDate ? <>
             <section className="trading-report-hero">
-              <div><span>{dateLabel(report.reportDate)} · 미국장 {dateLabel(report.marketDate)}</span><h1>어제 정한 행동의 결과와<br />다음 거래일 행동</h1><p>{isLegacyReport ? "이전 M" : "G55"}과 R2를 각각 $21,000 독립 계좌로 추적합니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
+              <div><span className="report-eyebrow">{dateLabel(report.reportDate)} · KOREA VIEW</span><h1>매매테스트 보고서</h1><div className="trading-date-meta"><span>미국장 <time dateTime={report.marketDate}>{dateLabel(report.marketDate)}</time></span><span>생성 <time dateTime={report.generatedAt}>{generatedLabel(report.generatedAt)}</time></span></div><p>{isLegacyReport ? "이전 M" : "G55"}과 R2를 각각 $21,000 독립 계좌로 추적합니다. 실제 주문이 아닌 조정종가 기반 포워드 기록입니다.</p><ReportPublicationStatus product="trading-test-reports" /></div>
               <dl><div><dt>IVV 누적수익률</dt><dd>{pct(report.benchmark.totalReturn)}</dd></div><div><dt>가격 기준</dt><dd>조정종가</dd></div><div><dt>매매비용 가정</dt><dd>{costDescription}</dd></div><div><dt>데이터 완전성</dt><dd>{pct(report.dataQuality.latestCoverage, 1)}</dd></div></dl>
             </section>
             <section className="trading-account-grid">{strategies.map((strategy) => <AccountCard key={strategy} name={strategy} account={report.accounts[strategy]} />)}</section>
             <section className="trading-report-card">
-              <div className="trading-card-head"><div><span>COMPLETED</span><h2>오늘 확인된 가상 체결</h2><p>전일에 확정된 행동을 미국장 {report.marketDate} 조정종가로 처리한 결과입니다.</p></div><CircleCheck size={21} /></div>
+              <div className="trading-card-head"><div><span>COMPLETED</span><h2>오늘 확인된 가상 체결</h2><p>전일에 확정된 행동을 미국장 {dateLabel(report.marketDate)} 조정종가로 처리한 결과입니다.</p></div><CircleCheck size={21} /></div>
               {strategies.map((strategy) => <div className="trading-strategy-block" key={strategy}><h3>{LABEL[strategy]} <small>{strategy}</small></h3><div className="trading-table-wrap"><table><thead><tr><th>행동</th><th>종목</th><th>수량</th><th>체결가</th><th>거래금액</th><th>비용</th><th>이유</th></tr></thead><tbody><ActionRows actions={report.completedActions[strategy]} /></tbody></table></div></div>)}
             </section>
             <section className="trading-report-card">
-              <div className="trading-card-head"><div><span>NEXT SESSION</span><h2>다음 미국 거래일 행동</h2><p>{report.marketDate} 종가까지만 이용해 확정했으며 다음 장중 움직임으로 변경하지 않습니다.</p></div><ShieldCheck size={21} /></div>
+              <div className="trading-card-head"><div><span>NEXT SESSION</span><h2>다음 미국 거래일 행동</h2><p>{dateLabel(report.marketDate)} 종가까지만 이용해 확정했으며 다음 장중 움직임으로 변경하지 않습니다.</p></div><ShieldCheck size={21} /></div>
               <div className="trading-next-grid">{strategies.map((strategy) => { const decision = report.nextActions[strategy]; const gate = decision.marketGate; return <article key={strategy}>
                 <div className="trading-next-title"><div><span>{strategy}</span><h3>{LABEL[strategy]}</h3></div><b className={gate?.open ? "is-open" : "is-closed"}>{gate?.open ? "진입 허용" : "진입 대기"}</b></div>
                 <dl><div><dt>IVV CCI</dt><dd>{gate?.ivvCci.toFixed(2) ?? "—"}</dd></div><div><dt>CCI 변화</dt><dd>{gate ? `${gate.ivvCciChange > 0 ? "+" : ""}${gate.ivvCciChange.toFixed(2)}` : "—"}</dd></div><div><dt>밴드 위치</dt><dd>{gate?.ivvBandPosition.toFixed(3) ?? "—"}</dd></div><div><dt>원신호</dt><dd>{decision.rawSignals ?? 0}개</dd></div></dl>
@@ -209,7 +223,7 @@ export default function TradingTestReportPage({
             </section>
             <section className="trading-report-card">
               <div className="trading-card-head"><div><span>OPEN POSITIONS</span><h2>현재 보유종목</h2><p>계좌별 수량, 매입가, 현재 평가액과 미실현손익입니다.</p></div><WalletCards size={21} /></div>
-              <div className="trading-table-wrap"><table><thead><tr><th>전략</th><th>종목</th><th>수량</th><th>매입일</th><th>매입가</th><th>현재가</th><th>평가액</th><th>미실현손익</th></tr></thead><tbody>{allPositions.length ? allPositions.map((position) => <tr key={`${position.strategy}-${position.ticker}`}><td>{LABEL[position.strategy]}</td><td><strong>{position.ticker}</strong><small>{position.themeBucket}</small></td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{position.entryDate}</td><td>{money(position.entryPrice)}</td><td>{money(position.currentPrice)}</td><td>{money(position.marketValue)}</td><td className={position.unrealizedPnl < 0 ? "is-down" : "is-up"}>{money(position.unrealizedPnl)}<small>{pct(position.unrealizedReturn)}</small></td></tr>) : <tr><td colSpan={8} className="trading-empty">현재 두 계좌 모두 보유종목이 없습니다.</td></tr>}</tbody></table></div>
+              <div className="trading-table-wrap"><table><thead><tr><th>전략</th><th>종목</th><th>수량</th><th>매입일</th><th>매입가</th><th>현재가</th><th>평가액</th><th>미실현손익</th></tr></thead><tbody>{allPositions.length ? allPositions.map((position) => <tr key={`${position.strategy}-${position.ticker}`}><td>{LABEL[position.strategy]}</td><td><strong>{position.ticker}</strong><small>{position.themeBucket}</small></td><td>{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td>{dateLabel(position.entryDate)}</td><td>{money(position.entryPrice)}</td><td>{money(position.currentPrice)}</td><td>{money(position.marketValue)}</td><td className={position.unrealizedPnl < 0 ? "is-down" : "is-up"}>{money(position.unrealizedPnl)}<small>{pct(position.unrealizedReturn)}</small></td></tr>) : <tr><td colSpan={8} className="trading-empty">현재 두 계좌 모두 보유종목이 없습니다.</td></tr>}</tbody></table></div>
             </section>
             <section className="trading-method"><div><Activity size={20} /><h2>검증 원칙</h2></div><ol><li>신호일 종가까지의 정보로만 다음 거래일 행동을 확정합니다.</li><li>확정 행동은 다음 완료 미국장의 조정종가로 처리하고, {report.transactionCosts?.label ?? "보고서에 표시된 비용 모형"}의 매수·매도 비용을 각각 적용합니다.</li><li>두 계좌는 각각 $21,000, 최대 4종목, 동일 비중, 테마 중복 금지입니다.</li><li>{isLegacyReport ? "이 보고서는 교체 전 M 기본형과 R2 기록입니다." : "G55는 M 조건에 종목 CCI−CCI Signal 55.003489 이상을, R2는 IVV CCI 상승과 목표여유 2%를 추가합니다."}</li><li>과거 체결과 신호는 이후 데이터로 다시 계산하거나 수정하지 않습니다.</li></ol><p><CircleAlert size={16} /> {report.disclaimer} {report.transactionCosts ? `비용에 포함되지 않은 항목: ${report.transactionCosts.excluded}.` : "실제 체결 가능성, 슬리피지, 세금과 환율은 별도로 고려해야 합니다."}</p></section>
           </> : null}
