@@ -4,6 +4,7 @@ import { loadPortfolioReport, loadPortfolioReportIndex, type PortfolioReportInde
 import { useReportRefresh } from "../../api/useReportRefresh";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
+import PortfolioDecisionReport from "./PortfolioDecisionReport";
 import { ACCOUNT_KEY, LEGACY_KEY, advanceAccount, createAccount, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
 import "./portfolioReportPage.css";
 import "./portfolioAccount.css";
@@ -130,6 +131,7 @@ export default function PortfolioReportPage(props: Props) {
           <p>총손익은 현재 총자산에서 초기 투자금을 뺀 금액입니다. 실현손익은 이미 매도한 주식에서 확정된 손익이고, 평가손익은 아직 보유 중인 주식의 평가액에서 매수원가를 뺀 금액입니다.</p>
           <p>예: 매도해서 번 돈이 $100이고 보유 주식의 평가손실이 $30이면 총손익은 +$70입니다. 아직 매도가 없으면 총손익과 평가손익이 같습니다.</p>
         </aside>
+        <PortfolioDecisionReport days={visibleDays} releaseId={index?.releaseId} />
         <section className="portfolio-report-card account-notice"><h2>변경사항과 다음 주문</h2>
           <p>{day.trades.length ? `미국 ${day.marketDate} 종가로 ${day.trades.length}건의 매매를 반영했습니다.` : "이 보고일에 새로 반영된 체결은 없습니다."}</p>
           {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 월간 점검에서 순위·섹터·상관 제한과 목표비중을 다시 확인합니다.</p>}

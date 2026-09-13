@@ -16,6 +16,19 @@ by the report generator. Sales precede buys; average cost includes buy costs and
 realized profit deducts sale costs. The I1 cost is 0.10% per side. Prices are the
 report's historical adjusted closes, not actual broker executions.
 
+Monthly orders now evaluate drift at the execution close for each existing target
+separately. A gap below 3 percentage points preserves that holding's shares even
+when another name is replaced. Target shares are floored before affordability is
+checked including fees; sales precede buys in ascending share-delta order, with
+ticker order breaking ties. This follows the source execution rule adapted to
+whole shares. Existing recorded fills remain unchanged; new accounts and future
+unfilled orders use the corrected implementation.
+
+New daily snapshots preserve decision explanations and the latest selection's
+rank, score, theme, sector and retention reason. Older snapshots display a clear
+legacy notice and recorded-order evidence rather than fabricated decision logs.
+See `I1_VERIFICATION.md` for source parity, operational paths and limitations.
+
 The screen shows total equity, cash, total profit and return, realized/unrealized
 profit, an equity chart, historical holdings, first/latest buy dates, average
 cost, security returns, every fill and its reason, and daily account snapshots.

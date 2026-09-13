@@ -35,7 +35,7 @@ GitHub Actions가 기존 R2 버킷에 날짜별 JSON·HTML·시장 구조 PNG와
 실행해 `portfolio-reports/{YYYY-MM-DD}.json`, 목록과 최신본을 시장 보고서와 함께 게시합니다.
 이 경로들은 게시 manifest가 불변 R2 객체로 연결하는 논리 경로입니다. 운영 R2 오류 시 정적 스냅샷으로 성공을 가장하지 않습니다. 종목 추천 계산과 화면은
 다른 로컬 저장소를 참조하지 않습니다. 이용자의 투자금·수량·반영 기록은
-`stock_strategy.us_portfolio.device.v1` 키로 브라우저에만 보관됩니다.
+`stock_strategy.us_portfolio.integer.v3` 키로 브라우저에만 보관됩니다.
 
 포트폴리오 전략은 `stock_strategy/stock_rank_prediction`의 `i1_core_satellite`를
 이식한 I1입니다. `us_institutional_hybrid_research.scored_for_candidate`와
@@ -49,6 +49,9 @@ GitHub Actions가 기존 R2 버킷에 날짜별 JSON·HTML·시장 구조 PNG와
 `portfolio-report:update`는 별도의 기존 v3 연구 내보내기 명령입니다. 이 명령은
 월말 연구 신호일을 사용하므로 자동 보고서와 날짜 선택 규칙이 다릅니다.
 날짜 동작 변경에 대한 별도 요청 없이 자동 생성기로 연결을 바꾸지 않습니다.
+현재 I1 운영 경로의 명시적인 수동 명령은 `npm run portfolio-report:i1`이며,
+기존 `report:publish-r2` 및 일일 Actions와 같은 실행 경로입니다. R2 자격증명이
+필요하고 시장 보고서와 포트폴리오 보고서를 함께 게시합니다.
 
 8월 17일부터의 I1 과거 보고서는 `repair-portfolio-history.yml` 수동 워크플로로
 재구성합니다. 한국 평일 슬롯을 빠짐없이 생성하고 XNYS 휴장일에 맞는 최근 종가와
@@ -70,7 +73,7 @@ UI 코드 배포는 기존 Git/Cloudflare 연결을 그대로 사용하고, 매�
 npm run report:test
 npm run report:generate
 npm run report:publish-local
-npm run portfolio-report:update
+npm run portfolio-report:i1
 ```
 
 R2 환경변수가 설정된 운영 환경에서는 `npm run report:publish-r2`로 누락분을 생성·검증·게시합니다.

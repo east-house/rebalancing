@@ -47,6 +47,10 @@
 .account-main .portfolio-report-table-wrap td:first-child { min-width: 110px; padding-left: 12px; }
 .account-main .portfolio-report-table-wrap td small { max-width: 190px; overflow-wrap: anywhere; }
 .account-chart svg { display: block; }
+.account-decision ul, .account-decision ol { padding-left: 22px; font-size: 13px; line-height: 1.9; word-break: keep-all; overflow-wrap: anywhere; }
+.account-decision li + li { margin-top: 8px; }
+.account-decision summary { cursor: pointer; color: #1d4ed8; font-weight: 700; font-size: 13px; }
+.account-decision details p { font-size: 12px; line-height: 1.8; color: var(--muted); }
 .account-chart > div { flex-wrap: wrap; }
 @media (max-width: 1200px) and (min-width: 901px) {
   .account-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }

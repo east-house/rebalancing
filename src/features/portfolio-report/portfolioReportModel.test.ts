@@ -24,7 +24,9 @@ describe("integer I1 account ledger", () => {
     reports[2].quotes.A.close = 150;
     const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
     const sold = result.trades.find(item => item.ticker === "A" && item.side === "SELL")!;
-    expect(sold.executionDate).toBe("2026-09-01"); expect(sold.realizedPnl).toBeCloseTo(945.25);
+    expect(sold.executionDate).toBe("2026-09-01");
+    // 20 shares: sale proceeds 3,000 - 3 fee - 2,002 cost including buy fee.
+    expect(sold.shares).toBe(20); expect(sold.realizedPnl).toBeCloseTo(995);
     expect(result.holdings.some(item => item.ticker === "A")).toBe(false);
     expect(result.holdings.some(item => item.ticker === "Z")).toBe(true);
     const day = result.days.at(-1)!;
@@ -66,5 +68,30 @@ describe("integer I1 account ledger", () => {
     expect(account.days[0].trades).toHaveLength(0); expect(account.days[1].trades).toHaveLength(0);
     expect(account.days[2].trades).toHaveLength(5);
     expect(account.trades.every(item => item.executionDate === "2026-09-08")).toBe(true);
+  });
+  it("checks drift per stock at execution, including price moves after the monthly signal", () => {
+    const reports = chain();
+    reports[2].quotes.A.close = 200;
+    const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    const monthly = result.days[2].trades;
+    expect(monthly.some(item => item.ticker === "A" && item.side === "SELL")).toBe(true);
+    // Other names now also exceed 3pp underweight and may be topped up.
+    expect(result.days[1].pending).not.toBeNull();
+    expect(result.days[1].selectionDetails?.find(item => item.ticker === "A")?.reason).toContain("유지순위");
+  });
+  it("does not rebalance an in-band holding when another name must be replaced", () => {
+    const reports = chain();
+    reports[1].candidates.find(item => item.ticker === "A")!.rank = 20;
+    reports[2].quotes.B.close = 105;
+    const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    expect(result.days[2].trades.some(item => item.ticker === "B")).toBe(false);
+    expect(result.days[2].explanation?.some(text => text.includes("B: 체결 종가"))).toBe(true);
+  });
+  it("explains zero fills and ordinary hold days separately", () => {
+    const reports = [...chain(), fixture("2026-09-03", "2026-09-02")];
+    const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    expect(result.days[2].trades).toHaveLength(0);
+    expect(result.days[2].explanation?.join(" ")).toContain("체결 수량이 없어");
+    expect(result.days[3].explanation?.join(" ")).toContain("월간 종목 점검일이 아니고");
   });
 });
