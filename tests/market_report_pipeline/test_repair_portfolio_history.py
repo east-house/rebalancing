@@ -80,3 +80,15 @@ def test_price_repair_fills_middle_gap_and_preserves_existing_bars(tmp_path, mon
     assert after["close"].tolist() == [100.0, 101.0, 102.0]
     assert audit[0]["missingBefore"] == ["2026-08-17"]
     assert audit[0]["missingAfter"] == []
+
+
+def test_former_constituent_needs_prices_only_on_its_eligible_report_dates(tmp_path, monkeypatch):
+    from market_report_pipeline import support
+    monkeypatch.setattr(repair, "STOCK_CACHE", tmp_path)
+    pd.DataFrame({"date": pd.to_datetime(["2026-08-14"]), "close": [100.0]}).to_parquet(tmp_path / "OLD.parquet")
+    def unexpected(*args, **kwargs):
+        pytest.fail("A former constituent must not require a later price")
+    monkeypatch.setattr(support, "_download_yahoo_frame", unexpected)
+    audit = repair.fill_price_gaps({"OLD"}, ["2026-08-17", "2026-09-11"], tmp_path,
+                                  membership_days={"OLD": ["2026-08-17"]})
+    assert audit[0]["missingAfter"] == []

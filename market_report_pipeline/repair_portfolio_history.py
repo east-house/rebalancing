@@ -60,25 +60,29 @@ def validate(reports: list[dict], days: list[str]) -> None:
             raise ValueError(f"I1 stops must be disabled for {day}")
 
 
-def fill_price_gaps(symbols: set[str], days: list[str], output: Path) -> list[dict]:
+def fill_price_gaps(symbols: set[str], days: list[str], output: Path,
+                    *, membership_days: dict[str, list[str]] | None = None) -> list[dict]:
     """Fill missing historical bars even when a cache already has its latest close."""
     from .support import _download_yahoo_frame
     sessions = sorted({pd.Timestamp(report_context(day)["marketSessionDate"]) for day in days})
 
     def fill(symbol):
+        required_sessions = ({pd.Timestamp(report_context(day)["marketSessionDate"])
+                              for day in membership_days[symbol]}
+                             if membership_days is not None and symbol in membership_days else set(sessions))
         path = STOCK_CACHE / f"{safe_symbol(symbol)}.parquet"
         old = pd.read_parquet(path) if path.exists() else pd.DataFrame()
         existing = set(pd.to_datetime(old["date"])) if not old.empty else set()
-        missing = sorted(set(sessions) - existing)
+        missing = sorted(required_sessions - existing)
         if not missing:
             return {"symbol": symbol, "missingBefore": [], "missingAfter": []}
-        update = _download_yahoo_frame(symbol, missing[0], sessions[-1] + pd.Timedelta(days=1),
+        update = _download_yahoo_frame(symbol, missing[0], max(required_sessions) + pd.Timedelta(days=1),
                                        timeout=20, max_retries=4)
         update = update.loc[pd.to_datetime(update["date"]).le(sessions[-1])]
         # Keep existing cached observations; append only missing dates.
         combined = pd.concat([old, update], ignore_index=True).drop_duplicates("date", keep="first").sort_values("date")
         atomic_write_parquet(combined, path)
-        remaining = sorted(set(sessions) - set(pd.to_datetime(combined["date"])))
+        remaining = sorted(required_sessions - set(pd.to_datetime(combined["date"])))
         return {"symbol": symbol, "missingBefore": [str(day.date()) for day in missing],
                 "missingAfter": [str(day.date()) for day in remaining]}
 
@@ -95,15 +99,16 @@ def prepare(days: list[str], output: Path, *, refresh_prices: bool = False) -> l
         from .us_market_report import MarketRunSettings, collect_context_prices, load_config
         config_path = PROJECT_ROOT / "config/market-report.yaml"
         config = load_config(config_path)
-        symbols = {"IVV", "^GSPC"}
-        for path in set(paths.values()):
-            symbols.update(pd.read_parquet(path)["ticker"].astype(str))
-        symbols.update(config["sector_proxies"].values())
-        symbols.update(item["proxy"] for item in config["themes"].values())
+        proxies = {"IVV", "^GSPC", *config["sector_proxies"].values(),
+                   *(item["proxy"] for item in config["themes"].values())}
+        members = {day: set(pd.read_parquet(path)["ticker"].astype(str)) for day, path in paths.items()}
+        symbols = proxies | set.union(*members.values())
+        membership_days = {symbol: [day for day in days if symbol in members[day]]
+                           for symbol in symbols - proxies}
         settings = MarketRunSettings(pd.Timestamp(days[-1]), pd.Timestamp(config["data"]["history_start"]),
                                      output, config_path)
-        collect_context_prices(sorted(symbols), settings, config)
-        gaps = fill_price_gaps(symbols, days, output)
+        collect_context_prices(sorted(proxies | members[days[-1]]), settings, config)
+        gaps = fill_price_gaps(symbols, days, output, membership_days=membership_days)
         required = {"IVV", *config["sector_proxies"].values(),
                     *(item["proxy"] for item in config["themes"].values())}
         if any(item["missingAfter"] for item in gaps if item["symbol"] in required):
