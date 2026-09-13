@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from urllib.request import Request, urlopen
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from market_report_pipeline.io_utils import write_json
@@ -19,15 +19,17 @@ def main():
     parser.add_argument("--base-url", default="https://tm-reports.com")
     parser.add_argument("--output", type=Path, default=Path("action-output/portfolio-history/public-verification.json"))
     args = parser.parse_args()
+    session = requests.Session()
+    session.headers.update({"Cache-Control": "no-cache", "User-Agent": "tm-reports-history-verification"})
 
     def read(path, release=None):
         suffix = f"?release={release}" if release else ""
-        request = Request(args.base_url + path + suffix, headers={"cache-control": "no-cache"})
-        with urlopen(request, timeout=60) as response:
+        with session.get(args.base_url + path + suffix, timeout=60) as response:
+            response.raise_for_status()
             actual = response.headers.get("x-report-release")
             if release and actual != release:
                 raise ValueError("Public response does not match the pinned release")
-            return json.load(response), actual
+            return response.json(), actual
 
     index, release = read("/api/portfolio-reports")
     if not release:
