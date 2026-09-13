@@ -104,7 +104,7 @@ def test_collector_retries_only_missing_symbol_and_preserves_cache_on_exhaustion
     else:
         with pytest.raises(RuntimeError, match="freshness validation failed"):
             market.collect_context_prices(["AAPL", "IVV"], settings, config)
-        audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text())
+        audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text(encoding="utf-8"))
         assert audit["fresh_symbols"] == 1 and audit["required_fresh_symbols"] == 2
         assert "attempt=4/4" in audit["failures"][0]["error"]
         assert (cache / "AAPL.parquet").read_bytes() == before
@@ -147,7 +147,7 @@ def test_expired_budget_stops_requests_and_retains_full_audit(tmp_path, monkeypa
     config = {"data": {"request_workers": 1, "collection_time_budget_seconds": 1}}
     with pytest.raises(RuntimeError, match="No context price"):
         market.collect_context_prices(["AAPL", "IVV"], settings, config)
-    audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text())
+    audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text(encoding="utf-8"))
     assert audit["time_budget_exhausted"] is True
     assert len(audit["symbol_checks"]) == 2
     assert len(audit["failures"]) == 2
@@ -182,6 +182,6 @@ def test_all_symbol_gate_rejects_partial_success_despite_minimum(tmp_path, monke
                        "minimum_fresh_symbols": 1, "require_all_fresh_symbols": True}, "indices": {"S&P 500": "IVV"}}
     with pytest.raises(RuntimeError, match="fresh=1, required=2"):
         market.collect_context_prices(["AAPL", "IVV"], settings, config)
-    audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text())
+    audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text(encoding="utf-8"))
     assert audit["benchmark_is_fresh"] is True
     assert audit["failures"][0]["ticker"] == "AAPL"
