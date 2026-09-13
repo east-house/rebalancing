@@ -112,7 +112,7 @@ export default function PortfolioReportPage(props: Props) {
         {account && <button type="button" className="portfolio-report-secondary" onClick={() => download(account, "i1-account-backup.json")}><Download size={16} /> 계좌 기록 다운로드</button>}</section>
       {busy && <p role="status"><RefreshCw size={15} className="spin" /> 보고서를 확인하고 거래일 순서대로 계좌를 갱신하고 있습니다.</p>}
       {error && <p role="alert" className="portfolio-report-alert">{error}</p>}
-      <PortfolioPublicationStatus reportDate={day?.reportDate ?? index?.reports[0]?.reportDate} generatedAt={index?.reports.find(item => item.reportDate === (day?.reportDate ?? index.reports[0]?.reportDate))?.generatedAt} />
+      <PortfolioPublicationStatus reportDate={day?.reportDate ?? index?.reports[0]?.reportDate} generatedAt={day?.sourceRevision ?? index?.reports.find(item => item.reportDate === (day?.reportDate ?? index.reports[0]?.reportDate))?.generatedAt} />
       {!account && <section className="portfolio-report-card"><h2>시작일과 초기 투자금</h2><p>시작 보고서의 i1 종목을 선택하고 다음 미국 거래일 종가로 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다.</p>
         <div className="portfolio-report-controls"><label>시작 보고일<select aria-label="시작 보고일" value={start} onChange={event => setStart(event.target.value)}>{[...(index?.reports ?? [])].sort((a, b) => a.reportDate.localeCompare(b.reportDate)).map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate}</option>)}</select></label>
           <label>초기 투자금(USD)<input aria-label="초기 투자금(USD)" type="number" min="1" step="1" value={capital} onChange={event => setCapital(Number(event.target.value))} /></label>
