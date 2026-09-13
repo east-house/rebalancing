@@ -2,6 +2,10 @@
 
 Reviewed 2026-09-13 after pulling main through `df35df9`.
 
+Update: both historical data issues were repaired and verified in production
+on 2026-09-13. See `HISTORY_REPAIR_2026-09-13.md` for the current result,
+workflow evidence and reproducible public verification command.
+
 ## Implemented
 
 - Portfolio management, allocation/rebalancing, device-local saved portfolios,
@@ -41,14 +45,15 @@ Reviewed 2026-09-13 after pulling main through `df35df9`.
   tracked report index was restored and the three untracked copies removed
   from `public/data/market-reports/`.
 
-## Known limitations, not new regressions
+## Historical issues resolved on 2026-09-13
 
-- Production still lists 2026-08-18 and 2026-09-03 as historical recovery
-  failures because news validation found zero articles. Daily publication is
-  separate. Do not remove these failures or invent historical source data.
-- Some differences between older regular trades and reconstructed trades
-  remain unexplained because original daily OHLC inputs are unavailable.
-  See `PORTFOLIO_VISIBILITY_REVIEW_2026-09-11.md`.
+- Both missing report dates are published with 12 sourced news items each and
+  valid market/portfolio reports and PNGs. The latest report date is preserved.
+- The revised regular ledger and start-date replay agree across all nine
+  compared US sessions. Original records were archived, and future replays
+  use the regular reports' preserved session inputs instead of a separate feed.
+
+## Other product limitations
 - Personal account records remain browser-local; cloud synchronization and
   backup import are not implemented. Replay constituent changes require review.
 - Python emitted 15 existing deprecation/future warnings from matplotlib's
@@ -56,5 +61,5 @@ Reviewed 2026-09-13 after pulling main through `df35df9`.
   suppression was applied.
 
 New date/time behavior requires an explicit textual request under `AGENTS.md`.
-Choose the next feature against this baseline; do not treat the archived local
-reports or the documented historical data gaps as newly introduced changes.
+Choose the next feature against this baseline. Do not reopen the resolved data
+issues based on the older audit documents without new evidence of a regression.

@@ -73,6 +73,12 @@ def refresh(as_of: pd.Timestamp, output: Path, work: Path):
                         "sessions": len(index["sessions"])}, work / "observation-verification.json")
             replay.publish_bundles(bundles, {"releaseId": store.manifest["releaseId"]}, last, output)
             return
+    current_index = output / "index.json"
+    if current_index.exists():
+        current = json.loads(current_index.read_text(encoding="utf-8"))
+        first = output / current["releaseId"] / f"{current['starts'][0]}.json"
+        if json.loads(first.read_text(encoding="utf-8")).get("audit", {}).get("inputMode") == "published-session-observations":
+            raise ValueError("Reconciled replays require the published R2 observations; refusing fresh-feed replacement")
     baseline = Path(__file__).resolve().parents[1] / "config/trading-replay-catalog.json"
     catalog = verify_membership(json.loads(baseline.read_text()), end, work / "membership")
     symbols = sorted({r["ticker"] for r in catalog["members"]} | replay.engine._required_proxy_symbols())

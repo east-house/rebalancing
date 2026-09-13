@@ -7,6 +7,7 @@ import pytest
 from market_report_pipeline import trading_observations as observations
 from market_report_pipeline import us_ircs_forward_report as engine
 from market_report_pipeline.repair_trading_history import MemoryStore, publish
+from market_report_pipeline.io_utils import write_json
 
 
 @pytest.fixture
@@ -132,3 +133,13 @@ def test_only_invalid_bars_are_repaired_without_changing_calendar(recorded):
     assert repaired.close.loc[panel.calendar[0], "IVV"] == 95.
     assert quality["preservedHistoryRepairs"] == 1
     assert pd.isna(incoming.close.loc[day, "AAA"])
+
+
+def test_refresh_cannot_replace_observed_replays_with_independent_feed_inputs(tmp_path, monkeypatch):
+    from market_report_pipeline import refresh_trading_replays as refresh
+    monkeypatch.delenv("R2_BUCKET_NAME", raising=False)
+    write_json({"releaseId": "verified", "starts": ["2026-08-31"]}, tmp_path / "index.json")
+    write_json({"audit": {"inputMode": "published-session-observations"}}, tmp_path / "verified/2026-08-31.json")
+    monkeypatch.setattr(refresh, "verify_membership", lambda *_: pytest.fail("Must not download replacement inputs"))
+    with pytest.raises(ValueError, match="require the published R2"):
+        refresh.refresh(pd.Timestamp("2026-09-12"), tmp_path, tmp_path / "work")
