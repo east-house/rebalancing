@@ -1,359 +1,150 @@
-import {
-  CircleAlert,
-  Download,
-  Database,
-  LockKeyhole,
-  RefreshCw,
-  ShieldCheck,
-  TrendingUp,
-  WalletCards,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Download, RefreshCw, WalletCards } from "lucide-react";
+import { loadPortfolioReport, loadPortfolioReportIndex, type PortfolioReportIndex } from "../../api/portfolioReport";
 import { useReportRefresh } from "../../api/useReportRefresh";
-
-import { loadPortfolioReport, loadPortfolioReportIndex, type PortfolioReportIndex, type PortfolioReportPayload } from "../../api/portfolioReport";
-import ReportPublicationStatus from "../../components/ReportPublicationStatus";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
-import {
-  allocatePortfolio,
-  applyActions,
-  buildSnapshot,
-  calculateHistoryPerformance,
-  type DeviceHistory,
-  type PortfolioActionKind,
-  type PortfolioDeviceState,
-} from "./portfolioReportModel";
+import { ACCOUNT_KEY, LEGACY_KEY, advanceAccount, createAccount, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
 import "./portfolioReportPage.css";
+import "./portfolioAccount.css";
 
-const STORAGE_KEY = "stock_strategy.us_portfolio.device.v1";
-
-interface PortfolioReportPageProps {
-  onOpenReport: () => void;
-  onOpenPortfolio: () => void;
-  onOpenPortfolioReport: () => void;
-  onOpenTradingTestReport?: () => void;
-  onOpenEtfCompare: () => void;
+interface Props {
+  onOpenReport: () => void; onOpenPortfolio: () => void; onOpenPortfolioReport: () => void;
+  onOpenTradingTestReport?: () => void; onOpenEtfCompare: () => void;
 }
-
-const ACTION_LABEL: Record<PortfolioActionKind, string> = {
-  BUY: "매수",
-  HOLD: "유지",
-  SELL: "전량 매도",
-  ADD: "추가 매수",
-  REDUCE: "일부 매도",
-  REVIEW: "교체 검토",
-};
-
-function money(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number.isFinite(value) ? value : 0);
-}
-
-function pct(value: number | null, digits = 1): string {
-  if (value === null || !Number.isFinite(value)) return "—";
-  return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(digits)}%`;
-}
-
-function loadDeviceState(): PortfolioDeviceState | null {
+const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+const pct = (value: number) => `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%`;
+const signed = (value: number) => `${value > 0 ? "+" : ""}${money(value)}`;
+function savedAccount(): PortfolioAccount | null {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as PortfolioDeviceState | null;
-    return value?.schemaVersion === 2
-      && typeof value.strategyId === "string"
-      && Array.isArray(value.positions)
-      ? value
-      : null;
-  } catch {
-    return null;
+    const value = JSON.parse(localStorage.getItem(ACCOUNT_KEY) ?? "null") as PortfolioAccount | null;
+    return value?.version === 3 && Array.isArray(value.days) && Array.isArray(value.trades)
+      && value.holdings.every(item => Number.isInteger(item.shares) && item.shares > 0) ? value : null;
+  } catch { return null; }
+}
+function download(value: unknown, name: string) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a"); link.href = url; link.download = name; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function updateAccount(account: PortfolioAccount, index: PortfolioReportIndex): Promise<PortfolioAccount> {
+  const dates = index.reports.map(item => item.reportDate).filter(day => day >= account.startDate && day > (account.days.at(-1)?.reportDate ?? "")).sort();
+  if (new Set(dates).size !== dates.length) throw new Error("보고서 목록에 중복 날짜가 있습니다.");
+  const reports = [];
+  for (let i = 0; i < dates.length; i += 4) {
+    reports.push(...await Promise.all(dates.slice(i, i + 4).map(async day => {
+      const report = await loadPortfolioReport(day, index.releaseId);
+      if (report.report_date_kst !== day || (index.releaseId && report.releaseId !== index.releaseId)) throw new Error("보고서 날짜 또는 게시 버전이 일치하지 않습니다.");
+      return report;
+    })));
   }
+  return advanceAccount(account, reports);
 }
 
-function saveDeviceState(state: PortfolioDeviceState | null) {
-  try {
-    if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    else localStorage.removeItem(STORAGE_KEY);
-    return true;
-  } catch {
-    return false;
-  }
+function EquityChart({ days, capital }: { days: AccountDay[]; capital: number }) {
+  const values = [capital, ...days.map(day => day.equity)];
+  const min = Math.min(...values), max = Math.max(...values), span = Math.max(max - min, capital * 0.01);
+  const y = (value: number) => 150 - (value - min) / span * 125;
+  const points = days.map((day, i) => `${20 + i / Math.max(1, days.length - 1) * 760},${y(day.equity)}`).join(" ");
+  return <figure className="account-chart"><figcaption>총자산 추이 <span>점선: 초기 투자금 {money(capital)}</span></figcaption>
+    <svg viewBox="0 0 800 180" role="img" aria-label="보고일별 총자산 추이"><line x1="20" x2="780" y1={y(capital)} y2={y(capital)} stroke="#94a3b8" strokeDasharray="5 5" /><polyline points={points} fill="none" stroke="#2563eb" strokeWidth="3" />
+      {days.length === 1 && <circle cx="20" cy={y(days[0].equity)} r="4" fill="#2563eb" />}</svg>
+    <div><span>{days[0]?.reportDate}</span><strong>{money(days.at(-1)?.equity ?? capital)}</strong><span>{days.at(-1)?.reportDate}</span></div>
+  </figure>;
 }
 
-function historyItem(
-  payload: PortfolioReportPayload,
-  type: DeviceHistory["type"],
-  summary: string,
-  equity?: number,
-): DeviceHistory {
-  return {
-    sourceRevision: payload.generated_at,
-    reportDate: payload.report_date_kst,
-    marketDate: payload.signal_market_date,
-    type,
-    summary,
-    recordedAt: new Date().toISOString(),
-    equity,
-  };
-}
-
-export default function PortfolioReportPage({
-  onOpenReport,
-  onOpenPortfolio,
-  onOpenPortfolioReport,
-  onOpenTradingTestReport,
-  onOpenEtfCompare,
-}: PortfolioReportPageProps) {
+export default function PortfolioReportPage(props: Props) {
   const refresh = useReportRefresh();
-  const [archive, setArchive] = useState<PortfolioReportIndex | null>(null);
-  const [archiveDate, setArchiveDate] = useState("");
-  const [payload, setPayload] = useState<PortfolioReportPayload | null>(null);
-  const [deviceState, setDeviceState] = useState<PortfolioDeviceState | null>(() => loadDeviceState());
-  const writeBlocked = !payload || !!archiveDate || !!payload.stale_preview || !!(deviceState && (
-    deviceState.strategyId !== payload.strategy.id || deviceState.history.some((item) => item.reportDate > payload.report_date_kst)
-  ));
-  const [capital, setCapital] = useState(2_819);
-  const [fractional, setFractional] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedHistoryKey, setSelectedHistoryKey] = useState<string | null>(null);
+  const [account, setAccount] = useState<PortfolioAccount | null>(savedAccount);
+  const [index, setIndex] = useState<PortfolioReportIndex | null>(null);
+  const [capital, setCapital] = useState(2819);
+  const [start, setStart] = useState("2026-08-17");
+  const [viewDate, setViewDate] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [legacy] = useState(() => localStorage.getItem(LEGACY_KEY));
 
+  const persist = (next: PortfolioAccount) => {
+    try { localStorage.setItem(ACCOUNT_KEY, JSON.stringify(next)); }
+    catch { throw new Error("계좌 기록을 저장하지 못했습니다. 기존 계좌는 유지됩니다."); }
+    setAccount(next);
+  };
   useEffect(() => {
     let active = true;
-    loadPortfolioReportIndex().then((value) => { if (active && Array.isArray(value.reports)) setArchive(value); }).catch(() => {});
+    setBusy(true);
+    (async () => {
+      try {
+        const list = await loadPortfolioReportIndex();
+        if (!active) return;
+        setIndex(list);
+        if (!list.reports.some(item => item.reportDate === start)) setStart([...list.reports].sort((a, b) => a.reportDate.localeCompare(b.reportDate))[0]?.reportDate ?? "");
+        if (account) {
+          const next = await updateAccount(account, list);
+          if (active) persist(next);
+        }
+        if (active) setError("");
+      } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "보고서 조회 실패"); }
+      finally { if (active) setBusy(false); }
+    })();
     return () => { active = false; };
   }, [refresh]);
 
-  const saveState = (state: PortfolioDeviceState | null) => {
-    if (saveDeviceState(state)) return true;
-    setError("브라우저에 기록을 저장하지 못했습니다. 저장 공간과 브라우저 설정을 확인해 주세요.");
-    return false;
+  const begin = async () => {
+    if (!index || busy) return;
+    setBusy(true); setError("");
+    try {
+      const next = await updateAccount(createAccount(start, capital), index);
+      if (!next.days.length) throw new Error("선택한 시작일의 보고서가 없습니다.");
+      persist(next); setViewDate("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "계좌 생성 실패"); }
+    finally { setBusy(false); }
   };
+  const day = account?.days.find(item => item.reportDate === viewDate) ?? account?.days.at(-1);
+  const visibleDays = account?.days.filter(item => item.reportDate <= (day?.reportDate ?? "")) ?? [];
+  const visibleTrades = account?.trades.filter(item => item.executionDate <= (day?.marketDate ?? "")) ?? [];
 
-  useEffect(() => {
-    let active = true;
-    loadPortfolioReport(archiveDate || "latest", archiveDate ? archive?.releaseId : undefined)
-      .then((value) => {
-        if (!active) return;
-        setPayload((previous) => !archiveDate && previous && previous.report_date_kst > value.report_date_kst ? previous : value);
-        if (!refresh) {
-          setCapital(deviceState?.capital ?? value.default_capital);
-          setFractional(deviceState?.fractional ?? value.default_fractional_shares);
-        }
-        setError("");
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "포트폴리오 보고서를 불러오지 못했습니다.");
-      })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [refresh, archiveDate, archive?.releaseId]);
-
-  const initialPlan = useMemo(
-    () => payload ? allocatePortfolio(payload, Math.max(100, capital), fractional) : null,
-    [capital, fractional, payload],
-  );
-  const snapshot = useMemo(
-    () => payload && deviceState ? buildSnapshot(payload, deviceState) : null,
-    [deviceState, payload],
-  );
-  const actionable = snapshot?.actions.filter((item) => item.action !== "HOLD") ?? [];
-
-  useEffect(() => {
-    if (!payload || !deviceState || !snapshot) return;
-    if (archiveDate || payload.stale_preview || payload.strategy.id !== deviceState.strategyId) return;
-    if (deviceState.history.some((item) => item.reportDate > payload.report_date_kst)) return;
-    if (deviceState.history.some((item) => item.type === "DAILY" && item.reportDate === payload.report_date_kst && item.sourceRevision === payload.generated_at)) return;
-    const next = {
-      ...deviceState,
-      positions: snapshot.actions.map(({ action: _action, reason: _reason, currentWeight: _currentWeight, targetShares: _targetShares, close: _close, rank: _rank, loss: _loss, drawdown: _drawdown, ...position }) => position),
-      history: [...deviceState.history, historyItem(payload, "DAILY", actionable.length ? `${actionable.length}건 확인 필요` : "전 종목 유지", snapshot.equity)],
-    };
-    if (!saveState(next)) return;
-    setDeviceState(next);
-  }, [actionable.length, deviceState, payload, snapshot, archiveDate]);
-
-  const saveInitial = () => {
-    if (!payload || !initialPlan || writeBlocked) return;
-    const state: PortfolioDeviceState = {
-      schemaVersion: 2,
-      strategyId: payload.strategy.id,
-      capital: Math.max(100, capital),
-      fractional,
-      cash: initialPlan.cash,
-      positions: initialPlan.positions,
-      initialReport: {
-        reportDate: payload.report_date_kst,
-        marketDate: payload.signal_market_date,
-        strategyId: payload.strategy.id,
-      },
-      lastReviewMonth: payload.report_date_kst.slice(0, 7),
-      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · ${payload.selection.length}종목 동일비중 · ${payload.strategy.name}`, Math.max(100, capital)) ],
-    };
-    if (!saveState(state)) return;
-    setDeviceState(state);
-  };
-
-  const applyToday = () => {
-    if (!payload || !deviceState || !snapshot || writeBlocked) return;
-    const applied = applyActions(payload, deviceState, snapshot);
-    const count = snapshot.actions.filter((item) => ["SELL", "ADD", "REDUCE"].includes(item.action)).length;
-    const next = {
-      ...applied,
-      history: [...applied.history, historyItem(payload, "APPLY", `${count}건 모델 기록에 반영`, snapshot.equity)],
-    };
-    if (!saveState(next)) return;
-    setDeviceState(next);
-  };
-
-  const changeCapital = () => {
-    if (!payload || !deviceState || writeBlocked) return;
-    const source = deviceState.positions.map((position) => ({
-      ...payload.selection.find((item) => item.ticker === position.ticker)!,
-      ticker: position.ticker,
-      name: position.name,
-      sector: position.sector,
-      themes: position.themes,
-      weight: position.weight,
-      reference_close: payload.quotes[position.ticker]?.close ?? position.entryPrice,
-      close: payload.quotes[position.ticker]?.close ?? position.entryPrice,
-      rank: payload.quotes[position.ticker]?.rank ?? 999,
-      trend_200: payload.quotes[position.ticker]?.trend_200 ?? 0,
-    }));
-    const plan = allocatePortfolio(payload, Math.max(100, capital), fractional, source);
-    const positions = plan.positions.map((position) => {
-      const previous = deviceState.positions.find((item) => item.ticker === position.ticker);
-      return {
-        ...position,
-        entryPrice: previous?.entryPrice ?? position.entryPrice,
-        highWatermark: Math.max(previous?.highWatermark ?? 0, position.highWatermark),
-      };
-    });
-    const next: PortfolioDeviceState = {
-      ...deviceState,
-      capital: Math.max(100, capital),
-      fractional,
-      cash: plan.cash,
-      positions,
-      history: [...deviceState.history, historyItem(payload, "CAPITAL_CHANGE", `${money(Math.max(100, capital))}로 목표비중 재계산`, Math.max(100, capital))],
-    };
-    if (!saveState(next)) return;
-    setDeviceState(next);
-  };
-
-  const reset = () => {
-    if (!window.confirm("이 기기에 저장된 포트폴리오와 기록을 모두 삭제할까요?")) return;
-    if (!saveState(null)) return;
-    setDeviceState(null);
-    setSelectedHistoryKey(null);
-  };
-
-  const selectedHistory = deviceState?.history.find(
-    (item) => `${item.recordedAt}-${item.type}` === selectedHistoryKey,
-  ) ?? deviceState?.history.at(-1) ?? null;
-  const selectedPerformance = payload && snapshot && selectedHistory
-    ? calculateHistoryPerformance(selectedHistory, snapshot.equity, payload.report_date_kst)
-    : null;
-
-  if (loading) return <main className="portfolio-report-loading"><RefreshCw className="spin" /> 포트폴리오 보고서를 불러오는 중입니다.</main>;
-
-  return (
-    <div className="portfolio-report-shell">
-      <header className="portfolio-report-topbar">
-        <div className="portfolio-report-brand"><WalletCards size={19} /><div><strong>포트폴리오 보고서</strong><span>MODEL DECISION REPORT</span></div></div>
-        <ProductTabs
-          current="portfolio-report"
-          onOpenReport={onOpenReport}
-          onOpenPortfolio={onOpenPortfolio}
-          onOpenPortfolioReport={onOpenPortfolioReport}
-          onOpenTradingTestReport={onOpenTradingTestReport}
-          onOpenEtfCompare={onOpenEtfCompare}
-        />
-      </header>
-
-      <main className="portfolio-report-main">
-        {archive?.reports.length ? <label>보고서 날짜 <select aria-label="보고서 날짜" value={archiveDate} onChange={(event) => { setPayload(null); setLoading(true); setArchiveDate(event.target.value); }}><option value="">최신 보고서</option>{archive.reports.map((item) => <option key={item.reportDate} value={item.reportDate}>{item.reportDate} · 미국장 {item.marketDate}</option>)}</select></label> : null}
-        {archiveDate && <p role="status">과거 보고서 조회 · 계좌 기록에 반영하지 않습니다.</p>}
-        <ReportPublicationStatus product="market-reports" />
-        {deviceState && <button type="button" title="기록 백업 다운로드" aria-label="기록 백업 다운로드" onClick={() => {
-          const url = URL.createObjectURL(new Blob([JSON.stringify(deviceState, null, 2)], { type: "application/json" }));
-          const link = document.createElement("a"); link.href = url; link.download = "portfolio-history-backup.json"; link.click();
-          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }}><Download size={16} /></button>}
-        {error || !payload ? <div className="portfolio-report-alert"><CircleAlert size={18} />{error || "표시할 포트폴리오 보고서가 없습니다."}</div> : (
-          <>
-            <section className="portfolio-report-hero">
-              <div><span className="portfolio-report-eyebrow">{payload.report_date_kst} · 예정 {payload.report_time_kst} KST</span><h1>오늘 확인할 매수·매도와<br />리밸런싱 제안</h1><p>{payload.strategy.name} · 미국 {payload.signal_market_date} 종가까지 반영한 {payload.selection.length}종목 모델입니다. 실제 주문은 실행하지 않습니다.</p>{payload.generated_at && <p>생성 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date(payload.generated_at))} KST</p>}{(payload.stale_preview || payload.reconstructed || payload.dataSource === "static-preview") && <p role="status">{payload.stale_preview ? "자료 지연 · 예비 보고서" : payload.reconstructed ? "과거일 재구성 보고서" : "정적 미리보기"}</p>}</div>
-              <dl><div><dt>시장 상태</dt><dd>{payload.market.state}</dd></div><div><dt>IVV 장기선</dt><dd>{pct(payload.market.ivv_vs_sma_200)}</dd></div><div><dt>정기 점검</dt><dd>월 1회</dd></div><div><dt>자동매매</dt><dd>없음</dd></div></dl>
-            </section>
-
-            <div className="portfolio-report-privacy"><LockKeyhole size={18} /><div><strong>금액·보유수량·기록은 이 브라우저에만 저장됩니다.</strong><p>서버 전송과 기기간 동기화가 없으며 브라우저 데이터를 삭제하면 함께 삭제됩니다.</p></div></div>
-
-            {!deviceState && initialPlan ? (
-              <section className="portfolio-report-card">
-                <div className="portfolio-report-card__head"><div><span>INITIAL BUY PLAN</span><h2>초기 포트폴리오 매수안</h2><p>투자금을 {payload.selection.length}종목에 동일비중으로 배정합니다. 금액과 소수점 거래 여부를 바꾸면 수량을 다시 계산합니다.</p></div><TrendingUp size={20} /></div>
-                <div className="portfolio-report-controls"><label>투자금액(USD)<input type="number" min="100" step="1" value={capital} onChange={(event) => setCapital(Number(event.target.value))} /></label><label className="portfolio-report-check"><input type="checkbox" checked={fractional} onChange={(event) => setFractional(event.target.checked)} /> 소수점 주식 사용</label><button type="button" disabled={writeBlocked} onClick={saveInitial}>초기 리포트 저장</button></div>
-                <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>연결 테마</th><th>제안</th><th>목표비중</th><th>배정금액</th><th>기준 종가</th><th>계산 수량</th><th>후보 순위</th></tr></thead><tbody>{initialPlan.positions.map((position) => { const quote = payload.quotes[position.ticker]; return <tr key={position.ticker}><td data-label="회사(티커)"><strong>{position.name}</strong><small>{position.ticker} · {position.sector}</small></td><td data-label="연결 테마">{position.themes}</td><td data-label="제안"><span className="portfolio-action buy">매수</span></td><td data-label="목표비중">{(position.weight * 100).toFixed(0)}%</td><td data-label="배정금액">{money(capital * position.weight)}</td><td data-label="기준 종가">{money(quote?.close ?? position.entryPrice)}</td><td data-label="계산 수량">{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td data-label="후보 순위">{quote?.rank ?? "—"}</td></tr>; })}</tbody></table></div>
-                <p className="portfolio-report-cash">계산 후 예상 현금 {money(initialPlan.cash)} · 실제 체결가격과 수수료에 따라 달라질 수 있습니다.</p>
-              </section>
-            ) : null}
-
-            {deviceState && snapshot ? (
-              <>
-                <section className="portfolio-decision-summary">
-                  <div><span>오늘의 결론</span><h2>{actionable.length ? `${actionable.length}건의 행동을 확인하세요.` : "오늘은 거래 없이 포트폴리오를 유지합니다."}</h2></div>
-                  <dl><div><dt>모델 평가액</dt><dd>{money(snapshot.equity)}</dd></div><div><dt>주식 / 현금</dt><dd>{(snapshot.stockValue / Math.max(snapshot.equity, 1) * 100).toFixed(0)}% / {(deviceState.cash / Math.max(snapshot.equity, 1) * 100).toFixed(0)}%</dd></div><div><dt>제안 행동</dt><dd>{actionable.length}건</dd></div></dl>
-                </section>
-
-                <div className="portfolio-report-grid">
-                  <section className="portfolio-report-card portfolio-report-actions">
-                    <div className="portfolio-report-card__head"><div><span>DAILY ACTIONS</span><h2>오늘 확인할 행동</h2><p>손실 제한과 추적 제한은 매일, 순위·목표비중은 매월 첫 평일 리포트에서 점검합니다.</p></div><ShieldCheck size={20} /></div>
-                    <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>판단</th><th>현재비중</th><th>목표비중</th><th>후보순위</th><th>이유</th></tr></thead><tbody>{snapshot.actions.map((action) => <tr key={action.ticker}><td data-label="회사(티커)"><strong>{action.name}</strong><small>{action.ticker} · {action.sector}</small></td><td data-label="판단"><span className={`portfolio-action ${action.action.toLowerCase()}`}>{ACTION_LABEL[action.action]}</span></td><td data-label="현재비중">{pct(action.currentWeight)}</td><td data-label="목표비중">{(action.weight * 100).toFixed(0)}%</td><td data-label="후보순위">{action.rank ?? "—"}</td><td data-label="이유">{action.reason}</td></tr>)}</tbody></table></div>
-                    <button className="portfolio-report-secondary" type="button" disabled={writeBlocked} onClick={applyToday}>매수·매도 제안을 모델 기록에 반영</button>
-                  </section>
-
-                  <aside className="portfolio-report-side">
-                    <section className="portfolio-report-card"><h2>투자금 변경</h2><p>현재 종목과 목표비중을 유지한 채 수량을 다시 계산합니다.</p><div className="portfolio-report-side-controls"><label>새 투자금액<input type="number" min="100" step="1" value={capital} onChange={(event) => setCapital(Number(event.target.value))} /></label><label className="portfolio-report-check"><input type="checkbox" checked={fractional} onChange={(event) => setFractional(event.target.checked)} /> 소수점 주식</label><button type="button" disabled={writeBlocked} onClick={changeCapital}>비율대로 변경</button></div></section>
-                    <section className="portfolio-report-card">
-                      <h2>이 기기의 기록</h2>
-                      <p className="portfolio-report-history-help">기록을 선택하면 그 시점부터 현재 보고서까지의 성과를 확인할 수 있습니다.</p>
-                      <div className="portfolio-report-history">
-                        {[...deviceState.history].reverse().map((item) => {
-                          const key = `${item.recordedAt}-${item.type}`;
-                          return <button className={key === `${selectedHistory?.recordedAt}-${selectedHistory?.type}` ? "is-selected" : ""} type="button" key={key} onClick={() => setSelectedHistoryKey(key)}><div><strong>{item.reportDate}</strong><small>{item.type} · 미국 {item.marketDate}</small></div><span>{item.summary}</span></button>;
-                        })}
-                      </div>
-                      {selectedHistory ? (
-                        <div className={`portfolio-report-history-performance ${selectedPerformance && selectedPerformance.returnRate < 0 ? "is-down" : "is-up"}`} aria-label="선택 기록 성과" aria-live="polite">
-                          {selectedPerformance ? <>
-                            <strong>{selectedHistory.reportDate} 기록 대비</strong>
-                            <span>{selectedPerformance.elapsedDays}일 경과</span>
-                            <b>{pct(selectedPerformance.returnRate)} {selectedPerformance.returnRate > 0 ? "상승" : selectedPerformance.returnRate < 0 ? "하락" : "변동 없음"}</b>
-                            <small>{money(selectedHistory.equity ?? 0)} → {money(snapshot.equity)}</small>
-                          </> : <small>선택한 기존 기록에는 당시 평가액이 없어 성과를 계산할 수 없습니다. 새로 저장되는 기록부터 비교할 수 있습니다.</small>}
-                        </div>
-                      ) : null}
-                    </section>
-                    <button className="portfolio-report-danger" type="button" onClick={reset}>이 기기의 포트폴리오 기록 삭제</button>
-                  </aside>
-                </div>
-
-                <section className="portfolio-report-card">
-                  <div className="portfolio-report-card__head"><div><span>MODEL PORTFOLIO</span><h2>현재 모델 포트폴리오</h2><p>실제 증권사 잔고가 아니라 이 브라우저에서 제안을 반영했다고 가정한 기록입니다.</p></div><Database size={20} /></div>
-                  <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>수량</th><th>현재가</th><th>평가액</th><th>비중</th><th>기준가 대비</th></tr></thead><tbody>{snapshot.actions.filter((action) => action.shares > 0).map((action) => <tr key={action.ticker}><td data-label="회사(티커)"><strong>{action.name}</strong><small>{action.ticker}</small></td><td data-label="수량">{action.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td data-label="현재가">{action.close === null ? "—" : money(action.close)}</td><td data-label="평가액">{money(action.shares * (action.close ?? 0))}</td><td data-label="비중">{pct(action.currentWeight)}</td><td data-label="기준가 대비" className={(action.loss ?? 0) >= 0 ? "is-up" : "is-down"}>{pct(action.loss)}</td></tr>)}</tbody></table></div>
-                </section>
-              </>
-            ) : null}
-
-            <section className="portfolio-report-method">
-              <h2>추천 기준과 한계</h2>
-              <ol><li>S&amp;P 500 종목 중 가격·유동성·변동성 조건을 통과한 상위 200개를 계산합니다.</li><li>안정 모멘텀 점수 85%에 시장 리포트의 테마 강도 15%를 결합합니다.</li><li>{payload.strategy.id === "i1_core_satellite" ? "IVV를 포함하고, 과거 초과수익률 상관으로 테마·섹터를 분류합니다. 섹터당 최대 2종목과 절대상관 0.80 제한으로 최대 5종목을 동일비중으로 선택합니다." : "섹터당 최대 2종목과 종목 간 상관 0.80 제한을 적용해 최종 5종목을 선택합니다."}</li><li>{payload.policy.stop_loss === null && payload.policy.trailing_stop === null ? "고정 손절·추적 손절은 사용하지 않습니다. 매월 첫 평일에는 순위와 목표비중을 점검합니다." : "매입가 대비 -12% 또는 보유 후 고점 대비 -15%면 전량 매도를 제안하고, 매월 첫 평일에는 순위와 목표비중을 점검합니다."}</li></ol>
-              <p><CircleAlert size={16} /> 본 보고서는 규칙 기반 모델의 정보 제공 결과이며 개인의 재무상황을 반영한 투자자문이 아닙니다. 실제 투자 판단과 주문 책임은 이용자에게 있습니다.</p>
-            </section>
-          </>
-        )}
-        <SiteFooter className="portfolio-report-footer" note="브라우저에만 저장되는 5종목 모델 포트폴리오 의사결정 자료" />
-      </main>
-    </div>
-  );
+  return <div className="portfolio-report-shell">
+    <header className="portfolio-report-topbar"><div className="portfolio-report-brand"><WalletCards size={20} /><div><strong>포트폴리오 보고서</strong><span>I1 ACCOUNT TRACKER</span></div></div><ProductTabs current="portfolio-report" {...props} /></header>
+    <main className="portfolio-report-main account-main">
+      <section className="account-heading"><div><span className="portfolio-report-eyebrow">I1 코어·위성 · 정수 주식 운용</span><h1>내 투자금은 얼마나 변했을까?</h1><p>시작일부터 매수·매도와 손익을 이어서 기록하는 가상계좌입니다. 실제 증권사 주문은 실행하지 않습니다.</p></div>
+        {account && <button type="button" className="portfolio-report-secondary" onClick={() => download(account, "i1-account-backup.json")}><Download size={16} /> 계좌 기록 다운로드</button>}</section>
+      {busy && <p role="status"><RefreshCw size={15} className="spin" /> 보고서를 확인하고 거래일 순서대로 계좌를 갱신하고 있습니다.</p>}
+      {error && <p role="alert" className="portfolio-report-alert">{error}</p>}
+      {!account && <section className="portfolio-report-card"><h2>시작일과 초기 투자금</h2><p>시작 보고서의 i1 종목을 선택하고 다음 미국 거래일 종가로 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다.</p>
+        <div className="portfolio-report-controls"><label>시작 보고일<select aria-label="시작 보고일" value={start} onChange={event => setStart(event.target.value)}>{[...(index?.reports ?? [])].sort((a, b) => a.reportDate.localeCompare(b.reportDate)).map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate}</option>)}</select></label>
+          <label>초기 투자금(USD)<input aria-label="초기 투자금(USD)" type="number" min="1" step="1" value={capital} onChange={event => setCapital(Number(event.target.value))} /></label>
+          <button type="button" disabled={busy || !index} onClick={begin}>이 금액으로 계좌 시작</button></div>
+        {legacy && <p>이전 방식의 기록은 별도로 보존돼 있습니다. 새 계좌의 체결 내역으로 변환하지 않습니다. <button type="button" onClick={() => download(JSON.parse(legacy), "previous-portfolio-backup.json")}>이전 기록 다운로드</button></p>}</section>}
+      {account && day && <>
+        <div className="account-period"><strong>시작 {account.startDate} · 초기 투자금 {money(account.initialCapital)}</strong><label>계좌 조회일 <select aria-label="계좌 조회일" value={viewDate} onChange={event => setViewDate(event.target.value)}><option value="">최신 계좌</option>{[...account.days].reverse().map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate} · 미국장 {item.marketDate}</option>)}</select></label></div>
+        <p>{day.reportDate} 보고서 · 미국 {day.marketDate} 종가 기준{viewDate ? " · 해당 날짜에 저장된 보유 내역과 손익" : ""}</p>
+        <section className="account-metrics" aria-label="계좌 손익 요약">
+          <div><span>현재 총자산</span><strong>{money(day.equity)}</strong><small>주식 평가액 + 현금</small></div>
+          <div className={day.totalPnl >= 0 ? "is-up" : "is-down"}><span>총손익 / 수익률</span><strong>{signed(day.totalPnl)}</strong><small>{pct(day.returnRate)} · 초기 투자금 대비</small></div>
+          <div><span>보유 현금</span><strong>{money(day.cash)}</strong><small>정수 매수 후 남은 금액 포함</small></div>
+          <div><span>실현손익</span><strong>{signed(day.realizedPnl)}</strong><small>매도로 확정된 손익</small></div>
+          <div><span>평가손익</span><strong>{signed(day.unrealizedPnl)}</strong><small>현재 보유 종목의 손익</small></div>
+        </section>
+        <section className="portfolio-report-card account-notice"><h2>변경사항과 다음 주문</h2>
+          <p>{day.trades.length ? `미국 ${day.marketDate} 종가로 ${day.trades.length}건의 매매를 반영했습니다.` : "이 보고일에 새로 반영된 체결은 없습니다."}</p>
+          {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 월간 점검에서 순위·섹터·상관 제한과 목표비중을 다시 확인합니다.</p>}
+          <details><summary>누적 변경 알림 ({visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).length})</summary>{visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).map(item => <p key={item.reportDate}>{item.reportDate} · {item.trades.length ? `${item.trades.length}건 체결` : item.pending?.reason}</p>)}</details>
+        </section>
+        <section className="portfolio-report-card"><EquityChart days={visibleDays} capital={account.initialCapital} /></section>
+        <section className="portfolio-report-card"><h2>보유 종목과 수익</h2><p>평균매수단가는 매수 비용을 포함합니다. 총손익 = 실현손익 + 평가손익입니다.</p>
+          {!day.holdings.length ? <p>아직 체결된 보유 종목이 없습니다. 주문 대기 또는 1주 매수에 필요한 금액 부족으로 현금을 보유하고 있습니다.</p> : <div className="portfolio-report-table-wrap"><table><thead><tr><th>종목</th><th>최초 매수일 / 최근 매수일</th><th>수량</th><th>평균매수단가</th><th>기준 종가</th><th>매수원가</th><th>평가액</th><th>평가손익</th><th>수익률</th></tr></thead><tbody>{day.holdings.map(item => <tr key={item.ticker}><td><strong>{item.ticker}</strong><small>{item.name}</small></td><td>{item.firstBuyDate}<small>{item.lastBuyDate}</small></td><td>{item.shares}주</td><td>{money(item.cost / item.shares)}</td><td>{money(item.close)}</td><td>{money(item.cost)}</td><td>{money(item.value)}</td><td className={item.pnl >= 0 ? "is-up" : "is-down"}>{signed(item.pnl)}</td><td>{pct(item.returnRate)}</td></tr>)}</tbody></table></div>}
+        </section>
+        <section className="portfolio-report-card"><h2>매수·매도 내역</h2><p>매매는 가상 체결이며, i1의 편도 거래비용 0.10%를 반영합니다. 날짜는 미국 체결 거래일입니다.</p>
+          {!visibleTrades.length ? <p>체결 내역이 없습니다.</p> : <div className="portfolio-report-table-wrap"><table><thead><tr><th>체결일</th><th>종목</th><th>매매</th><th>수량</th><th>체결가</th><th>거래금액</th><th>거래비용</th><th>실현손익</th><th>변경 사유 / 판단 기준일</th></tr></thead><tbody>{[...visibleTrades].reverse().map(item => <tr key={item.id}><td>{item.executionDate}</td><td>{item.ticker}</td><td>{item.side === "BUY" ? "매수" : "매도"}</td><td>{item.shares}주</td><td>{money(item.price)}</td><td>{money(item.shares * item.price)}</td><td>{money(item.fee)}</td><td>{item.side === "SELL" ? signed(item.realizedPnl) : "—"}</td><td>{item.reason}<small>미국 {item.signalDate} 종가</small></td></tr>)}</tbody></table></div>}
+        </section>
+        <section className="portfolio-report-card"><h2>일별 자산 기록</h2><div className="portfolio-report-table-wrap"><table><thead><tr><th>한국 보고일</th><th>미국장 기준일</th><th>총자산</th><th>현금</th><th>총손익</th><th>수익률</th><th>체결</th></tr></thead><tbody>{[...visibleDays].reverse().map(item => <tr key={item.reportDate}><td><button type="button" onClick={() => setViewDate(item.reportDate)}>{item.reportDate}</button></td><td>{item.marketDate}</td><td>{money(item.equity)}</td><td>{money(item.cash)}</td><td>{signed(item.totalPnl)}</td><td>{pct(item.returnRate)}</td><td>{item.trades.length}건</td></tr>)}</tbody></table></div></section>
+        <button type="button" className="portfolio-report-secondary" disabled={busy} onClick={() => {
+          if (!window.confirm("현재 계좌를 백업 보관하고 새 시작일·투자금으로 시작할까요?")) return;
+          try { localStorage.setItem(`${ACCOUNT_KEY}.previous`, JSON.stringify(account)); localStorage.removeItem(ACCOUNT_KEY); setAccount(null); setViewDate(""); }
+          catch { setError("기존 계좌를 보존하지 못해 새 계좌 전환을 중단했습니다."); }
+        }}>기존 계좌를 보관하고 새로 시작</button>
+      </>}
+      <p className="account-footnote">계좌는 이 브라우저에 저장됩니다. 새 보고서는 날짜순으로 이어서 처리하며, 이미 기록한 체결은 새로고침으로 중복 실행하거나 과거 가격 개정으로 다시 쓰지 않습니다. 과거 보고서에 기반한 재구성 결과입니다.</p>
+    </main><SiteFooter className="portfolio-report-footer" note="정수 주식으로 추적하는 i1 가상계좌" />
+  </div>;
 }

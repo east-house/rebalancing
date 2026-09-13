@@ -1,109 +1,70 @@
 import { describe, expect, it } from "vitest";
+import { advanceAccount, createAccount, selectNames } from "./portfolioReportModel";
+import { chain, fixture } from "./accountTestData";
 
-import type { PortfolioReportPayload } from "../../api/portfolioReport";
-import { allocatePortfolio, buildSnapshot, type PortfolioDeviceState } from "./portfolioReportModel";
-
-const payload: PortfolioReportPayload = {
-  schema_version: 2,
-  generated_at: "2026-08-17T07:30:00+09:00",
-  report_date_kst: "2026-08-17",
-  report_time_kst: "07:30",
-  signal_market_date: "2026-08-14",
-  proposed_execution_date: "2026-08-17",
-  stale_preview: true,
-  default_capital: 2_819,
-  default_fractional_shares: true,
-  fractional_precision: 3,
-  strategy: {
-    id: "us_theme_hybrid_v1",
-    name: "안정 모멘텀·테마 혼합",
-    status: "production_baseline",
-    base_weight: 0.85,
-    theme_weight: 0.15,
-    benchmark: "IVV",
-  },
-  selection: ["A", "B", "C", "D", "E"].map((ticker, index) => ({
-    ticker,
-    name: `Company ${ticker}`,
-    sector: `Sector ${index}`,
-    themes: index === 0 ? "강한 테마" : "미분류",
-    weight: 0.2,
-    reference_close: 100,
-    rank: index + 1,
-    score: 0.9 - index * 0.05,
-    base_score: 0.9 - index * 0.05,
-    theme_strength: index === 0 ? 1 : 0.5,
-    trend_200: 0.1,
-  })),
-  candidates: [],
-  quotes: Object.fromEntries(["A", "B", "C", "D", "E"].map((ticker, index) => [ticker, {
-    ticker,
-    name: `Company ${ticker}`,
-    sector: `Sector ${index}`,
-    themes: index === 0 ? "강한 테마" : "미분류",
-    close: ticker === "A" ? 80 : 100,
-    rank: index + 1,
-    score: 0.9 - index * 0.05,
-    base_score: 0.9 - index * 0.05,
-    theme_strength: index === 0 ? 1 : 0.5,
-    trend_200: 0.1,
-  }])),
-  market: { state: "강세", ivv_close: 700, ivv_vs_sma_200: 0.1 },
-  policy: { maximum_positions: 5, hold_rank: 10, maximum_names_per_sector: 2, maximum_pairwise_correlation: 0.8, stop_loss: 0.12, trailing_stop: 0.15, drift_threshold: 0.03, review_frequency: "monthly", market_regime_cash_overlay: false, stopped_capital_stays_cash_until_monthly_review: true, automatic_trading: false },
-  privacy: { storage: "browser localStorage only", server_user_state: false, cross_device_sync: false, analytics: false },
-  data_snapshot: "snapshot.parquet",
-};
-
-describe("portfolio report device model", () => {
-  it("does not trigger either stop for I1 when prices are flat or fall", () => {
-    const plan = allocatePortfolio(payload, 2_819, true);
-    const i1 = {
-      ...payload,
-      strategy: { ...payload.strategy, id: "i1_core_satellite" },
-      policy: { ...payload.policy, stop_loss: null, trailing_stop: null },
-      quotes: { ...payload.quotes, A: { ...payload.quotes.A!, close: 40 } },
-    };
-    const state: PortfolioDeviceState = {
-      schemaVersion: 2, strategyId: i1.strategy.id, capital: 2_819, fractional: true,
-      ...plan,
-      initialReport: { reportDate: "2026-08-01", marketDate: "2026-07-31", strategyId: i1.strategy.id },
-      lastReviewMonth: "2026-08", history: [],
-    };
-    expect(buildSnapshot(i1, state).actions.every((action) => action.action === "HOLD")).toBe(true);
+describe("integer I1 account ledger", () => {
+  it("waits for the proposed execution close and never uses the signal close as a fill", () => {
+    const reports = chain(); reports[1].quotes.A.close = 125;
+    const initial = advanceAccount(createAccount("2026-08-31", 10000), [reports[0]]);
+    expect(initial.trades).toHaveLength(0); expect(initial.cash).toBe(10000);
+    const filled = advanceAccount(initial, [reports[1]]);
+    const trade = filled.trades.find(item => item.ticker === "A")!;
+    expect(trade.price).toBe(125); expect(trade.executionDate).toBe("2026-08-31");
+    expect(trade.signalDate).toBe("2026-08-28");
+    expect(filled.holdings.every(item => Number.isInteger(item.shares))).toBe(true);
+    expect(filled.cash).toBeGreaterThanOrEqual(0);
   });
-
-  it("allocates five equal-weight positions without exceeding capital", () => {
-    const plan = allocatePortfolio(payload, 2_819, true);
-
-    expect(plan.positions).toHaveLength(5);
-    expect(plan.positions.every((position) => position.weight === 0.2)).toBe(true);
-    expect(plan.cash).toBeGreaterThanOrEqual(0);
+  it("keeps uninvestable allocations in cash with no fractional shares", () => {
+    const result = advanceAccount(createAccount("2026-08-31", 100), chain());
+    expect(result.holdings).toHaveLength(0); expect(result.cash).toBe(100);
   });
-
-  it("recommends a full sell after the 12% loss limit", () => {
-    const plan = allocatePortfolio(payload, 2_819, true);
-    const lowerPayload: PortfolioReportPayload = {
-      ...payload,
-      quotes: {
-        ...payload.quotes,
-        A: { ...payload.quotes.A!, close: 60 },
-      },
-    };
-    const state: PortfolioDeviceState = {
-      schemaVersion: 2,
-      strategyId: payload.strategy.id,
-      capital: 2_819,
-      fractional: true,
-      cash: plan.cash,
-      positions: plan.positions,
-      initialReport: { reportDate: "2026-07-01", marketDate: "2026-06-30", strategyId: payload.strategy.id },
-      lastReviewMonth: "2026-07",
-      history: [],
-    };
-
-    const snapshot = buildSnapshot(lowerPayload, state);
-
-    expect(snapshot.actions.find((item) => item.ticker === "A")?.action).toBe("SELL");
-    expect(snapshot.actions.find((item) => item.ticker === "A")?.reason).toContain("손실 제한선");
+  it("executes monthly replacements, credits sale proceeds and realizes net profit", () => {
+    const reports = chain();
+    reports[1].candidates.find(item => item.ticker === "A")!.rank = 20;
+    reports[2].quotes.A.close = 150;
+    const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    const sold = result.trades.find(item => item.ticker === "A" && item.side === "SELL")!;
+    expect(sold.executionDate).toBe("2026-09-01"); expect(sold.realizedPnl).toBeCloseTo(945.25);
+    expect(result.holdings.some(item => item.ticker === "A")).toBe(false);
+    expect(result.holdings.some(item => item.ticker === "Z")).toBe(true);
+    const day = result.days.at(-1)!;
+    expect(day.realizedPnl + day.unrealizedPnl).toBeCloseTo(day.totalPnl, 8);
+    expect(day.cash + day.holdings.reduce((sum, item) => sum + item.value, 0)).toBeCloseTo(day.equity);
+  });
+  it("updates average cost when adding shares and retains the original buy date", () => {
+    const reports = chain(); reports[1].quotes.A.close = 200; reports[2].quotes.A.close = 100;
+    reports[1].policy.drift_threshold = 0;
+    const result = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    const a = result.holdings.find(item => item.ticker === "A")!;
+    expect(a.shares).toBeGreaterThan(9); expect(a.cost / a.shares).toBeLessThan(200.2);
+    expect(a.firstBuyDate).toBe("2026-08-31"); expect(a.lastBuyDate).toBe("2026-09-01");
+  });
+  it("retains eligible names and enforces absolute correlation and sector limits", () => {
+    const report = fixture(); report.candidates.find(item => item.ticker === "A")!.rank = 8;
+    report.selection_correlations!.B.A = -0.9;
+    const names = selectNames(report, ["IVV", "A"]);
+    expect(names.slice(0, 2).map(item => item.ticker)).toEqual(["IVV", "A"]);
+    expect(names.some(item => item.ticker === "B")).toBe(false);
+  });
+  it("is idempotent and catches up identically after missed visits", () => {
+    const reports = chain(); const first = advanceAccount(createAccount("2026-08-31", 10000), reports);
+    expect(advanceAccount(first, reports)).toEqual(first);
+    const part = advanceAccount(createAccount("2026-08-31", 10000), reports.slice(0, 1));
+    const next = advanceAccount(part, reports);
+    expect(next.trades).toEqual(first.trades); expect(next.days).toEqual(first.days);
+  });
+  it("blocks missing reports and missing execution prices without mutating the saved account", () => {
+    const reports = chain(), account = advanceAccount(createAccount("2026-08-31", 10000), [reports[0]]);
+    expect(() => advanceAccount(account, [reports[2]])).toThrow("보고서가 빠져");
+    delete reports[1].quotes.A;
+    expect(() => advanceAccount(account, [reports[1]])).toThrow("종가 누락");
+    expect(account.trades).toHaveLength(0); expect(account.cash).toBe(10000);
+  });
+  it("keeps a holiday order pending until its actual US execution session", () => {
+    const reports = [fixture("2026-09-07", "2026-09-04", "2026-09-08"), fixture("2026-09-08", "2026-09-04", "2026-09-08"), fixture("2026-09-09", "2026-09-08")];
+    const account = advanceAccount(createAccount("2026-09-07", 10000), reports);
+    expect(account.days[0].trades).toHaveLength(0); expect(account.days[1].trades).toHaveLength(0);
+    expect(account.days[2].trades).toHaveLength(5);
+    expect(account.trades.every(item => item.executionDate === "2026-09-08")).toBe(true);
   });
 });

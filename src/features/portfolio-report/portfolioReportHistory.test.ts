@@ -1,29 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { expect, it } from "vitest";
+import { advanceAccount, createAccount } from "./portfolioReportModel";
+import { chain } from "./accountTestData";
 
-import { calculateHistoryPerformance } from "./portfolioReportModel";
-
-describe("portfolio report history performance", () => {
-  it("calculates elapsed days and a negative return from a selected record", () => {
-    const result = calculateHistoryPerformance({
-      reportDate: "2026-08-01",
-      marketDate: "2026-07-31",
-      type: "DAILY",
-      summary: "daily check",
-      recordedAt: "2026-08-01T00:00:00.000Z",
-      equity: 1_000,
-    }, 925, "2026-08-17");
-
-    expect(result?.elapsedDays).toBe(16);
-    expect(result?.returnRate).toBeCloseTo(-0.075);
-  });
-
-  it("does not calculate performance for legacy records without a saved value", () => {
-    expect(calculateHistoryPerformance({
-      reportDate: "2026-08-01",
-      marketDate: "2026-07-31",
-      type: "DAILY",
-      summary: "legacy",
-      recordedAt: "2026-08-01T00:00:00.000Z",
-    }, 1_000, "2026-08-17")).toBeNull();
-  });
+it("preserves actual historical holdings and equity when later prices and holdings change", () => {
+  const reports = chain(); reports[1].candidates.find(item => item.ticker === "A")!.rank = 20;
+  reports[2].quotes.A.close = 200;
+  const before = advanceAccount(createAccount("2026-08-31", 10000), reports.slice(0, 2));
+  const result = advanceAccount(before, [reports[2]]);
+  expect(result.days.slice(0, 2)).toEqual(before.days);
+  expect(result.days[1].holdings.some(item => item.ticker === "A")).toBe(true);
+  expect(result.days[2].holdings.some(item => item.ticker === "A")).toBe(false);
+  expect(advanceAccount(result, reports).days).toEqual(result.days);
 });

@@ -1,0 +1,34 @@
+.account-main { padding-top: 32px; }
+.account-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+.account-heading h1 { font-size: clamp(26px, 3vw, 38px); margin: 10px 0; letter-spacing: -.04em; }
+.account-heading p, .account-footnote { color: var(--muted); line-height: 1.8; font-size: 13px; }
+.account-main .portfolio-report-card { margin-bottom: 22px; }
+.account-main .portfolio-report-card > h2 { margin-top: 0; font-size: 19px; }
+.account-main .portfolio-report-card > p { color: var(--muted); font-size: 13px; line-height: 1.8; }
+.account-main select { min-height: 40px; padding: 8px 12px; border: 1px solid #dbe3ed; border-radius: 8px; background: white; color: #172033; }
+.account-period { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 24px 0 10px; }
+.account-metrics { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1fr; gap: 12px; margin: 20px 0; }
+.account-metrics > div { padding: 22px 18px; border: 1px solid #dce5f0; border-radius: 14px; background: white; display: flex; flex-direction: column; gap: 10px; }
+.account-metrics > div:first-child { background: #142c50; color: white; }
+.account-metrics span { font-size: 12px; }
+.account-metrics strong { font-size: clamp(20px, 2vw, 28px); letter-spacing: -.03em; }
+.account-metrics small { font-size: 11px; opacity: .75; }
+.account-notice { border-left: 4px solid #2563eb; }
+.account-notice summary { cursor: pointer; color: #2563eb; font-size: 13px; }
+.account-notice details p { margin: 8px 0; font-size: 12px; }
+.account-chart { margin: 0; }
+.account-chart figcaption { display: flex; justify-content: space-between; font-weight: 700; gap: 12px; }
+.account-chart figcaption span { font-size: 12px; font-weight: 400; color: var(--muted); }
+.account-chart svg { width: 100%; max-height: 230px; }
+.account-chart > div { display: flex; justify-content: space-between; gap: 15px; font-size: 12px; color: var(--muted); }
+.account-main .portfolio-report-table-wrap { overflow-x: auto; }
+.account-main table { min-width: 760px; width: 100%; font-size: 12px; }
+.account-main td { white-space: nowrap; }
+.account-main td small { white-space: normal; min-width: 100px; }
+.account-footnote { margin-top: 24px; }
+@media (max-width: 900px) { .account-metrics { grid-template-columns: repeat(2, 1fr); } .account-metrics > div:first-child { grid-column: 1 / -1; } .account-heading, .account-period { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 680px) {
+  .account-main table { display: table; } .account-main thead { display: table-header-group; } .account-main tbody { display: table-row-group; }
+  .account-main tr { display: table-row; } .account-main td, .account-main th { display: table-cell; padding: 12px; } .account-main td::before { display: none; }
+  .account-chart figcaption { flex-direction: column; } .account-main .portfolio-report-controls { align-items: stretch; }
+}

@@ -47,8 +47,7 @@ export interface PortfolioReportPayload {
   proposed_execution_date: string;
   stale_preview: boolean;
   default_capital: number;
-  default_fractional_shares: boolean;
-  fractional_precision: number;
+  selection_correlations?: Record<string, Record<string, number>>;
   strategy: {
     id: string;
     name: string;
@@ -77,6 +76,7 @@ export interface PortfolioReportPayload {
     market_regime_cash_overlay: boolean;
     stopped_capital_stays_cash_until_monthly_review: boolean;
     automatic_trading: boolean;
+    transaction_cost_each_side?: number;
   };
   privacy: {
     storage: string;

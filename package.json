@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm run build && wrangler dev",
     "dev:vite": "vite",
+    "dev:reports": "node scripts/live_report_preview.mjs",
     "build": "tsc -b && vite build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",

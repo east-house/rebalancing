@@ -493,8 +493,13 @@ def build_device_payload(
         "proposed_execution_date": str(execution_date.date()),
         "stale_preview": stale_preview,
         "default_capital": float(default_capital),
-        "default_fractional_shares": True,
-        "fractional_precision": 3,
+        "default_fractional_shares": False,
+        "fractional_precision": 0,
+        "selection_correlations": {
+            str(left): {str(right): float(value) for right, value in row.items() if pd.notna(value)}
+            for left, row in _close_with_anchor(data).loc[:signal_date, ranking["ticker"].tolist()]
+            .tail(CORRELATION_LOOKBACK).pct_change(fill_method=None).corr(min_periods=60).iterrows()
+        },
         "strategy": {
             "id": STRATEGY_ID,
             "name": STRATEGY_NAME,
@@ -527,6 +532,7 @@ def build_device_payload(
                 STRATEGY_CONFIG["risk"]["stopped_capital_stays_cash_until_monthly_review"]
             ),
             "automatic_trading": False,
+            "transaction_cost_each_side": float(STRATEGY_CONFIG["execution"]["transaction_cost_each_side"]),
         },
         "privacy": {
             "storage": "browser localStorage only",

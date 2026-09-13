@@ -136,6 +136,12 @@ def test_device_payload_keeps_user_state_out_of_the_server_artifact() -> None:
     assert payload["selection"][0]["ticker"] == "IVV"
     assert payload["policy"]["stop_loss"] is None
     assert payload["policy"]["trailing_stop"] is None
+    assert payload["default_fractional_shares"] is False
+    assert payload["fractional_precision"] == 0
+    assert payload["policy"]["transaction_cost_each_side"] == 0.001
+    correlation = payload["selection_correlations"]
+    assert set(correlation) == {item["ticker"] for item in payload["candidates"]}
+    assert np.isclose(correlation["IVV"]["IVV"], 1.0)
     assert np.isclose(sum(item["weight"] for item in payload["selection"]), 1.0)
     assert all(
         "themes" in item and "base_score" in item and "theme_strength" in item

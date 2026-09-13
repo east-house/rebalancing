@@ -1,261 +1,149 @@
-import type {
-  PortfolioReportPayload,
-  PortfolioReportSelection,
-} from "../../api/portfolioReport";
+import type { PortfolioReportPayload as Report } from "../../api/portfolioReport";
 
-export type PortfolioActionKind = "BUY" | "HOLD" | "SELL" | "ADD" | "REDUCE" | "REVIEW";
+export interface Holding {
+  ticker: string; name: string; shares: number; cost: number;
+  firstBuyDate: string; lastBuyDate: string;
+}
+export interface Trade {
+  id: string; reportDate: string; signalDate: string; executionDate: string;
+  ticker: string; name: string; side: "BUY" | "SELL"; shares: number;
+  price: number; fee: number; realizedPnl: number; reason: string;
+}
+export interface Order {
+  reportDate: string; signalDate: string; executionDate: string;
+  names: { ticker: string; name: string }[]; feeRate: number; reason: string;
+}
+export interface AccountDay {
+  reportDate: string; marketDate: string; equity: number; cash: number;
+  realizedPnl: number; unrealizedPnl: number; totalPnl: number; returnRate: number;
+  holdings: (Holding & { close: number; value: number; pnl: number; returnRate: number })[];
+  trades: Trade[]; pending: Order | null; sourceRevision?: string;
+}
+export interface PortfolioAccount {
+  version: 3; startDate: string; initialCapital: number; createdAt: string;
+  cash: number; holdings: Holding[]; trades: Trade[]; days: AccountDay[];
+  targetNames: string[]; reviewedMonth: string; pending: Order | null;
+}
+export const ACCOUNT_KEY = "stock_strategy.us_portfolio.integer.v3";
+export const LEGACY_KEY = "stock_strategy.us_portfolio.device.v1";
 
-export interface DevicePosition {
-  ticker: string;
-  name: string;
-  sector: string;
-  themes: string;
-  weight: number;
-  shares: number;
-  entryPrice: number;
-  highWatermark: number;
+function nextWeekday(day: string): string {
+  const value = new Date(`${day}T00:00:00Z`);
+  do { value.setUTCDate(value.getUTCDate() + 1); } while ([0, 6].includes(value.getUTCDay()));
+  return value.toISOString().slice(0, 10);
 }
 
-export interface DeviceHistory {
-  sourceRevision?: string;
-  reportDate: string;
-  marketDate: string;
-  type: "INITIAL" | "DAILY" | "APPLY" | "CAPITAL_CHANGE";
-  summary: string;
-  recordedAt: string;
-  /** Model portfolio value when this record was made. Older records may not have it. */
-  equity?: number;
-}
-
-export interface PortfolioDeviceState {
-  schemaVersion: 2;
-  strategyId: string;
-  capital: number;
-  fractional: boolean;
-  cash: number;
-  positions: DevicePosition[];
-  initialReport: {
-    reportDate: string;
-    marketDate: string;
-    strategyId: string;
-  };
-  lastReviewMonth: string;
-  history: DeviceHistory[];
-}
-
-export interface PortfolioSuggestedAction extends DevicePosition {
-  action: PortfolioActionKind;
-  reason: string;
-  currentWeight: number;
-  targetShares: number;
-  close: number | null;
-  rank: number | null;
-  loss: number | null;
-  drawdown: number | null;
-}
-
-export interface PortfolioSnapshot {
-  equity: number;
-  stockValue: number;
-  monthReview: boolean;
-  actions: PortfolioSuggestedAction[];
-}
-
-export interface HistoryPerformance {
-  elapsedDays: number;
-  returnRate: number;
-}
-
-function utcDay(date: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const value = Date.parse(`${date}T00:00:00Z`);
-  return Number.isFinite(value) ? value : null;
-}
-
-/** Calculates performance from a saved record to the currently loaded report date. */
-export function calculateHistoryPerformance(
-  record: DeviceHistory,
-  currentEquity: number,
-  currentReportDate: string,
-): HistoryPerformance | null {
-  const recordEquity = record.equity;
-  if (!Number.isFinite(recordEquity) || !recordEquity || recordEquity <= 0 || !Number.isFinite(currentEquity)) {
-    return null;
+export function createAccount(startDate: string, initialCapital: number): PortfolioAccount {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isFinite(initialCapital) || initialCapital <= 0) {
+    throw new Error("시작일과 0보다 큰 투자금을 입력해 주세요.");
   }
-  const start = utcDay(record.reportDate);
-  const end = utcDay(currentReportDate);
-  if (start === null || end === null) return null;
-  return {
-    elapsedDays: Math.max(0, Math.round((end - start) / 86_400_000)),
-    returnRate: currentEquity / recordEquity - 1,
+  return { version: 3, startDate, initialCapital, createdAt: new Date().toISOString(),
+    cash: initialCapital, holdings: [], trades: [], days: [], targetNames: [], reviewedMonth: "", pending: null };
+}
+function price(report: Report, ticker: string): number {
+  const value = report.quotes[ticker]?.close;
+  if (!Number.isFinite(value) || !(value > 0)) throw new Error(`${report.report_date_kst}: ${ticker} 종가 누락으로 계좌 갱신을 중단했습니다.`);
+  return value;
+}
+
+/** Canonical I1 retained-rank, sector and absolute-correlation selection. */
+export function selectNames(report: Report, existing: string[]): { ticker: string; name: string }[] {
+  if (!report.selection_correlations) throw new Error("계좌 추적에 필요한 i1 자료가 아직 준비되지 않았습니다.");
+  const candidates = [...report.candidates].sort((a, b) => a.rank - b.rank);
+  const indexed = new Map(candidates.map(item => [item.ticker, item]));
+  const retained = existing.filter(ticker => indexed.has(ticker) && indexed.get(ticker)!.rank <= report.policy.hold_rank)
+    .sort((a, b) => indexed.get(a)!.rank - indexed.get(b)!.rank);
+  const order = [...retained, ...candidates.map(item => item.ticker).filter(ticker => !retained.includes(ticker))];
+  const selected: string[] = [], sectors: Record<string, number> = {};
+  for (const ticker of order) {
+    const item = indexed.get(ticker)!;
+    if ((sectors[item.sector] ?? 0) >= report.policy.maximum_names_per_sector) continue;
+    if (selected.some(other => Math.abs(report.selection_correlations![ticker]?.[other] ?? 0) > report.policy.maximum_pairwise_correlation)) continue;
+    selected.push(ticker); sectors[item.sector] = (sectors[item.sector] ?? 0) + 1;
+    if (selected.length === report.policy.maximum_positions) break;
+  }
+  if (!selected.length) throw new Error("i1 선정 조건을 통과한 종목이 없습니다.");
+  return selected.map(ticker => ({ ticker, name: indexed.get(ticker)!.name }));
+}
+
+function execute(account: PortfolioAccount, report: Report, order: Order): Trade[] {
+  if (order.executionDate !== report.signal_market_date) throw new Error(`${order.executionDate} 체결 종가 자료가 빠져 있습니다.`);
+  const equity = account.cash + account.holdings.reduce((sum, item) => sum + item.shares * price(report, item.ticker), 0);
+  const targets = new Map(order.names.map(item => [item.ticker,
+    Math.floor(equity / order.names.length / (price(report, item.ticker) * (1 + order.feeRate)))]));
+  const trades: Trade[] = [];
+  const record = (holding: Holding, side: Trade["side"], shares: number, close: number, fee: number, pnl: number) => {
+    const trade: Trade = { id: `${order.reportDate}:${order.executionDate}:${holding.ticker}:${side}`,
+      reportDate: order.reportDate, signalDate: order.signalDate, executionDate: order.executionDate,
+      ticker: holding.ticker, name: holding.name, side, shares, price: close, fee, realizedPnl: pnl, reason: order.reason };
+    trades.push(trade); account.trades.push(trade);
   };
+  for (const holding of account.holdings) {
+    const shares = Math.max(0, holding.shares - (targets.get(holding.ticker) ?? 0));
+    if (!shares) continue;
+    const close = price(report, holding.ticker), fee = shares * close * order.feeRate;
+    const removedCost = holding.cost * shares / holding.shares, proceeds = shares * close - fee;
+    record(holding, "SELL", shares, close, fee, proceeds - removedCost);
+    account.cash += proceeds; holding.cost -= removedCost; holding.shares -= shares;
+  }
+  account.holdings = account.holdings.filter(item => item.shares > 0);
+  for (const item of order.names) {
+    let holding = account.holdings.find(position => position.ticker === item.ticker);
+    const close = price(report, item.ticker);
+    const shares = Math.min(Math.max(0, targets.get(item.ticker)! - (holding?.shares ?? 0)),
+      Math.floor((account.cash + 1e-9) / (close * (1 + order.feeRate))));
+    if (!shares) continue;
+    if (!holding) {
+      holding = { ...item, shares: 0, cost: 0, firstBuyDate: order.executionDate, lastBuyDate: order.executionDate };
+      account.holdings.push(holding);
+    }
+    const fee = shares * close * order.feeRate;
+    record(holding, "BUY", shares, close, fee, 0);
+    holding.shares += shares; holding.cost += shares * close + fee; holding.lastBuyDate = order.executionDate;
+    account.cash -= shares * close + fee;
+  }
+  if (account.cash < -1e-7) throw new Error("계좌 현금 검증에 실패했습니다.");
+  account.cash = Math.max(0, account.cash); account.targetNames = order.names.map(item => item.ticker);
+  return trades;
 }
 
-export function floorShares(raw: number, fractional: boolean, precision = 3): number {
-  if (!Number.isFinite(raw) || raw <= 0) return 0;
-  if (!fractional) return Math.floor(raw);
-  const factor = 10 ** precision;
-  return Math.floor(raw * factor) / factor;
-}
-
-export function allocatePortfolio(
-  payload: PortfolioReportPayload,
-  capital: number,
-  fractional: boolean,
-  source: readonly PortfolioReportSelection[] = payload.selection,
-): { positions: DevicePosition[]; cash: number } {
-  let used = 0;
-  const positions = source.map((item) => {
-    const quote = payload.quotes[item.ticker];
-    const price = quote?.close ?? item.reference_close;
-    const shares = floorShares(
-      capital * item.weight / price,
-      fractional,
-      payload.fractional_precision,
-    );
-    used += shares * price;
-    return {
-      ticker: item.ticker,
-      name: item.name,
-      sector: item.sector,
-      themes: item.themes,
-      weight: item.weight,
-      shares,
-      entryPrice: price,
-      highWatermark: price,
-    };
-  });
-  return { positions, cash: Math.max(0, capital - used) };
-}
-
-export function buildSnapshot(
-  payload: PortfolioReportPayload,
-  state: PortfolioDeviceState,
-): PortfolioSnapshot {
-  let stockValue = 0;
-  const updatedPositions = state.positions.map((position) => {
-    const quote = payload.quotes[position.ticker];
-    if (!quote) return position;
-    stockValue += position.shares * quote.close;
-    return {
-      ...position,
-      highWatermark: Math.max(position.highWatermark, quote.close),
-    };
-  });
-  const equity = state.cash + stockValue;
-  const monthReview = state.lastReviewMonth !== payload.report_date_kst.slice(0, 7);
-  const actions = updatedPositions.map<PortfolioSuggestedAction>((position) => {
-    const quote = payload.quotes[position.ticker];
-    if (!quote) {
-      return {
-        ...position,
-        action: "REVIEW",
-        reason: "현재 가격 누락: 수동 확인 필요",
-        currentWeight: 0,
-        targetShares: position.shares,
-        close: null,
-        rank: null,
-        loss: null,
-        drawdown: null,
-      };
+/** Append new reports only; refreshes and past revisions never rewrite fills. */
+export function advanceAccount(original: PortfolioAccount, reports: Report[]): PortfolioAccount {
+  const account: PortfolioAccount = structuredClone(original);
+  const ordered = [...reports].sort((a, b) => a.report_date_kst.localeCompare(b.report_date_kst));
+  for (const report of ordered) {
+    const day = report.report_date_kst;
+    if (day < account.startDate || day <= (account.days.at(-1)?.reportDate ?? "")) continue;
+    if (!account.days.length && day !== account.startDate) throw new Error("시작일 보고서가 빠져 있습니다.");
+    if (report.strategy.id !== "i1_core_satellite" || report.stale_preview) throw new Error(`${day}: 유효한 i1 보고서가 아닙니다.`);
+    if (report.proposed_execution_date <= report.signal_market_date) throw new Error("판단일 이후 체결일이 필요합니다.");
+    const previous = account.days.at(-1);
+    if (previous && day !== nextWeekday(previous.reportDate)) throw new Error(`${nextWeekday(previous.reportDate)} 보고서가 빠져 있어 계좌 갱신을 중단했습니다.`);
+    if (previous && report.signal_market_date < previous.marketDate) throw new Error("미국 거래일 순서가 올바르지 않습니다.");
+    let trades: Trade[] = [];
+    if (account.pending && report.signal_market_date >= account.pending.executionDate) {
+      trades = execute(account, report, account.pending); account.pending = null;
     }
-    const value = position.shares * quote.close;
-    const currentWeight = value / Math.max(equity, 1);
-    const loss = quote.close / position.entryPrice - 1;
-    const drawdown = quote.close / Math.max(position.highWatermark, quote.close) - 1;
-    const targetShares = floorShares(
-      equity * position.weight / quote.close,
-      state.fractional,
-      payload.fractional_precision,
-    );
-    let action: PortfolioActionKind = "HOLD";
-    let reason = "예외 청산 신호 없음";
-    if (payload.policy.stop_loss !== null && loss <= -payload.policy.stop_loss) {
-      action = "SELL";
-      reason = `기준가 대비 ${(loss * 100).toFixed(1)}%: 손실 제한선 도달`;
-    } else if (payload.policy.trailing_stop !== null && drawdown <= -payload.policy.trailing_stop) {
-      action = "SELL";
-      reason = `보유 후 고점 대비 ${(drawdown * 100).toFixed(1)}%: 추적 제한선 도달`;
-    } else if (monthReview && (quote.rank === null || quote.rank > payload.policy.hold_rank)) {
-      action = "REVIEW";
-      reason = `월간 점검: 순위 ${quote.rank ?? "필터 밖"}로 10위 유지구간 이탈`;
-    } else if (
-      monthReview
-      && Math.abs(currentWeight - position.weight) > payload.policy.drift_threshold
-    ) {
-      action = currentWeight > position.weight ? "REDUCE" : "ADD";
-      reason = `월간 점검: 목표비중과 ${((currentWeight - position.weight) * 100).toFixed(1)}%p 차이`;
+    const holdings = account.holdings.map(holding => {
+      const close = price(report, holding.ticker), value = holding.shares * close;
+      return { ...holding, close, value, pnl: value - holding.cost, returnRate: value / holding.cost - 1 };
+    });
+    const equity = account.cash + holdings.reduce((sum, item) => sum + item.value, 0);
+    const initial = account.days.length === 0, month = day.slice(0, 7);
+    if (!account.pending && (initial || month !== account.reviewedMonth)) {
+      const names = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, account.targetNames);
+      const changed = names.length !== account.targetNames.length || names.some(item => !account.targetNames.includes(item.ticker));
+      const drift = names.some(item => Math.abs((holdings.find(position => position.ticker === item.ticker)?.value ?? 0) / equity - 1 / names.length) > report.policy.drift_threshold);
+      if (initial || changed || drift) account.pending = { reportDate: day, signalDate: report.signal_market_date,
+        executionDate: report.proposed_execution_date, names, feeRate: report.policy.transaction_cost_each_side ?? 0.001,
+        reason: initial ? "시작일 i1 최초 매수" : changed ? "월간 점검: 유지순위·섹터·상관 제한에 따른 종목 교체" : "월간 점검: 목표비중 조정" };
+      account.reviewedMonth = month;
     }
-    return {
-      ...position,
-      highWatermark: Math.max(position.highWatermark, quote.close),
-      action,
-      reason,
-      currentWeight,
-      targetShares,
-      close: quote.close,
-      rank: quote.rank,
-      loss,
-      drawdown,
-    };
-  });
-  return { equity, stockValue, monthReview, actions };
-}
-
-export function applyActions(
-  payload: PortfolioReportPayload,
-  state: PortfolioDeviceState,
-  snapshot: PortfolioSnapshot,
-): PortfolioDeviceState {
-  let cash = state.cash;
-  const positions = snapshot.actions.flatMap<DevicePosition>((action) => {
-    if (action.action === "SELL" && action.close !== null) {
-      cash += action.shares * action.close;
-      return [];
-    }
-    if (
-      (action.action === "ADD" || action.action === "REDUCE")
-      && action.close !== null
-    ) {
-      let targetShares = action.targetShares;
-      if (targetShares > action.shares) {
-        const affordable = floorShares(
-          cash / action.close,
-          state.fractional,
-          payload.fractional_precision,
-        );
-        targetShares = action.shares + Math.min(targetShares - action.shares, affordable);
-      }
-      const delta = targetShares - action.shares;
-      cash -= delta * action.close;
-      return [{
-        ticker: action.ticker,
-        name: action.name,
-        sector: action.sector,
-        themes: action.themes,
-        weight: action.weight,
-        shares: targetShares,
-        entryPrice: action.entryPrice,
-        highWatermark: action.highWatermark,
-      }];
-    }
-    return [{
-      ticker: action.ticker,
-      name: action.name,
-      sector: action.sector,
-      themes: action.themes,
-      weight: action.weight,
-      shares: action.shares,
-      entryPrice: action.entryPrice,
-      highWatermark: action.highWatermark,
-    }];
-  });
-  return {
-    ...state,
-    cash: Math.max(0, cash),
-    positions,
-    lastReviewMonth: snapshot.monthReview
-      ? payload.report_date_kst.slice(0, 7)
-      : state.lastReviewMonth,
-  };
+    const realizedPnl = account.trades.reduce((sum, trade) => sum + trade.realizedPnl, 0);
+    account.days.push({ reportDate: day, marketDate: report.signal_market_date, equity, cash: account.cash,
+      realizedPnl, unrealizedPnl: holdings.reduce((sum, item) => sum + item.pnl, 0),
+      totalPnl: equity - account.initialCapital, returnRate: equity / account.initialCapital - 1,
+      holdings, trades, pending: structuredClone(account.pending), sourceRevision: report.generated_at });
+  }
+  return account;
 }
