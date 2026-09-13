@@ -1,0 +1,76 @@
+name: Repair and verify trading history
+
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Existing Korean report date through which to rebuild"
+        required: true
+        default: "2026-09-12"
+        type: string
+      source_run_id:
+        description: "Successful replay workflow with reviewed input artifact"
+        required: true
+        default: "34707299135"
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: production-ircs-trading-test-report
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MPLBACKEND: Agg
+      PYTHONUNBUFFERED: "1"
+      REPORT_DATE: ${{ inputs.as_of }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+          name: replay-audit-${{ inputs.source_run_id }}
+          path: action-output/repair-inputs
+      - name: Install and test
+        run: |
+          pip install -r requirements-market-report.txt
+          python -m pytest tests/market_report_pipeline -q
+      - name: Rebuild, compare and atomically publish the preserved revision
+        run: |
+          python -m market_report_pipeline.repair_trading_history --inputs action-output/repair-inputs --as-of "$REPORT_DATE" --publish
+      - name: Recreate all starts from the published input observations
+        run: |
+          python -m market_report_pipeline.refresh_trading_replays --as-of "$REPORT_DATE"
+          python scripts/verify_trading_replays.py
+      - name: Save verified replay data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/trading-replays
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Publish reconciled trading history replays"
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: history-repair-${{ github.run_id }}
+          path: |
+            action-output/history-repair/
+            action-output/replay-refresh/
+          retention-days: 30

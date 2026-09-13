@@ -719,6 +719,7 @@ def build_report(
         "marketDate": str(date.date()),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "executionPriceBasis": "split/dividend-adjusted close",
+        **({"reconciliation": state["reconciliation"]} if state.get("reconciliation") else {}),
         "transactionCosts": transaction_cost_model(),
         "accounts": accounts,
         "transactionHistory": {
@@ -742,7 +743,8 @@ def build_report(
             ).hexdigest(),
             "candidateDates": sorted(state.get("candidateSnapshots", {})),
         },
-        "disclaimer": "실제 주문이 아닌 조정종가 기반 포워드 가상계좌입니다.",
+        "disclaimer": ("검증된 공통 입력으로 재구성한 기준 원장에서 이어지는 가상계좌입니다. 수정 전 원본은 별도 보존되어 있습니다."
+                       if state.get("reconciliation") else "실제 주문이 아닌 조정종가 기반 포워드 가상계좌입니다."),
     }
 
 
@@ -782,13 +784,17 @@ def run(
     upload_r2: bool = False,
     publish_static: bool = False,
     reset_ledger: bool = False,
+    market_input: tuple[MarketPanel, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    panel, quality = load_market_panel(as_of)
+    panel, quality = market_input if market_input is not None else load_market_panel(as_of)
     latest = pd.Timestamp(quality["marketDate"])
-    indicators = _indicators(panel)
-    signals = _signals(panel, indicators)
     prefix = str(CONFIG["storage"]["prefix"])
     store = R2JsonStore.from_environment(prefix) if upload_r2 else None
+    if store:
+        from .trading_observations import supplement_preserved_history
+        panel, quality = supplement_preserved_history(store.release, panel, quality)
+    indicators = _indicators(panel)
+    signals = _signals(panel, indicators)
     local_state = output_dir / "state.json"
     persisted = store.load("state/latest.json") if store else (json.loads(local_state.read_text()) if local_state.exists() else None)
     stored_state = None if reset_ledger else persisted
@@ -903,6 +909,9 @@ def run(
         for report in reports:
             write_json(report, STATIC_OUTPUT / f"{report['reportDate']}.json")
     if store:
+        from .trading_observations import stage_observation
+        for report in reports:
+            stage_observation(store.release, panel, pd.Timestamp(report["marketDate"]), quality)
         for report in reports:
             store.save(f"reports/{report['reportDate']}.json", report)
         store.save("latest.json", reports[-1])

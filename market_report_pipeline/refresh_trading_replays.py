@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from io import StringIO
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -59,6 +60,19 @@ def refresh(as_of: pd.Timestamp, output: Path, work: Path):
     end = replay.expected_market_date(as_of)
     if as_of > pd.Timestamp(replay.korean_today()):
         raise ValueError("Future as-of date")
+    if os.environ.get("R2_BUCKET_NAME"):
+        from .report_store import ReportStore
+        from .trading_observations import INDEX, generate_observed
+        store = ReportStore.from_environment("trading")
+        if store.load(INDEX):
+            bundles, index = generate_observed(store)
+            last = pd.Timestamp(max(index["sessions"]))
+            if last > end:
+                raise ValueError("Published observations exceed the requested completed session")
+            write_json({"releaseId": store.manifest["releaseId"], "forwardReplayEquality": "passed",
+                        "sessions": len(index["sessions"])}, work / "observation-verification.json")
+            replay.publish_bundles(bundles, {"releaseId": store.manifest["releaseId"]}, last, output)
+            return
     baseline = Path(__file__).resolve().parents[1] / "config/trading-replay-catalog.json"
     catalog = verify_membership(json.loads(baseline.read_text()), end, work / "membership")
     symbols = sorted({r["ticker"] for r in catalog["members"]} | replay.engine._required_proxy_symbols())

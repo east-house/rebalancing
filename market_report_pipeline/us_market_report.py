@@ -8,6 +8,7 @@ chart phase, macro releases, rates, and sourced news.  It never creates orders.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import math
@@ -55,6 +56,7 @@ RESULTS_ROOT = PROJECT_ROOT / "data" / "results"
 MARKET_RAW_ROOT = PROJECT_ROOT / "data" / "raw" / "us_market"
 MACRO_CACHE = MARKET_RAW_ROOT / "fred_market_macro.parquet"
 NEWS_CACHE_ROOT = MARKET_RAW_ROOT / "news"
+NEWS_ARCHIVE_ROOT = PROJECT_ROOT / "config" / "news-archive"
 
 SECTOR_DISPLAY_NAMES = {
     "Communication Services": "커뮤니케이션 서비스 (Communication Services)",
@@ -1327,7 +1329,7 @@ def collect_market_news(
         frame = pd.DataFrame(cached)
         if not frame.empty:
             frame["published_at"] = pd.to_datetime(frame["published_at"])
-        return frame, {"cache_hit": True, "rows": len(frame), "failures": []}
+            return frame, {"cache_hit": True, "rows": len(frame), "failures": []}
 
     rows: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
@@ -1351,14 +1353,38 @@ def collect_market_news(
             rows.extend(_parse_rss(response.content, feed_name, query))
         except Exception as error:  # noqa: BLE001
             failures.append({"feed": feed_name, "url": url, "error": str(error)})
+    start = market_date - pd.Timedelta(days=int(config["news"]["lookback_days"]))
+    end = settings.as_of + pd.Timedelta(days=1)
+    # Recovery uses preserved articles under exactly the existing news window.
+    # A recent-only RSS response cannot reconstruct an older report on its own.
+    available = pd.DataFrame(rows)
+    in_window = (not available.empty and available["published_at"].between(start, end).any())
+    archives = []
+    if not in_window:
+        for path in sorted(set(NEWS_ARCHIVE_ROOT.glob("*.json")) | set(NEWS_CACHE_ROOT.glob("news_*_v2.json"))):
+            if path == cache_path:
+                continue
+            try:
+                raw = path.read_bytes()
+                preserved = pd.DataFrame(json.loads(raw))
+                if preserved.empty:
+                    continue
+                preserved["published_at"] = pd.to_datetime(preserved["published_at"])
+                preserved = preserved.loc[preserved["published_at"].between(start, end)]
+                preserved = preserved.loc[preserved["title"].notna() & preserved["url"].notna()]
+                if preserved.empty:
+                    continue
+                rows.extend(preserved.to_dict(orient="records"))
+                archives.append({"file": str(path.relative_to(PROJECT_ROOT)) if path.is_relative_to(PROJECT_ROOT) else str(path),
+                                 "sha256": hashlib.sha256(raw).hexdigest(), "rows": len(preserved)})
+            except (ValueError, KeyError, TypeError) as error:
+                failures.append({"feed": "preserved news", "url": str(path), "error": str(error)})
     frame = pd.DataFrame(rows)
     if frame.empty:
         return pd.DataFrame(
             columns=["published_at", "title", "source", "url", "topic", "affected_assets", "tone", "interpretation"]
         ), {"cache_hit": False, "rows": 0, "failures": failures}
     frame = frame.dropna(subset=["published_at"]).copy()
-    start = market_date - pd.Timedelta(days=int(config["news"]["lookback_days"]))
-    end = settings.as_of + pd.Timedelta(days=1)
     frame = frame.loc[frame["published_at"].between(start, end)].copy()
     frame["normalized_title"] = (
         frame["title"].str.lower().str.replace(r"\s+-\s+[^-]+$", "", regex=True).str.replace(r"\W+", " ", regex=True)
@@ -1393,8 +1419,9 @@ def collect_market_news(
         "relevance_score",
     ]
     frame = frame[keep].reset_index(drop=True)
-    cache_path.write_text(frame.to_json(orient="records", date_format="iso", force_ascii=False), encoding="utf-8")
-    return frame, {"cache_hit": False, "rows": len(frame), "failures": failures}
+    if not frame.empty:
+        cache_path.write_text(frame.to_json(orient="records", date_format="iso", force_ascii=False), encoding="utf-8")
+    return frame, {"cache_hit": False, "rows": len(frame), "failures": failures, "archives": archives}
 
 
 def _pct(value: Any) -> str:
