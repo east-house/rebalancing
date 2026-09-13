@@ -27,8 +27,9 @@
 .account-main td small { white-space: normal; min-width: 100px; }
 .account-footnote { margin-top: 24px; }
 @media (max-width: 900px) { .account-metrics { grid-template-columns: repeat(2, 1fr); } .account-metrics > div:first-child { grid-column: 1 / -1; } .account-heading, .account-period { align-items: flex-start; flex-direction: column; } }
-@media (max-width: 680px) {
-  .account-main table { display: table; } .account-main thead { display: table-header-group; } .account-main tbody { display: table-row-group; }
-  .account-main tr { display: table-row; } .account-main td, .account-main th { display: table-cell; padding: 12px; } .account-main td::before { display: none; }
+@media (max-width: 980px) {
+  .account-main .portfolio-report-table-wrap { overflow-x: auto; }
+  .account-main table { display: table; } .account-main thead { display: table-header-group; position: static; width: auto; height: auto; overflow: visible; clip-path: none; } .account-main tbody { display: table-row-group; }
+  .account-main tr { display: table-row; } .account-main .portfolio-report-table-wrap td, .account-main .portfolio-report-table-wrap td:first-child, .account-main th { display: table-cell; padding: 12px; white-space: nowrap; } .account-main .portfolio-report-table-wrap td::before { display: none; }
   .account-chart figcaption { flex-direction: column; } .account-main .portfolio-report-controls { align-items: stretch; }
 }

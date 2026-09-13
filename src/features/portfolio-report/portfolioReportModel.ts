@@ -18,6 +18,7 @@ export interface AccountDay {
   realizedPnl: number; unrealizedPnl: number; totalPnl: number; returnRate: number;
   holdings: (Holding & { close: number; value: number; pnl: number; returnRate: number })[];
   trades: Trade[]; pending: Order | null; sourceRevision?: string;
+  targetNames?: string[];
 }
 export interface PortfolioAccount {
   version: 3; startDate: string; initialCapital: number; createdAt: string;
@@ -143,7 +144,8 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[]): P
     account.days.push({ reportDate: day, marketDate: report.signal_market_date, equity, cash: account.cash,
       realizedPnl, unrealizedPnl: holdings.reduce((sum, item) => sum + item.pnl, 0),
       totalPnl: equity - account.initialCapital, returnRate: equity / account.initialCapital - 1,
-      holdings, trades, pending: structuredClone(account.pending), sourceRevision: report.generated_at });
+      holdings, trades, pending: structuredClone(account.pending), sourceRevision: report.generated_at,
+      targetNames: [...account.targetNames] });
   }
   return account;
 }

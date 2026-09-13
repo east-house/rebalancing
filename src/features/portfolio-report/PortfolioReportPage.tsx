@@ -132,6 +132,7 @@ export default function PortfolioReportPage(props: Props) {
         </section>
         <section className="portfolio-report-card"><EquityChart days={visibleDays} capital={account.initialCapital} /></section>
         <section className="portfolio-report-card"><h2>보유 종목과 수익</h2><p>평균매수단가는 매수 비용을 포함합니다. 총손익 = 실현손익 + 평가손익입니다.</p>
+          {(day.targetNames ?? []).some(ticker => !day.holdings.some(item => item.ticker === ticker)) && <p>목표 종목 중 미보유: {(day.targetNames ?? []).filter(ticker => !day.holdings.some(item => item.ticker === ticker)).join(" · ")}. 배정금액으로 1주를 살 수 없으면 해당 금액은 현금으로 남깁니다.</p>}
           {!day.holdings.length ? <p>아직 체결된 보유 종목이 없습니다. 주문 대기 또는 1주 매수에 필요한 금액 부족으로 현금을 보유하고 있습니다.</p> : <div className="portfolio-report-table-wrap"><table><thead><tr><th>종목</th><th>최초 매수일 / 최근 매수일</th><th>수량</th><th>평균매수단가</th><th>기준 종가</th><th>매수원가</th><th>평가액</th><th>평가손익</th><th>수익률</th></tr></thead><tbody>{day.holdings.map(item => <tr key={item.ticker}><td><strong>{item.ticker}</strong><small>{item.name}</small></td><td>{item.firstBuyDate}<small>{item.lastBuyDate}</small></td><td>{item.shares}주</td><td>{money(item.cost / item.shares)}</td><td>{money(item.close)}</td><td>{money(item.cost)}</td><td>{money(item.value)}</td><td className={item.pnl >= 0 ? "is-up" : "is-down"}>{signed(item.pnl)}</td><td>{pct(item.returnRate)}</td></tr>)}</tbody></table></div>}
         </section>
         <section className="portfolio-report-card"><h2>매수·매도 내역</h2><p>매매는 가상 체결이며, i1의 편도 거래비용 0.10%를 반영합니다. 날짜는 미국 체결 거래일입니다.</p>
