@@ -10,7 +10,7 @@ function reportRoute(path) {
   const match = /^\/api\/(market-reports|portfolio-reports|trading-test-reports)(?:\/(.*))?$/.exec(path);
   if (!match) return null;
   const [, group, suffix = ""] = match;
-  const product = group === "trading-test-reports" ? "trading" : "morning";
+  const product = group === "trading-test-reports" ? "trading" : group === "portfolio-reports" ? "portfolio" : "morning";
   if (suffix === "status") return { product, status: true };
   if (!suffix || suffix === "latest" && group !== "market-reports") {
     const filename = suffix ? "latest.json" : "index.json";
@@ -39,13 +39,16 @@ export async function handlePublishedReport(request, env) {
     return new Response(response.body, { status: response.status, headers });
   }
   try {
-    const pointer = await env.MARKET_DATA.get(`report-publications/${route.product}/current.json`);
+    let pointer = await env.MARKET_DATA.get(`report-publications/${route.product}/current.json`);
+    // Before the independent archive is initialized, preserve access to its old releases.
+    if (!pointer && route.product === "portfolio") pointer = await env.MARKET_DATA.get("report-publications/morning/current.json");
     const manifest = pointer ? await new Response(pointer.body).json() : null;
     if (manifest && (!manifest.releaseId || !manifest.objects)) return jsonError("Invalid publication manifest.", 502);
     if (route.status) {
       return new Response(JSON.stringify({ releaseId: manifest?.releaseId ?? null, codeSha: manifest?.codeSha ?? null,
         publishedAt: manifest?.publishedAt ?? null, jobs: manifest?.jobs ?? {},
         dailyStartDate: manifest?.dailyStartDate ?? null, recoveryDates: manifest?.recoveryDates ?? [],
+        schedule: route.product === "portfolio" ? { timezone: "Asia/Seoul", time: "19:00", startDate: "2026-09-14", weekdays: [1, 2, 3, 4, 5] } : undefined,
         serverTime: new Date().toISOString() }),
       { headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }

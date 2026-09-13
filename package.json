@@ -19,7 +19,7 @@
     "report:repair-index": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.daily_reports morning --repair-index",
     "report:update": "npm run report:generate && npm run report:publish-local",
     "portfolio-report:update": "uv run python scripts/update_v3_portfolio_report.py --as-of today",
-    "portfolio-report:i1": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.daily_reports morning",
+    "portfolio-report:i1": "uv run --with-requirements requirements-market-report.txt python -m market_report_pipeline.portfolio_evening",
     "report:test": "uv run --with-requirements requirements-market-report.txt python -m pytest tests/market_report_pipeline -q",
     "typecheck": "tsc -b",
     "test": "vitest run",

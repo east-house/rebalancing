@@ -31,7 +31,7 @@ GitHub Actions가 기존 R2 버킷에 날짜별 JSON·HTML·시장 구조 PNG와
 `GET /api/market-reports/{YYYY-MM-DD}`, 날짜별 `/dashboard` 이미지 경로로
 이를 전달하며, R2 바인딩이 없는 로컬 개발 환경에서는
 `public/data/market-reports`의 검증된 스냅샷을 사용합니다.
-같은 워크플로가 현재 저장소의 `market_report_pipeline.us_daily_portfolio_report`를
+2026-09-11까지는 같은 워크플로가 현재 저장소의 `market_report_pipeline.us_daily_portfolio_report`를
 실행해 `portfolio-reports/{YYYY-MM-DD}.json`, 목록과 최신본을 시장 보고서와 함께 게시합니다.
 이 경로들은 게시 manifest가 불변 R2 객체로 연결하는 논리 경로입니다. 운영 R2 오류 시 정적 스냅샷으로 성공을 가장하지 않습니다. 종목 추천 계산과 화면은
 다른 로컬 저장소를 참조하지 않습니다. 이용자의 투자금·수량·반영 기록은
@@ -49,9 +49,13 @@ GitHub Actions가 기존 R2 버킷에 날짜별 JSON·HTML·시장 구조 PNG와
 `portfolio-report:update`는 별도의 기존 v3 연구 내보내기 명령입니다. 이 명령은
 월말 연구 신호일을 사용하므로 자동 보고서와 날짜 선택 규칙이 다릅니다.
 날짜 동작 변경에 대한 별도 요청 없이 자동 생성기로 연결을 바꾸지 않습니다.
-현재 I1 운영 경로의 명시적인 수동 명령은 `npm run portfolio-report:i1`이며,
-기존 `report:publish-r2` 및 일일 Actions와 같은 실행 경로입니다. R2 자격증명이
-필요하고 시장 보고서와 포트폴리오 보고서를 함께 게시합니다.
+2026-09-14부터 포트폴리오 보고서는 사용자 요청에 따라 한국 평일 19:00 생성으로
+분리했습니다. `daily-portfolio-report.yml`이 19:00에 실행을 예약하고 19:30·20:00에
+미완료 날짜를 재확인합니다. `npm run portfolio-report:i1`은 같은
+`market_report_pipeline.portfolio_evening` 경로를 사용하며 R2 자격증명이 필요합니다.
+시장 보고서의 기존 아침 스케줄은 유지됩니다. 보고일·미국장 기준일·체결일 규칙은
+유지하고 포트폴리오 생성 예정 시각만 변경했습니다. 실제 시작·완료 시각은 별도 기록합니다.
+기존 20개 보고서는 별도 portfolio 게시 manifest에 원문 그대로 보존합니다.
 
 8월 17일부터의 I1 과거 보고서는 `repair-portfolio-history.yml` 수동 워크플로로
 재구성합니다. 한국 평일 슬롯을 빠짐없이 생성하고 XNYS 휴장일에 맞는 최근 종가와

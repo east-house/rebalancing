@@ -11,6 +11,7 @@ import pandas as pd
 
 KST = ZoneInfo("Asia/Seoul")
 POLICY_VERSION = "report-time-v1"
+PORTFOLIO_EVENING_START = "2026-09-14"
 
 
 def utc_now() -> datetime:
@@ -40,7 +41,7 @@ def market_calendar(year: int):
 
 
 def scheduled_for(day: object, kind: str = "morning") -> datetime:
-    clock = time(7, 30) if kind == "morning" else time(19, 13)
+    clock = time(19, 0) if kind == "portfolio" else time(7, 30) if kind == "morning" else time(19, 13)
     return datetime.combine(calendar_date(day), clock, KST).astimezone(timezone.utc)
 
 
@@ -77,7 +78,7 @@ def due_dates(kind: str, start: object, completed: set[str], now: datetime | Non
         raise ValueError("Planner requires a timezone-aware clock")
     day = calendar_date(start)
     end = korean_today(instant)
-    weekdays = {0, 1, 2, 3, 4} if kind == "morning" else {1, 2, 3, 4, 5}
+    weekdays = {0, 1, 2, 3, 4} if kind in {"morning", "portfolio"} else {1, 2, 3, 4, 5}
     result = []
     while day <= end:
         if day.weekday() in weekdays and scheduled_for(day, kind) <= instant and day.isoformat() not in completed:

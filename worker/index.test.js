@@ -206,6 +206,25 @@ describe("market report Worker API", () => {
 });
 
 describe("portfolio report Worker API", () => {
+  it("uses the independent evening publication and exposes its schedule", async () => {
+    const worker = (await import("./index.js")).default;
+    const manifest = { releaseId: "evening", objects: {}, jobs: { "2026-09-14": { status: "running" } } };
+    const get = vi.fn(async () => ({ body: JSON.stringify(manifest) }));
+    const response = await worker.fetch(new Request("https://example.com/api/portfolio-reports/status"), { MARKET_DATA: { get } }, {});
+    const body = await response.json();
+    expect(body.schedule.time).toBe("19:00");
+    expect(body.jobs["2026-09-14"].status).toBe("running");
+    expect(get).toHaveBeenCalledWith("report-publications/portfolio/current.json");
+    expect(get).not.toHaveBeenCalledWith("report-publications/morning/current.json");
+  });
+  it("preserves the morning archive until the evening archive is initialized", async () => {
+    const worker = (await import("./index.js")).default;
+    const get = vi.fn(async key => key.includes("/portfolio/current") ? null : ({ body: JSON.stringify(key.includes("current.json") ? { releaseId: "old", objects: { "portfolio-reports/latest.json": { key: "frozen-old" } } } : { report_date_kst: "2026-09-11" }) }));
+    const response = await worker.fetch(new Request("https://example.com/api/portfolio-reports/latest?release=old"), { MARKET_DATA: { get } }, {});
+    expect(response.status).toBe(200);
+    expect((await response.json()).report_date_kst).toBe("2026-09-11");
+    expect(get).toHaveBeenLastCalledWith("frozen-old");
+  });
   it("serves the latest portfolio decision payload from R2", async () => {
     const payload = { schema_version: 1, report_date_kst: "2026-08-17" };
     const env = {

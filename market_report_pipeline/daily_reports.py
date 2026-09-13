@@ -13,7 +13,7 @@ import pandas as pd
 
 from .io_utils import write_json
 from .report_store import ReportStore
-from .report_time import calendar_date, due_dates, korean_today, report_context, scheduled_for, utc_now
+from .report_time import PORTFOLIO_EVENING_START, calendar_date, due_dates, korean_today, report_context, scheduled_for, utc_now
 
 
 def recover_market_index(store: ReportStore) -> dict:
@@ -45,26 +45,30 @@ def publish_morning(store: ReportStore, day: str, source: Path, *, revise: bool 
     known = any(item["displayDate"] == day for item in existing["reports"])
     portfolio_key = f"portfolio-reports/{day}.json"
     previous_portfolio = store.load(portfolio_key)
-    if known and previous_portfolio and not revise:
+    evening_portfolio = day >= PORTFOLIO_EVENING_START
+    if known and (previous_portfolio or evening_portfolio) and not revise:
         return store.commit(job_date=day, status="published", details={"unchanged": True})
     bundle = build_web_bundle(source)
-    portfolio = json.loads((source / "portfolio.json").read_text())
+    portfolio = json.loads((source / "portfolio.json").read_text()) if not evening_portfolio else None
     context = report_context(day)
-    if bundle["displayDate"] != day or portfolio["report_date_kst"] != day:
+    if bundle["displayDate"] != day or (portfolio and portfolio["report_date_kst"] != day):
         raise ValueError("Report date differs from fixed job date")
-    if bundle["marketDate"] != context["marketSessionDate"] or portfolio["signal_market_date"] != bundle["marketDate"]:
+    if bundle["marketDate"] != context["marketSessionDate"] or (portfolio and portfolio["signal_market_date"] != bundle["marketDate"]):
         raise ValueError("Morning reports disagree on the completed market session")
-    if portfolio.get("stale_preview"):
+    if portfolio and portfolio.get("stale_preview"):
         raise ValueError("Preview data cannot be published as a normal report")
     if scheduled_for(day) > utc_now():
         raise ValueError("Premature publication")
     bundle["publicationStatus"] = "published"
     bundle["context"] = context
-    portfolio["context"] = context
-    portfolio["publicationStatus"] = "published"
+    if portfolio:
+        portfolio["context"] = context
+        portfolio["publicationStatus"] = "published"
     # A backfill is explicitly a reconstruction, never a claim of original publication.
     if calendar_date(day) < korean_today():
-        bundle["reconstructed"] = portfolio["reconstructed"] = True
+        bundle["reconstructed"] = True
+        if portfolio:
+            portfolio["reconstructed"] = True
     with tempfile.TemporaryDirectory() as directory:
         target = Path(directory)
         write_json(existing, target / "index.json")
@@ -73,15 +77,16 @@ def publish_morning(store: ReportStore, day: str, source: Path, *, revise: bool 
     for suffix, filename, content_type in (("json", None, "application/json"), ("html", "MARKET_REPORT.html", "text/html"), ("png", "market_dashboard.png", "image/png")):
         store.stage(f"market-reports/{day}.{suffix}", bundle if filename is None else (source / filename).read_bytes(), content_type)
     store.stage("market-reports/index.json", index)
-    store.stage(portfolio_key, portfolio)
-    portfolio_index = store.load("portfolio-reports/index.json") or {"schemaVersion": 1, "reports": []}
-    items = {item["reportDate"]: item for item in portfolio_index["reports"]}
-    items[day] = {"reportDate": day, "marketDate": portfolio["signal_market_date"], "generatedAt": portfolio["generated_at"]}
-    ordered = sorted(items.values(), key=lambda item: item["reportDate"], reverse=True)
-    store.stage("portfolio-reports/index.json", {"schemaVersion": 1, "reports": ordered, "latestReportDate": ordered[0]["reportDate"]})
-    current_portfolio = store.load("portfolio-reports/latest.json")
-    if not current_portfolio or day >= current_portfolio["report_date_kst"]:
-        store.stage("portfolio-reports/latest.json", portfolio)
+    if portfolio:
+        store.stage(portfolio_key, portfolio)
+        portfolio_index = store.load("portfolio-reports/index.json") or {"schemaVersion": 1, "reports": []}
+        items = {item["reportDate"]: item for item in portfolio_index["reports"]}
+        items[day] = {"reportDate": day, "marketDate": portfolio["signal_market_date"], "generatedAt": portfolio["generated_at"]}
+        ordered = sorted(items.values(), key=lambda item: item["reportDate"], reverse=True)
+        store.stage("portfolio-reports/index.json", {"schemaVersion": 1, "reports": ordered, "latestReportDate": ordered[0]["reportDate"]})
+        current_portfolio = store.load("portfolio-reports/latest.json")
+        if not current_portfolio or day >= current_portfolio["report_date_kst"]:
+            store.stage("portfolio-reports/latest.json", portfolio)
     for path in source.iterdir():
         if path.is_file():
             store.stage(f"report-inputs/morning/{day}/{path.name}", path.read_bytes(), "application/octet-stream")
@@ -93,8 +98,9 @@ def generate_morning(day: str, output: Path):
     from .us_daily_portfolio_report import build_device_payload, load_market_data
 
     generate(["run", "--as-of", day, "--output", str(output)])
-    payload = build_device_payload(load_market_data(pd.Timestamp(day)), pd.Timestamp(day))
-    write_json(payload, output / "portfolio.json")
+    if day < PORTFOLIO_EVENING_START:
+        payload = build_device_payload(load_market_data(pd.Timestamp(day)), pd.Timestamp(day))
+        write_json(payload, output / "portfolio.json")
 
 
 def initialize_daily_policy(store: ReportStore, legacy_dates: list[str], now) -> None:
@@ -171,7 +177,7 @@ def main():
         try:
             if args.kind == "morning":
                 existing = store.load(f"portfolio-reports/{day}.json")
-                if existing and day in legacy_dates and not args.revise:
+                if (existing or day >= PORTFOLIO_EVENING_START) and day in legacy_dates and not args.revise:
                     store.commit(job_date=day, details={"unchanged": True})
                     continue
                 output = Path("action-output/daily-reports") / day

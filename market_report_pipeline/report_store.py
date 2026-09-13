@@ -20,7 +20,7 @@ class ReleaseConflict(RuntimeError):
 
 class ReportStore:
     def __init__(self, client: Any, bucket: str, product: str):
-        if product not in {"morning", "trading"}:
+        if product not in {"morning", "trading", "portfolio"}:
             raise ValueError("Unknown report product")
         self.client, self.bucket, self.product = client, bucket, product
         self.pointer = f"report-publications/{product}/current.json"

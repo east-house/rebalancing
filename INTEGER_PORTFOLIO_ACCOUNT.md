@@ -1,5 +1,10 @@
 # Integer I1 account tracker
 
+From 2026-09-14 the portfolio publication is scheduled independently at 19:00
+KST on weekdays, with incomplete-slot retry checks at 19:30 and 20:00. This was
+explicitly requested by the user. Market report scheduling and US signal/fill
+session rules are unchanged. See `PORTFOLIO_EVENING_SCHEDULE.md`.
+
 The portfolio report now starts a virtual account from a selected Korean report
 date and initial USD capital. It processes every report through the latest
 available date and appends newly published reports on refresh or return visits.

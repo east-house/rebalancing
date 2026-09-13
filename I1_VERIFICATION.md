@@ -1,5 +1,11 @@
 # I1 적용 검증 — 2026-09-13
 
+> 후속 요청 반영: 2026-09-14부터 포트폴리오 생성 예약을 한국 평일 19:00으로
+> 분리했다. 아래 최초 검증의 공동 아침 게시 경로는 9월 11일까지의 운영 설명이다.
+> 현재 `portfolio-report:i1`은 `portfolio_evening`을 실행하며,
+> `.github/workflows/daily-portfolio-report.yml`과 독립 portfolio manifest를 사용한다.
+> 상세 스케줄·기록 항목은 `PORTFOLIO_EVENING_SCHEDULE.md` 참조.
+
 ## 결론
 
 현재 루트 `cloud_pages`의 코드로 운영한다. `stock_strategy/stock_rank_prediction`

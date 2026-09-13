@@ -21,6 +21,7 @@ import yaml
 
 from .io_utils import write_json
 from .support import PROJECT_ROOT, STOCK_CACHE, UNIVERSE_CACHE, safe_symbol
+from .report_time import PORTFOLIO_EVENING_START
 
 
 SCHEMA_VERSION = 2
@@ -183,7 +184,7 @@ def load_market_data(as_of: pd.Timestamp | None = None, *, universe_snapshot: Pa
 def report_market_dates(
     report_date: pd.Timestamp, calendar: pd.DatetimeIndex
 ) -> tuple[pd.Timestamp, pd.Timestamp]:
-    """Map a 07:30 KST weekday report to signal and proposed execution dates."""
+    """Map a KST weekday report to its completed US signal and execution dates."""
 
     report_date = pd.Timestamp(report_date).normalize()
     if report_date.dayofweek >= 5:
@@ -488,7 +489,7 @@ def build_device_payload(
         "schema_version": SCHEMA_VERSION,
         "generated_at": pd.Timestamp.now(tz="UTC").isoformat(),
         "report_date_kst": str(report_date.date()),
-        "report_time_kst": "07:30",
+        "report_time_kst": "19:00" if str(report_date.date()) >= PORTFOLIO_EVENING_START else "07:30",
         "signal_market_date": str(signal_date.date()),
         "proposed_execution_date": str(execution_date.date()),
         "stale_preview": stale_preview,

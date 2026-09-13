@@ -114,7 +114,7 @@ function parsePayload(value: unknown): PortfolioReportPayload {
 
 export interface PortfolioReportIndex {
   releaseId?: string;
-  reports: { reportDate: string; marketDate: string }[];
+  reports: { reportDate: string; marketDate: string; generatedAt?: string }[];
 }
 
 export async function loadPortfolioReportIndex(): Promise<PortfolioReportIndex> {
