@@ -58,8 +58,8 @@ MINIMUM_PRICE = float(STRATEGY_CONFIG["universe"]["minimum_price"])
 MINIMUM_DOLLAR_VOLUME = float(STRATEGY_CONFIG["universe"]["minimum_dollar_volume_63"])
 MAXIMUM_ANNUALIZED_VOLATILITY = float(STRATEGY_CONFIG["universe"]["maximum_annualized_volatility"])
 TOP_LIQUID_NAMES = int(STRATEGY_CONFIG["universe"]["top_liquid_names"])
-STOP_LOSS = float(STRATEGY_CONFIG["risk"]["stop_loss"])
-TRAILING_STOP = float(STRATEGY_CONFIG["risk"]["trailing_stop"])
+STOP_LOSS = STRATEGY_CONFIG["risk"]["stop_loss"]
+TRAILING_STOP = STRATEGY_CONFIG["risk"]["trailing_stop"]
 DRIFT_THRESHOLD = float(STRATEGY_CONFIG["portfolio"]["drift_threshold"])
 
 if not math.isclose(BASE_WEIGHT + THEME_WEIGHT, 1.0):
@@ -82,6 +82,7 @@ class MarketData:
     snapshot_path: Path
     theme_proxy_close: pd.DataFrame = field(default_factory=pd.DataFrame)
     theme_definitions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    sector_proxy_close: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def _read_price(path: Path, ticker: str) -> pd.DataFrame:
@@ -95,10 +96,10 @@ def _read_price(path: Path, ticker: str) -> pd.DataFrame:
     return result.dropna(subset=["date", "close"]).sort_values("date")
 
 
-def load_market_data(as_of: pd.Timestamp | None = None) -> MarketData:
+def load_market_data(as_of: pd.Timestamp | None = None, *, universe_snapshot: Path | None = None) -> MarketData:
     """Load the cache produced by this repository's market-report collector."""
 
-    snapshots = sorted(UNIVERSE_CACHE.glob("sp500_*.parquet"))
+    snapshots = [universe_snapshot] if universe_snapshot is not None else sorted(UNIVERSE_CACHE.glob("sp500_*.parquet"))
     if as_of is not None:
         snapshots = [path for path in snapshots if pd.Timestamp(path.stem.split("_")[-1]) <= as_of]
     if not snapshots:
@@ -161,6 +162,11 @@ def load_market_data(as_of: pd.Timestamp | None = None) -> MarketData:
             "Run the market report collection before the portfolio report."
         )
     theme_proxy_close = pd.DataFrame(proxy_series).reindex(calendar).ffill()
+    sector_series = {}
+    for proxy in market_config["sector_proxies"].values():
+        sector_series[proxy] = _read_price(
+            STOCK_CACHE / f"{safe_symbol(proxy)}.parquet", proxy
+        ).set_index("date")["close"]
     return MarketData(
         calendar=calendar,
         close=close.astype("float64"),
@@ -170,6 +176,7 @@ def load_market_data(as_of: pd.Timestamp | None = None) -> MarketData:
         snapshot_path=snapshot_path,
         theme_proxy_close=theme_proxy_close,
         theme_definitions=theme_definitions,
+        sector_proxy_close=pd.DataFrame(sector_series).reindex(calendar).ffill(),
     )
 
 
@@ -227,7 +234,7 @@ def build_theme_strength(
                 "relative_60": close.pct_change(60, fill_method=None).loc[signal_date]
                 - benchmark.pct_change(60, fill_method=None).loc[signal_date],
                 "above_ma_50": float(
-                    close.loc[signal_date] > close.rolling(50).mean().loc[signal_date]
+                    close.loc[signal_date] > close.rolling(50, min_periods=45).mean().loc[signal_date]
                 ),
             }
         )
@@ -241,6 +248,28 @@ def build_theme_strength(
         result.sort_values(["theme_strength", "theme"], ascending=[False, True]),
         ticker_themes,
     )
+
+
+def _pit_assignments(
+    data: MarketData, signal_date: pd.Timestamp, tickers: list[str],
+    proxies: pd.DataFrame, threshold: float,
+) -> pd.Series:
+    """I1: trailing 126 excess returns, 60 observations, positive correlation."""
+    if proxies.empty:
+        return pd.Series(index=tickers, dtype=object)
+    window = data.close.loc[:signal_date, tickers].pct_change(fill_method=None).tail(126)
+    market = data.benchmark.loc[:signal_date].pct_change(fill_method=None).reindex(window.index)
+    stocks = window.sub(market, axis=0)
+    proxy_returns = proxies.reindex(data.calendar).ffill().loc[:signal_date].pct_change(fill_method=None)
+    proxy_excess = proxy_returns.reindex(window.index).sub(market, axis=0)
+    renamed = proxy_excess.add_prefix("proxy::")
+    correlations = stocks.join(renamed).corr(min_periods=60).loc[tickers, renamed.columns]
+    best = correlations.fillna(-np.inf).idxmax(axis=1).str.removeprefix("proxy::")
+    return best.where(correlations.max(axis=1) >= threshold)
+
+
+def _close_with_anchor(data: MarketData) -> pd.DataFrame:
+    return data.close.assign(IVV=data.benchmark.reindex(data.close.index))
 
 
 def build_daily_ranking(data: MarketData, signal_date: pd.Timestamp) -> pd.DataFrame:
@@ -257,13 +286,16 @@ def build_daily_ranking(data: MarketData, signal_date: pd.Timestamp) -> pd.DataF
     frame["mom_12_1"] = history.iloc[-22] / history.iloc[-253] - 1
     frame["mom_6_1"] = history.iloc[-22] / history.iloc[-127] - 1
     frame["vol_63"] = returns.tail(63).std() * math.sqrt(252)
-    frame["sma_200"] = history.tail(200).mean()
+    frame["sma_200"] = history.rolling(200, min_periods=180).mean().iloc[-1]
     frame["trend_200"] = frame["close"] / frame["sma_200"] - 1
     frame["adv_63"] = liquidity.tail(63).mean()
+    frame.loc[returns.tail(63).count() < 50, "vol_63"] = np.nan
+    frame.loc[liquidity.tail(63).count() < 40, "adv_63"] = np.nan
+    frame["mom_3_1"] = history.iloc[-22] / history.iloc[-64] - 1
     frame.index.name = "ticker"
     frame = frame.loc[frame.index.isin(members_on_date(data, signal_date))]
     frame = frame.dropna(
-        subset=["close", "mom_12_1", "mom_6_1", "vol_63", "trend_200", "adv_63"]
+        subset=["close", "mom_12_1", "mom_6_1", "mom_3_1", "vol_63", "trend_200", "adv_63"]
     )
     frame = frame.loc[
         frame["close"].ge(MINIMUM_PRICE)
@@ -286,35 +318,34 @@ def build_daily_ranking(data: MarketData, signal_date: pd.Timestamp) -> pd.DataF
         + BASE_COMPONENT_WEIGHTS["trend_200"] * frame["rank_trend_200"]
         + BASE_COMPONENT_WEIGHTS["low_volatility_63"] * frame["rank_low_vol_63"]
     )
-    theme_strength, ticker_themes = build_theme_strength(data, signal_date)
+    theme_strength, _ = build_theme_strength(data, signal_date)
+    theme_proxy = _pit_assignments(data, signal_date, frame.index.tolist(), data.theme_proxy_close, 0.30)
+    theme_names = {definition["proxy"]: name for name, definition in data.theme_definitions.items()}
+    mapped_themes = theme_proxy.map(theme_names)
     theme_lookup = (
         theme_strength.set_index("theme")["theme_strength"].to_dict()
         if not theme_strength.empty
         else {}
     )
 
-    def mapped_theme_score(ticker: str) -> float:
-        values = [
-            theme_lookup.get(theme, np.nan)
-            for theme in ticker_themes.get(str(ticker).upper(), [])
-        ]
-        usable = [float(value) for value in values if pd.notna(value)]
-        return max(usable) if usable else UNMAPPED_THEME_SCORE
-
-    frame["theme_strength"] = frame.index.to_series().map(mapped_theme_score)
-    frame["themes"] = frame.index.to_series().map(
-        lambda ticker: ", ".join(ticker_themes.get(str(ticker).upper(), [])) or "미분류"
-    )
-    frame["theme_mapped"] = frame.index.to_series().map(
-        lambda ticker: bool(ticker_themes.get(str(ticker).upper(), []))
-    )
+    frame["theme_strength"] = mapped_themes.map(theme_lookup).fillna(UNMAPPED_THEME_SCORE)
+    frame["themes"] = mapped_themes.fillna("Unmapped::" + frame.index.to_series())
+    frame["theme_mapped"] = mapped_themes.notna()
     frame["score"] = BASE_WEIGHT * frame["base_score"] + THEME_WEIGHT * frame["theme_strength"]
     metadata = data.universe.drop_duplicates("ticker").set_index("ticker")
     frame["name"] = metadata["name"].reindex(frame.index).fillna(frame.index.to_series())
-    frame["sector"] = metadata["sector"].reindex(frame.index).fillna("Unknown")
-    frame = frame.sort_values(["score", "adv_63"], ascending=[False, False])
+    sector_proxy = _pit_assignments(data, signal_date, frame.index.tolist(), data.sector_proxy_close, 0.20)
+    sector_names = {proxy: name for name, proxy in _load_yaml(MARKET_CONFIG_PATH)["sector_proxies"].items()}
+    frame["sector"] = sector_proxy.map(sector_names).fillna("Unknown::" + frame.index.to_series())
+    benchmark = data.benchmark.loc[:signal_date]
+    frame.loc["IVV", ["close", "score", "adv_63", "name", "sector", "themes", "base_score", "theme_strength", "trend_200"]] = [
+        float(benchmark.iloc[-1]), float(frame["score"].max()) + 1.0, np.inf,
+        "iShares Core S&P 500 ETF", "Benchmark", "Benchmark", 0.0, 0.0,
+        float(benchmark.iloc[-1] / benchmark.tail(200).mean() - 1),
+    ]
+    frame = frame.reset_index().sort_values(["score", "adv_63", "ticker"], ascending=[False, False, True])
     frame["rank"] = np.arange(1, len(frame) + 1)
-    return frame.reset_index()
+    return frame.reset_index(drop=True)
 
 
 def _pairwise_ok(
@@ -323,23 +354,29 @@ def _pairwise_ok(
     if not selected:
         return True
     returns = (
-        data.close.loc[:signal_date, selected + [ticker]]
+        _close_with_anchor(data).loc[:signal_date, selected + [ticker]]
         .tail(CORRELATION_LOOKBACK)
         .pct_change(fill_method=None)
     )
-    correlations = returns[selected].corrwith(returns[ticker])
-    return bool(correlations.dropna().le(MAX_PAIRWISE_CORRELATION).all())
+    correlations = returns.corr(min_periods=60).loc[selected, ticker]
+    return bool(correlations.dropna().abs().le(MAX_PAIRWISE_CORRELATION).all())
 
 
 def select_portfolio(
-    ranking: pd.DataFrame, data: MarketData, signal_date: pd.Timestamp
+    ranking: pd.DataFrame, data: MarketData, signal_date: pd.Timestamp,
+    existing: tuple[str, ...] = (),
 ) -> list[str]:
     """Select five names with sector and pairwise-correlation limits."""
 
     indexed = ranking.set_index("ticker")
     selected: list[str] = []
     sector_counts: dict[str, int] = {}
-    for ticker in ranking["ticker"].astype(str):
+    retained = sorted(
+        [ticker for ticker in existing if ticker in indexed.index and indexed.loc[ticker, "rank"] <= HOLD_RANK],
+        key=lambda ticker: int(indexed.loc[ticker, "rank"]),
+    )
+    order = retained + [ticker for ticker in ranking["ticker"].astype(str) if ticker not in retained]
+    for ticker in order:
         sector = str(indexed.loc[ticker, "sector"])
         if sector_counts.get(sector, 0) >= MAX_NAMES_PER_SECTOR:
             continue
@@ -349,19 +386,8 @@ def select_portfolio(
         sector_counts[sector] = sector_counts.get(sector, 0) + 1
         if len(selected) == MAX_POSITIONS:
             break
-    if len(selected) < MAX_POSITIONS:
-        for ticker in ranking["ticker"].astype(str):
-            if ticker in selected:
-                continue
-            sector = str(indexed.loc[ticker, "sector"])
-            if sector_counts.get(sector, 0) >= MAX_NAMES_PER_SECTOR:
-                continue
-            selected.append(ticker)
-            sector_counts[sector] = sector_counts.get(sector, 0) + 1
-            if len(selected) == MAX_POSITIONS:
-                break
-    if len(selected) != MAX_POSITIONS:
-        raise RuntimeError("The public report requires exactly five selected names")
+    if not selected:
+        raise RuntimeError("No I1 candidates passed the strict selection limits")
     return selected
 
 
@@ -393,7 +419,7 @@ def build_device_payload(
     selected = select_portfolio(ranking, data, signal_date)
     ranked = ranking.set_index("ticker")
     metadata = data.universe.drop_duplicates("ticker").set_index("ticker")
-    history = data.close.loc[:signal_date]
+    history = _close_with_anchor(data).loc[:signal_date]
     latest = history.iloc[-1]
     sma_200 = history.tail(200).mean()
     quotes: dict[str, dict[str, Any]] = {}
@@ -433,7 +459,7 @@ def build_device_payload(
             "name": str(ranked.loc[ticker, "name"]),
             "sector": str(ranked.loc[ticker, "sector"]),
             "themes": str(ranked.loc[ticker, "themes"]),
-            "weight": TARGET_WEIGHT_EACH,
+            "weight": 1.0 / len(selected),
             "reference_close": float(ranked.loc[ticker, "close"]),
             "rank": int(ranked.loc[ticker, "rank"]),
             "score": float(ranked.loc[ticker, "score"]),

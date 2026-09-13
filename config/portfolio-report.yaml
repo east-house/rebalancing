@@ -1,9 +1,9 @@
 strategy:
-  id: us_theme_hybrid_v1
-  name: "안정 모멘텀·테마 혼합"
+  id: i1_core_satellite
+  name: "I1 코어·위성"
   status: production_baseline
   benchmark: IVV
-  description: "안정 모멘텀 85%와 시장 리포트의 테마 강도 15%를 결합한 최대 5종목 전략"
+  description: "IVV와 I0 가격 기반 주식으로 구성하는 I1 동일비중 전략"
 
 score:
   base_weight: 0.85
@@ -37,10 +37,10 @@ portfolio:
   drift_threshold: 0.03
 
 risk:
-  stop_loss: 0.12
-  trailing_stop: 0.15
+  stop_loss: null
+  trailing_stop: null
   market_regime_cash_overlay: false
-  stopped_capital_stays_cash_until_monthly_review: true
+  stopped_capital_stays_cash_until_monthly_review: false
 
 execution:
   decision_data: "latest completed US close"

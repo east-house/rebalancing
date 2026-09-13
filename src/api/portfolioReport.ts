@@ -70,8 +70,8 @@ export interface PortfolioReportPayload {
     hold_rank: number;
     maximum_names_per_sector: number;
     maximum_pairwise_correlation: number;
-    stop_loss: number;
-    trailing_stop: number;
+    stop_loss: number | null;
+    trailing_stop: number | null;
     drift_threshold: number;
     review_frequency: string;
     market_regime_cash_overlay: boolean;
@@ -99,7 +99,14 @@ function parsePayload(value: unknown): PortfolioReportPayload {
     throw new Error("포트폴리오 보고서 데이터 형식이 올바르지 않습니다.");
   }
   const payload = value as PortfolioReportPayload;
-  if (payload.selection.length !== 5) {
+  if (payload.strategy.id === "i1_core_satellite") {
+    const names = payload.selection.map((item) => item.ticker);
+    if (names.length < 1 || names.length > 5 || names[0] !== "IVV"
+      || new Set(names).size !== names.length
+      || payload.selection.some((item) => Math.abs(item.weight - 1 / names.length) > 1e-9)) {
+      throw new Error("I1 포트폴리오의 IVV 포함·동일비중 조건이 올바르지 않습니다.");
+    }
+  } else if (payload.selection.length !== 5) {
     throw new Error("포트폴리오 보고서의 추천 종목은 5개여야 합니다.");
   }
   return payload;

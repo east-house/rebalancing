@@ -1,0 +1,70 @@
+name: Rebuild complete I1 portfolio history
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: First Korean report date
+        default: "2026-08-17"
+        required: true
+        type: string
+      end:
+        description: Last Korean report date; empty means latest completed slot
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-daily-market-report
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MPLBACKEND: Agg
+      PYTHONUNBUFFERED: "1"
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/cache/restore@v5
+        with:
+          path: |
+            data/cache/market-report
+            data/raw/us_market
+          key: market-report-${{ runner.os }}-portfolio-${{ github.run_id }}
+          restore-keys: market-report-${{ runner.os }}-
+      - name: Install and verify
+        run: |
+          pip install -r requirements-market-report.txt
+          python -m pytest tests/market_report_pipeline -q
+      - name: Prepare, validate and publish preserved portfolio revision
+        env:
+          START_DATE: ${{ inputs.start }}
+          END_DATE: ${{ inputs.end }}
+        run: |
+          args=(--start "$START_DATE" --refresh-prices --publish)
+          if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
+          python -m market_report_pipeline.repair_portfolio_history "${args[@]}"
+      - uses: actions/cache/save@v5
+        if: success()
+        with:
+          path: |
+            data/cache/market-report
+            data/raw/us_market
+          key: market-report-${{ runner.os }}-portfolio-${{ github.run_id }}
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: portfolio-history-${{ github.run_id }}
+          path: action-output/portfolio-history/
+          retention-days: 30

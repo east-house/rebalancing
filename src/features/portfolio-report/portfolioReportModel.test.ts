@@ -55,6 +55,23 @@ const payload: PortfolioReportPayload = {
 };
 
 describe("portfolio report device model", () => {
+  it("does not trigger either stop for I1 when prices are flat or fall", () => {
+    const plan = allocatePortfolio(payload, 2_819, true);
+    const i1 = {
+      ...payload,
+      strategy: { ...payload.strategy, id: "i1_core_satellite" },
+      policy: { ...payload.policy, stop_loss: null, trailing_stop: null },
+      quotes: { ...payload.quotes, A: { ...payload.quotes.A!, close: 40 } },
+    };
+    const state: PortfolioDeviceState = {
+      schemaVersion: 2, strategyId: i1.strategy.id, capital: 2_819, fractional: true,
+      ...plan,
+      initialReport: { reportDate: "2026-08-01", marketDate: "2026-07-31", strategyId: i1.strategy.id },
+      lastReviewMonth: "2026-08", history: [],
+    };
+    expect(buildSnapshot(i1, state).actions.every((action) => action.action === "HOLD")).toBe(true);
+  });
+
   it("allocates five equal-weight positions without exceeding capital", () => {
     const plan = allocatePortfolio(payload, 2_819, true);
 

@@ -188,7 +188,7 @@ export default function PortfolioReportPage({
         strategyId: payload.strategy.id,
       },
       lastReviewMonth: payload.report_date_kst.slice(0, 7),
-      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · 5종목 각 20% · ${payload.strategy.name}`, Math.max(100, capital)) ],
+      history: [historyItem(payload, "INITIAL", `${money(Math.max(100, capital))} · ${payload.selection.length}종목 동일비중 · ${payload.strategy.name}`, Math.max(100, capital)) ],
     };
     if (!saveState(state)) return;
     setDeviceState(state);
@@ -283,7 +283,7 @@ export default function PortfolioReportPage({
         {error || !payload ? <div className="portfolio-report-alert"><CircleAlert size={18} />{error || "표시할 포트폴리오 보고서가 없습니다."}</div> : (
           <>
             <section className="portfolio-report-hero">
-              <div><span className="portfolio-report-eyebrow">{payload.report_date_kst} · 예정 {payload.report_time_kst} KST</span><h1>오늘 확인할 매수·매도와<br />리밸런싱 제안</h1><p>{payload.strategy.name} · 미국 {payload.signal_market_date} 종가까지 반영한 5종목 모델입니다. 실제 주문은 실행하지 않습니다.</p>{payload.generated_at && <p>생성 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date(payload.generated_at))} KST</p>}{(payload.stale_preview || payload.reconstructed || payload.dataSource === "static-preview") && <p role="status">{payload.stale_preview ? "자료 지연 · 예비 보고서" : payload.reconstructed ? "과거일 재구성 보고서" : "정적 미리보기"}</p>}</div>
+              <div><span className="portfolio-report-eyebrow">{payload.report_date_kst} · 예정 {payload.report_time_kst} KST</span><h1>오늘 확인할 매수·매도와<br />리밸런싱 제안</h1><p>{payload.strategy.name} · 미국 {payload.signal_market_date} 종가까지 반영한 {payload.selection.length}종목 모델입니다. 실제 주문은 실행하지 않습니다.</p>{payload.generated_at && <p>생성 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date(payload.generated_at))} KST</p>}{(payload.stale_preview || payload.reconstructed || payload.dataSource === "static-preview") && <p role="status">{payload.stale_preview ? "자료 지연 · 예비 보고서" : payload.reconstructed ? "과거일 재구성 보고서" : "정적 미리보기"}</p>}</div>
               <dl><div><dt>시장 상태</dt><dd>{payload.market.state}</dd></div><div><dt>IVV 장기선</dt><dd>{pct(payload.market.ivv_vs_sma_200)}</dd></div><div><dt>정기 점검</dt><dd>월 1회</dd></div><div><dt>자동매매</dt><dd>없음</dd></div></dl>
             </section>
 
@@ -291,7 +291,7 @@ export default function PortfolioReportPage({
 
             {!deviceState && initialPlan ? (
               <section className="portfolio-report-card">
-                <div className="portfolio-report-card__head"><div><span>INITIAL BUY PLAN</span><h2>초기 포트폴리오 매수안</h2><p>투자금을 5종목에 각 20%씩 배정합니다. 금액과 소수점 거래 여부를 바꾸면 수량을 다시 계산합니다.</p></div><TrendingUp size={20} /></div>
+                <div className="portfolio-report-card__head"><div><span>INITIAL BUY PLAN</span><h2>초기 포트폴리오 매수안</h2><p>투자금을 {payload.selection.length}종목에 동일비중으로 배정합니다. 금액과 소수점 거래 여부를 바꾸면 수량을 다시 계산합니다.</p></div><TrendingUp size={20} /></div>
                 <div className="portfolio-report-controls"><label>투자금액(USD)<input type="number" min="100" step="1" value={capital} onChange={(event) => setCapital(Number(event.target.value))} /></label><label className="portfolio-report-check"><input type="checkbox" checked={fractional} onChange={(event) => setFractional(event.target.checked)} /> 소수점 주식 사용</label><button type="button" disabled={writeBlocked} onClick={saveInitial}>초기 리포트 저장</button></div>
                 <div className="portfolio-report-table-wrap"><table><thead><tr><th>회사(티커)</th><th>연결 테마</th><th>제안</th><th>목표비중</th><th>배정금액</th><th>기준 종가</th><th>계산 수량</th><th>후보 순위</th></tr></thead><tbody>{initialPlan.positions.map((position) => { const quote = payload.quotes[position.ticker]; return <tr key={position.ticker}><td data-label="회사(티커)"><strong>{position.name}</strong><small>{position.ticker} · {position.sector}</small></td><td data-label="연결 테마">{position.themes}</td><td data-label="제안"><span className="portfolio-action buy">매수</span></td><td data-label="목표비중">{(position.weight * 100).toFixed(0)}%</td><td data-label="배정금액">{money(capital * position.weight)}</td><td data-label="기준 종가">{money(quote?.close ?? position.entryPrice)}</td><td data-label="계산 수량">{position.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })}</td><td data-label="후보 순위">{quote?.rank ?? "—"}</td></tr>; })}</tbody></table></div>
                 <p className="portfolio-report-cash">계산 후 예상 현금 {money(initialPlan.cash)} · 실제 체결가격과 수수료에 따라 달라질 수 있습니다.</p>
@@ -347,7 +347,7 @@ export default function PortfolioReportPage({
 
             <section className="portfolio-report-method">
               <h2>추천 기준과 한계</h2>
-              <ol><li>S&amp;P 500 종목 중 가격·유동성·변동성 조건을 통과한 상위 200개를 계산합니다.</li><li>안정 모멘텀 점수 85%에 시장 리포트의 테마 강도 15%를 결합합니다.</li><li>섹터당 최대 2종목과 종목 간 상관 0.80 제한을 적용해 최종 5종목을 선택합니다.</li><li>매입가 대비 -12% 또는 보유 후 고점 대비 -15%면 전량 매도를 제안하고, 매월 첫 평일에는 순위와 목표비중을 점검합니다.</li></ol>
+              <ol><li>S&amp;P 500 종목 중 가격·유동성·변동성 조건을 통과한 상위 200개를 계산합니다.</li><li>안정 모멘텀 점수 85%에 시장 리포트의 테마 강도 15%를 결합합니다.</li><li>{payload.strategy.id === "i1_core_satellite" ? "IVV를 포함하고, 과거 초과수익률 상관으로 테마·섹터를 분류합니다. 섹터당 최대 2종목과 절대상관 0.80 제한으로 최대 5종목을 동일비중으로 선택합니다." : "섹터당 최대 2종목과 종목 간 상관 0.80 제한을 적용해 최종 5종목을 선택합니다."}</li><li>{payload.policy.stop_loss === null && payload.policy.trailing_stop === null ? "고정 손절·추적 손절은 사용하지 않습니다. 매월 첫 평일에는 순위와 목표비중을 점검합니다." : "매입가 대비 -12% 또는 보유 후 고점 대비 -15%면 전량 매도를 제안하고, 매월 첫 평일에는 순위와 목표비중을 점검합니다."}</li></ol>
               <p><CircleAlert size={16} /> 본 보고서는 규칙 기반 모델의 정보 제공 결과이며 개인의 재무상황을 반영한 투자자문이 아닙니다. 실제 투자 판단과 주문 책임은 이용자에게 있습니다.</p>
             </section>
           </>

@@ -88,16 +88,18 @@ def test_hybrid_ranking_uses_85_percent_base_and_15_percent_theme() -> None:
     data = _market_data()
     signal = data.calendar[-5]
 
-    ranked = report.build_daily_ranking(data, signal).set_index("ticker")
+    ranked = report.build_daily_ranking(data, signal).set_index("ticker").drop(index="IVV")
 
     np.testing.assert_allclose(
         ranked["score"],
         report.BASE_WEIGHT * ranked["base_score"]
         + report.THEME_WEIGHT * ranked["theme_strength"],
     )
-    assert ranked.loc["A", "theme_strength"] > ranked.loc["B", "theme_strength"]
-    assert ranked.loc["A", "themes"] == "강한 테마"
-    assert ranked.loc["C", "theme_strength"] == report.UNMAPPED_THEME_SCORE
+    changed = copy.deepcopy(data)
+    changed.theme_definitions["강한 테마"]["members"] = ["B", "C"]
+    after = report.build_daily_ranking(changed, signal).set_index("ticker").drop(index="IVV")
+    pd.testing.assert_series_equal(ranked["score"], after["score"])
+    pd.testing.assert_series_equal(ranked["themes"], after["themes"])
 
 
 def test_hybrid_ranking_does_not_use_future_theme_prices() -> None:
@@ -123,14 +125,17 @@ def test_device_payload_keeps_user_state_out_of_the_server_artifact() -> None:
     assert payload["default_capital"] == 2_819.0
     assert payload["schema_version"] == 2
     assert payload["strategy"] == {
-        "id": "us_theme_hybrid_v1",
-        "name": "안정 모멘텀·테마 혼합",
+        "id": "i1_core_satellite",
+        "name": "I1 코어·위성",
         "status": "production_baseline",
         "base_weight": 0.85,
         "theme_weight": 0.15,
         "benchmark": "IVV",
     }
     assert len(payload["selection"]) == 5
+    assert payload["selection"][0]["ticker"] == "IVV"
+    assert payload["policy"]["stop_loss"] is None
+    assert payload["policy"]["trailing_stop"] is None
     assert np.isclose(sum(item["weight"] for item in payload["selection"]), 1.0)
     assert all(
         "themes" in item and "base_score" in item and "theme_strength" in item
@@ -156,3 +161,20 @@ def test_morning_payload_can_use_latest_completed_session() -> None:
     assert payload["report_date_kst"] == str(report_date.date())
     assert payload["signal_market_date"] == str(data.calendar[-1].date())
     assert payload["stale_preview"] is False
+
+
+def test_i1_strict_correlation_cap_does_not_fill_rejected_names() -> None:
+    data = _market_data()
+    data.close.loc[:, :] = np.column_stack([data.benchmark.to_numpy()] * len(data.close.columns))
+    payload = report.build_device_payload(data, data.calendar[-1])
+    assert [item["ticker"] for item in payload["selection"]] == ["IVV"]
+    assert payload["selection"][0]["weight"] == 1.0
+
+
+def test_i1_retains_eligible_holdings_before_new_stock_candidates() -> None:
+    data = _market_data()
+    signal = data.calendar[-5]
+    ranking = report.build_daily_ranking(data, signal)
+    retained = str(ranking.iloc[-1]["ticker"])
+    selected = report.select_portfolio(ranking, data, signal, existing=("IVV", retained))
+    assert selected[:2] == ["IVV", retained]

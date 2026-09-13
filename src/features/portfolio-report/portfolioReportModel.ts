@@ -170,10 +170,10 @@ export function buildSnapshot(
     );
     let action: PortfolioActionKind = "HOLD";
     let reason = "예외 청산 신호 없음";
-    if (loss <= -payload.policy.stop_loss) {
+    if (payload.policy.stop_loss !== null && loss <= -payload.policy.stop_loss) {
       action = "SELL";
       reason = `기준가 대비 ${(loss * 100).toFixed(1)}%: 손실 제한선 도달`;
-    } else if (drawdown <= -payload.policy.trailing_stop) {
+    } else if (payload.policy.trailing_stop !== null && drawdown <= -payload.policy.trailing_stop) {
       action = "SELL";
       reason = `보유 후 고점 대비 ${(drawdown * 100).toFixed(1)}%: 추적 제한선 도달`;
     } else if (monthReview && (quote.rank === null || quote.rank > payload.policy.hold_rank)) {
