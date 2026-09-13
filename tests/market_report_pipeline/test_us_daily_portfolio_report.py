@@ -184,3 +184,15 @@ def test_i1_retains_eligible_holdings_before_new_stock_candidates() -> None:
     retained = str(ranking.iloc[-1]["ticker"])
     selected = report.select_portfolio(ranking, data, signal, existing=("IVV", retained))
     assert selected[:2] == ["IVV", retained]
+
+
+def test_monthly_report_maps_to_original_month_end_signal_and_next_session() -> None:
+    from market_report_pipeline.report_time import market_calendar, expected_market_date, next_execution_date
+
+    for month in pd.date_range("2025-01-01", "2027-12-01", freq="MS"):
+        report_day = pd.bdate_range(month, periods=1)[0]
+        calendar = market_calendar(month.year)
+        original_signal = calendar.date_to_session(month - pd.Timedelta(days=1), direction="previous")
+        original_execution = calendar.next_session(original_signal)
+        assert expected_market_date(report_day) == pd.Timestamp(original_signal).tz_localize(None)
+        assert next_execution_date(report_day) == pd.Timestamp(original_execution).tz_localize(None)
