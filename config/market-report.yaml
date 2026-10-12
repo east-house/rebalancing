@@ -8,9 +8,11 @@ data:
   max_retries: 4
   freshness_retry_delay_seconds: 30
   collection_time_budget_seconds: 900
-  require_all_fresh_symbols: true
+  require_all_fresh_symbols: false
   cache_overlap_days: 10
-  minimum_fresh_symbols: 490
+  # Allow one unavailable symbol in the current 553-symbol collection.
+  # Benchmark freshness is still required independently.
+  minimum_fresh_symbols: 552
 
 portfolio_report:
   benchmark: "IVV"

@@ -1,10 +1,12 @@
 import copy
 import json
 from collections import Counter
+from pathlib import Path
 
 import pandas as pd
 import pytest
 import requests
+import yaml
 
 from market_report_pipeline import support
 from market_report_pipeline import us_market_report as market
@@ -185,3 +187,47 @@ def test_all_symbol_gate_rejects_partial_success_despite_minimum(tmp_path, monke
     audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text(encoding="utf-8"))
     assert audit["benchmark_is_fresh"] is True
     assert audit["failures"][0]["ticker"] == "AAPL"
+
+
+@pytest.mark.parametrize("missing_count,missing_benchmark,passes", [
+    (1, False, True),
+    (2, False, False),
+    (1, True, False),
+])
+def test_production_freshness_threshold_keeps_benchmark_required(
+    tmp_path, monkeypatch, missing_count, missing_benchmark, passes
+):
+    config_path = Path(__file__).resolve().parents[2] / "config/market-report.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["data"].update(max_retries=1, request_workers=1)
+    benchmark = config["indices"]["S&P 500"]
+    symbols = [benchmark, *[f"S{i:03}" for i in range(552)]]
+    missing = set(symbols[:missing_count] if missing_benchmark else symbols[-missing_count:])
+
+    def download(symbol, *args, **kwargs):
+        if symbol in missing:
+            raise support.PriceDataNotReady("No completed price for expected session")
+        return pd.DataFrame({
+            "date": [pd.Timestamp("2026-09-08")], "ticker": [symbol],
+            "open": [100.0], "high": [101.0], "low": [99.0],
+            "close": [100.0], "volume": [1000.0],
+        })
+
+    monkeypatch.setattr(market, "STOCK_CACHE", tmp_path / "cache")
+    monkeypatch.setattr(market, "_download_yahoo_frame", download)
+    monkeypatch.setattr(market, "atomic_write_parquet", lambda *args: None)
+    settings = market.MarketRunSettings(
+        pd.Timestamp("2026-09-09"), pd.Timestamp("2026-09-01"), tmp_path / "out", config_path
+    )
+    if passes:
+        result, _ = market.collect_context_prices(symbols, settings, config)
+        assert result.ticker.nunique() == 552
+        assert result.date.max() == pd.Timestamp("2026-09-08")
+    else:
+        with pytest.raises(RuntimeError, match="freshness validation failed"):
+            market.collect_context_prices(symbols, settings, config)
+    audit = json.loads((settings.output_dir / "price_collection_audit.json").read_text(encoding="utf-8"))
+    assert audit["required_fresh_symbols"] == 552
+    assert audit["fresh_symbols"] == 553 - missing_count
+    assert audit["benchmark_is_fresh"] is (not missing_benchmark)
+    assert {item["ticker"] for item in audit["failures"]} == missing
