@@ -21,6 +21,7 @@ const pct = (value: number) => `${value >= 0 ? "+" : ""}${(value * 100).toFixed(
 const share = (value: number) => `${(value * 100).toFixed(1)}%`;
 const signed = (value: number) => `${value > 0 ? "+" : ""}${money(value)}`;
 const ids = STRATEGIES.map(item => item.id);
+const RESERVE_OPTIONS = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
 function savedAccount(strategy: StrategyId): PortfolioAccount | null {
   try {
     const value = JSON.parse(localStorage.getItem(accountKey(strategy)) ?? "null") as PortfolioAccount | null;
@@ -129,11 +130,11 @@ function AllocationCard({ day }: { day: AccountDay }) {
 function Comparison({ accounts, current, onSelect }: { accounts: Record<StrategyId, PortfolioAccount | null>; current: StrategyId; onSelect: (id: StrategyId) => void }) {
   const rows = STRATEGIES.map(info => ({ info, account: accounts[info.id], day: accounts[info.id]?.days.at(-1) }));
   if (rows.filter(row => row.day).length < 2) return null;
-  return <section className="portfolio-report-card"><h2>매매법 비교</h2><p>시작일과 투자금이 다르면 수익률을 직접 비교할 수 없습니다. 같은 시작일·투자금으로 시작하면 같은 조건의 비교가 됩니다.</p>
+  return <section className="portfolio-report-card"><h2>매매법 비교</h2><p>시작일·투자금·현금 비중이 다르면 수익률을 직접 비교할 수 없습니다. 같은 조건으로 시작하면 같은 조건의 비교가 됩니다.</p>
     <div className="portfolio-report-table-wrap"><table><thead><tr><th>매매법</th><th>시작일 / 투자금</th><th>최신 보고일</th><th>총자산</th><th>수익률</th><th>현금</th><th>S&amp;P 500 ETF</th><th>개별 주식</th></tr></thead>
       <tbody>{rows.map(({ info, account, day }) => { const mix = day ? allocation(day) : null; return <tr key={info.id} className={info.id === current ? "is-current" : undefined}>
         <td><button type="button" onClick={() => onSelect(info.id)}>{info.label}</button></td>
-        {account && day && mix ? <><td>{account.startDate}<small>{money(account.initialCapital)}</small></td><td>{day.reportDate}</td><td>{money(day.equity)}</td><td className={day.returnRate >= 0 ? "is-up" : "is-down"}>{pct(day.returnRate)}</td><td>{share(mix.cash)}</td><td>{share(mix.ivv)}</td><td>{share(mix.stocks)} · {mix.stockCount}종목</td></> : <td colSpan={7}>계좌 미시작</td>}
+        {account && day && mix ? <><td>{account.startDate}<small>{money(account.initialCapital)} · 현금 {share(account.cashReserve ?? 0)}</small></td><td>{day.reportDate}</td><td>{money(day.equity)}</td><td className={day.returnRate >= 0 ? "is-up" : "is-down"}>{pct(day.returnRate)}</td><td>{share(mix.cash)}</td><td>{share(mix.ivv)}</td><td>{share(mix.stocks)} · {mix.stockCount}종목</td></> : <td colSpan={7}>계좌 미시작</td>}
       </tr>; })}</tbody></table></div></section>;
 }
 
@@ -144,6 +145,7 @@ export default function PortfolioReportPage(props: Props) {
   const [index, setIndex] = useState<PortfolioReportIndex | null>(null);
   const [capital, setCapital] = useState(2819);
   const [start, setStart] = useState("2026-08-17");
+  const [reserve, setReserve] = useState(0);
   const [viewDate, setViewDate] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [legacy] = useState(() => localStorage.getItem(LEGACY_KEY));
@@ -187,7 +189,7 @@ export default function PortfolioReportPage(props: Props) {
     if (!index || busy) return;
     setBusy(true); setError("");
     try {
-      const next = await updateAccount(createAccount(start, capital, strategy), index);
+      const next = await updateAccount(createAccount(start, capital, strategy, reserve), index);
       if (!next.days.length) throw new Error("선택한 시작일의 보고서가 없습니다.");
       persist(next); setViewDate("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "계좌 생성 실패"); }
@@ -208,13 +210,14 @@ export default function PortfolioReportPage(props: Props) {
       {error && <p role="alert" className="portfolio-report-alert">{error}</p>}
       <PortfolioPublicationStatus reportDate={day?.reportDate ?? index?.reports[0]?.reportDate} generatedAt={day?.sourceRevision ?? index?.reports.find(item => item.reportDate === (day?.reportDate ?? index.reports[0]?.reportDate))?.generatedAt} />
       <Comparison accounts={accounts} current={strategy} onSelect={select} />
-      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일과 초기 투자금</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다.{strategy !== "i1" && " I2·S1은 해당 날짜의 계산 자료(수익률·모멘텀·섹터)가 게시된 보고일부터 시작할 수 있습니다."}</p>
+      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일 · 초기 투자금 · 현금 비중</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다. 현금 비중을 고르면 매 리밸런싱마다 총자산의 그 비율을 투자하지 않고 현금으로 두며, 나머지에 매매법의 목표 비중을 같은 비율로 적용합니다.{strategy !== "i1" && " I2·S1은 해당 날짜의 계산 자료(수익률·모멘텀·섹터)가 게시된 보고일부터 시작할 수 있습니다."}</p>
         <div className="portfolio-report-controls"><label>시작 보고일<select aria-label="시작 보고일" value={start} onChange={event => setStart(event.target.value)}>{[...(index?.reports ?? [])].sort((a, b) => a.reportDate.localeCompare(b.reportDate)).map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate}</option>)}</select></label>
           <label>초기 투자금(USD)<input aria-label="초기 투자금(USD)" type="number" min="1" step="1" value={capital} onChange={event => setCapital(Number(event.target.value))} /></label>
+          <label>현금 비중<select aria-label="현금 비중" value={reserve} onChange={event => setReserve(Number(event.target.value))}>{RESERVE_OPTIONS.map(value => <option key={value} value={value}>{value === 0 ? "0% (매매법 그대로)" : `${Math.round(value * 100)}% 현금 유지`}</option>)}</select></label>
           <button type="button" disabled={busy || !index} onClick={begin}>이 금액으로 계좌 시작</button></div>
         {legacy && strategy === "i1" && <p>이전 방식의 기록은 별도로 보존돼 있습니다. 새 계좌의 체결 내역으로 변환하지 않습니다. <button type="button" onClick={() => download(JSON.parse(legacy), "previous-portfolio-backup.json")}>이전 기록 다운로드</button></p>}</section>}
       {account && day && <>
-        <div className="account-period"><strong>시작 {account.startDate} · 초기 투자금 {money(account.initialCapital)}</strong><label>계좌 조회일 <select aria-label="계좌 조회일" value={viewDate} onChange={event => setViewDate(event.target.value)}><option value="">최신 계좌</option>{[...account.days].reverse().map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate} · 미국장 {item.marketDate}</option>)}</select></label></div>
+        <div className="account-period"><strong>시작 {account.startDate} · 초기 투자금 {money(account.initialCapital)} · 현금 비중 {share(account.cashReserve ?? 0)}</strong><label>계좌 조회일 <select aria-label="계좌 조회일" value={viewDate} onChange={event => setViewDate(event.target.value)}><option value="">최신 계좌</option>{[...account.days].reverse().map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate} · 미국장 {item.marketDate}</option>)}</select></label></div>
         <p>{day.reportDate} 보고서 · 미국 {day.marketDate} 종가 기준{viewDate ? " · 해당 날짜에 저장된 보유 내역과 손익" : ""}</p>
         <section className="account-metrics" aria-label="계좌 손익 요약">
           <div><span>현재 총자산</span><strong>{money(day.equity)}</strong><small>주식·ETF 평가액 + 현금</small></div>
@@ -249,7 +252,7 @@ export default function PortfolioReportPage(props: Props) {
         </section>
         <section className="portfolio-report-card"><h2>일별 자산 기록</h2><div className="portfolio-report-table-wrap"><table><thead><tr><th>한국 보고일</th><th>미국장 기준일</th><th>총자산</th><th>현금</th><th>현금 비중</th><th>S&amp;P 500 ETF 비중</th><th>총손익</th><th>수익률</th><th>체결</th></tr></thead><tbody>{[...visibleDays].reverse().map(item => { const mix = allocation(item); return <tr key={item.reportDate}><td><button type="button" onClick={() => setViewDate(item.reportDate)}>{item.reportDate}</button></td><td>{item.marketDate}</td><td>{money(item.equity)}</td><td>{money(item.cash)}</td><td>{share(mix.cash)}</td><td>{share(mix.ivv)}</td><td>{signed(item.totalPnl)}</td><td>{pct(item.returnRate)}</td><td>{item.trades.length}건</td></tr>; })}</tbody></table></div></section>
         <button type="button" className="portfolio-report-secondary" disabled={busy} onClick={() => {
-          if (!window.confirm(`현재 ${info.label.split(" ")[0]} 계좌를 백업 보관하고 새 시작일·투자금으로 시작할까요?`)) return;
+          if (!window.confirm(`현재 ${info.label.split(" ")[0]} 계좌를 백업 보관하고 새 시작일·투자금·현금 비중으로 시작할까요?`)) return;
           try { localStorage.setItem(`${accountKey(strategy)}.previous`, JSON.stringify(account)); localStorage.removeItem(accountKey(strategy)); setAccounts(previous => ({ ...previous, [strategy]: null })); setViewDate(""); }
           catch { setError("기존 계좌를 보존하지 못해 새 계좌 전환을 중단했습니다."); }
         }}>기존 계좌를 보관하고 새로 시작</button>

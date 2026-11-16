@@ -91,3 +91,25 @@ describe("S&P 500 core ETF substitution", () => {
       ticker: "SPYM", name: "x", proxy_for: "IVV", close: 88 })).toThrow("미국장 기준일");
   });
 });
+
+describe("chosen cash reserve", () => {
+  const data = (reports: ReturnType<typeof chain>) => Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
+    { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
+  it("keeps the chosen share in cash and scales every target weight", () => {
+    const reports = chain();
+    for (const strategy of ["i1", "i2", "s1"] as const) {
+      const plain = advanceAccount(createAccount("2026-08-31", 10000, strategy), reports, data(reports)).days.at(-1)!;
+      const reserved = advanceAccount(createAccount("2026-08-31", 10000, strategy, 0.3), reports, data(reports));
+      const day = reserved.days.at(-1)!;
+      expect(reserved.cashReserve).toBe(0.3);
+      expect(day.cash / day.equity, strategy).toBeGreaterThan(Math.min(0.29, plain.cash / plain.equity + 0.25));
+      const total = Object.values(day.targetWeights ?? {}).reduce((sum, value) => sum + value, 0);
+      expect(total, strategy).toBeLessThanOrEqual(0.7 + 1e-9);
+      expect(day.holdings.some(item => item.ticker === "SPYM"), strategy).toBe(true);
+    }
+  });
+  it("rejects reserves outside 0-90%", () => {
+    expect(() => createAccount("2026-08-31", 10000, "i1", 0.95)).toThrow("현금 비중");
+    expect(() => createAccount("2026-08-31", 10000, "i1", -0.1)).toThrow("현금 비중");
+  });
+});

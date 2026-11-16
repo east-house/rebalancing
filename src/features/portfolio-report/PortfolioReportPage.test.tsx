@@ -55,3 +55,15 @@ it("does not save a partially updated account when a required report fails", asy
   expect(await screen.findByRole("alert")).toHaveProperty("textContent", "missing report");
   expect(localStorage.getItem(ACCOUNT_KEY)).toBeNull();
 });
+it("starts an account with the chosen start date and cash share", async () => {
+  render(<PortfolioReportPage {...navigation} />);
+  await waitFor(() => expect((screen.getByRole("button", { name: "이 금액으로 계좌 시작" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.change(screen.getByLabelText("시작 보고일"), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText("초기 투자금(USD)"), { target: { value: "10000" } });
+  fireEvent.change(screen.getByLabelText("현금 비중"), { target: { value: "0.2" } });
+  fireEvent.click(screen.getByRole("button", { name: "이 금액으로 계좌 시작" }));
+  expect(await screen.findByLabelText("계좌 손익 요약")).toBeTruthy();
+  const saved = JSON.parse(localStorage.getItem(ACCOUNT_KEY)!);
+  expect(saved.startDate).toBe("2026-09-01"); expect(saved.cashReserve).toBe(0.2);
+  expect(screen.getAllByText(/현금 비중 20.0%/).length).toBeGreaterThan(0);
+});

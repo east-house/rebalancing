@@ -36,6 +36,8 @@ export interface PortfolioAccount {
   /** Absent means the original I1 account (backward compatible). */
   strategy?: StrategyId;
   targetWeights?: Record<string, number>;
+  /** Share of equity kept as cash at every rebalance (0 = fully follow the strategy). */
+  cashReserve?: number;
 }
 export const ACCOUNT_KEY = "stock_strategy.us_portfolio.integer.v3";
 export const LEGACY_KEY = "stock_strategy.us_portfolio.device.v1";
@@ -49,13 +51,17 @@ function nextWeekday(day: string): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function createAccount(startDate: string, initialCapital: number, strategy: StrategyId = "i1"): PortfolioAccount {
+export const MAX_CASH_RESERVE = 0.9;
+export function createAccount(startDate: string, initialCapital: number, strategy: StrategyId = "i1", cashReserve = 0): PortfolioAccount {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isFinite(initialCapital) || initialCapital <= 0) {
     throw new Error("시작일과 0보다 큰 투자금을 입력해 주세요.");
   }
+  if (!Number.isFinite(cashReserve) || cashReserve < 0 || cashReserve > MAX_CASH_RESERVE) {
+    throw new Error("현금 비중은 0%에서 90% 사이로 선택해 주세요.");
+  }
   return { version: 3, startDate, initialCapital, createdAt: new Date().toISOString(),
     cash: initialCapital, holdings: [], trades: [], days: [], targetNames: [], reviewedMonth: "", pending: null,
-    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }) };
+    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }), ...(cashReserve > 0 ? { cashReserve } : {}) };
 }
 const targetWeight = (order: Order, ticker: string) => {
   const item = order.names.find(name => name.ticker === ticker);
@@ -164,7 +170,7 @@ function execute(account: PortfolioAccount, report: Report, order: Order, explan
   }
   if (account.cash < -1e-7) throw new Error("계좌 현금 검증에 실패했습니다.");
   account.cash = Math.max(0, account.cash); account.targetNames = order.names.map(item => item.ticker);
-  if (account.strategy) account.targetWeights = Object.fromEntries(order.names.map(item => [item.ticker, targetWeight(order, item.ticker)]));
+  if (account.strategy || account.cashReserve) account.targetWeights = Object.fromEntries(order.names.map(item => [item.ticker, targetWeight(order, item.ticker)]));
   return trades;
 }
 
@@ -197,6 +203,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
     });
     const equity = account.cash + holdings.reduce((sum, item) => sum + item.value, 0);
     const initial = account.days.length === 0, month = day.slice(0, 7);
+    const reserve = account.cashReserve ?? 0;
     if (!account.pending && (initial || month !== account.reviewedMonth)) {
       let names: Order["names"];
       const notes: Record<string, string> = {};
@@ -214,13 +221,18 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
           for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
             : `I1 선정 종목 · 하프 켈리 ${(item.weight! * 100).toFixed(1)}%${sized.fallback ? ` (관측 ${sized.observations}일 부족 등으로 균등 배분)` : ` (최근 ${sized.observations}거래일 수익률)`}`;
         } else {
-          const picked = s1Names(report, input, asSignal(account.targetNames), equity);
+          const picked = s1Names(report, input, asSignal(account.targetNames), equity * (1 - reserve));
           names = picked.names.map(({ ticker, name, weight }) => ({ ticker, name, weight }));
           for (const item of picked.names) notes[item.ticker] = item.note ?? "";
         }
       }
       if (notes[SIGNAL_CORE] !== undefined) notes[CORE_ETF] = notes[SIGNAL_CORE];
       names = names.map(item => toCore(item, report));
+      if (reserve > 0) {
+        // Scale every target so the chosen cash share stays uninvested at each rebalance.
+        const count = names.length;
+        names = names.map(item => ({ ...item, weight: (item.weight ?? 1 / count) * (1 - reserve) }));
+      }
       const changed = names.length !== account.targetNames.length || names.some(item => !account.targetNames.includes(item.ticker));
       selectionDetails = names.map(item => {
         const candidate = report.candidates.find(row => row.ticker === (item.ticker === CORE_ETF ? SIGNAL_CORE : item.ticker))!;
@@ -249,7 +261,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       totalPnl: equity - account.initialCapital, returnRate: equity / account.initialCapital - 1,
       holdings, trades, pending: structuredClone(account.pending), sourceRevision: report.generated_at,
       targetNames: [...account.targetNames], explanation, selectionDetails, selectionReportDate,
-      ...(account.strategy ? { targetWeights: { ...(account.targetWeights ?? {}) } } : {}) });
+      ...(account.strategy || account.cashReserve ? { targetWeights: { ...(account.targetWeights ?? {}) } } : {}) });
   }
   return account;
 }
