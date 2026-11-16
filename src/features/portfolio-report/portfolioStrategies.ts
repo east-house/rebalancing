@@ -5,11 +5,11 @@ export interface StrategyInfo { id: StrategyId; label: string; title: string; su
 
 export const STRATEGIES: StrategyInfo[] = [
   { id: "i1", label: "I1 (기존)", title: "I1 코어·위성",
-    summary: "IVV 포함 최대 5종목 동일비중(각 20%). 현금을 거의 두지 않습니다." },
+    summary: "S&P 500 ETF(SPYM, IVV 대체) 포함 최대 5종목 동일비중(각 20%). 현금을 거의 두지 않습니다." },
   { id: "i2", label: "I2", title: "I2 · I1 종목 + 하프 켈리 비중",
-    summary: "I1과 같은 종목에 IVV 20% 고정, 개별 종목은 하프 켈리로 합계 최대 40%(종목당 최대 20%). 나머지는 현금." },
+    summary: "I1과 같은 종목에 S&P 500 ETF(SPYM) 20% 고정, 개별 종목은 하프 켈리로 합계 최대 40%(종목당 최대 20%). 나머지는 현금." },
   { id: "s1", label: "S1", title: "S1 · 주도주 3종목 + 섹터 분산",
-    summary: "I1 점수 상위 20개 주도주를 12-1 모멘텀 순으로 정렬해 GICS 섹터당 1종목씩 3종목(각 26.7%) + IVV 20%. 현금 없음." },
+    summary: "I1 점수 상위 20개 주도주를 12-1 모멘텀 순으로 정렬해 GICS 섹터당 1종목씩 3종목(각 26.7%) + S&P 500 ETF(SPYM) 20%. 현금 없음." },
 ];
 
 export class MissingStrategyInputs extends Error {
@@ -106,7 +106,7 @@ export function s1Names(report: Report, inputs: Inputs, existing: string[], equi
   const name = (ticker: string) => report.quotes[ticker]?.name ?? ticker;
   return {
     order,
-    names: [{ ticker: "IVV", name: name("IVV"), weight: p.ivv_weight, note: "시장 코어: IVV 20% 고정" },
+    names: [{ ticker: "IVV", name: name("IVV"), weight: p.ivv_weight, note: "시장 코어: S&P 500 ETF 20% 고정 (SPYM, IVV 대체)" },
       ...chosen.map(ticker => ({ ticker, name: name(ticker), weight,
         note: `${keep.includes(ticker) ? `유지(모멘텀 순위 ${p.hold_order_rank}위 이내)` : "신규"} · 모멘텀 순위 ${order.indexOf(ticker) + 1}위 · ${inputs.tickers[ticker]?.gics_sector ?? "섹터 미확인"}` }))],
   };

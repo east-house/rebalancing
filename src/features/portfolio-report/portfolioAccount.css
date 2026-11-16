@@ -95,6 +95,7 @@
 .allocation-legend small { grid-column: 2 / 4; font-size: 11px; color: var(--muted); }
 .allocation-target { margin: 14px 0 0; font-size: 13px; }
 .allocation-target small { display: block; margin-top: 4px; color: var(--muted); }
+.allocation-note { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
 .account-main tr.is-core td:first-child strong { color: #0f9d76; }
 .account-main tr.is-cash td { background: #f7f9fc; }
 .account-main tr.is-current td { background: #eff5ff; }

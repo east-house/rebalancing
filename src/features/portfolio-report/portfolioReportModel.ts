@@ -1,4 +1,4 @@
-import type { PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
+import type { PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
 import { MissingStrategyInputs, STRATEGIES, i2Weights, s1Names, type StrategyId } from "./portfolioStrategies";
 
 export interface Holding {
@@ -61,7 +61,30 @@ const targetWeight = (order: Order, ticker: string) => {
   const item = order.names.find(name => name.ticker === ticker);
   return item?.weight ?? 1 / order.names.length;
 };
+/**
+ * Integer-share accounts hold the S&P 500 core through SPYM instead of IVV: one IVV
+ * share (about $770) is larger than a 20% slice of a small account. IVV remains the
+ * report's ranking and I2 sizing proxy; only the account position is substituted.
+ */
+export const CORE_ETF = "SPYM";
+export const SIGNAL_CORE = "IVV";
+export const isCore = (ticker: string) => ticker === CORE_ETF || ticker === SIGNAL_CORE;
+/** Adds the published SPYM close of the report's US session to the report quotes (in memory only). */
+export function withCoreQuote(report: Report, quote: PortfolioCoreQuote): Report {
+  if (quote.report_date_kst !== report.report_date_kst || quote.signal_market_date !== report.signal_market_date || quote.ticker !== CORE_ETF) {
+    throw new Error(`${report.report_date_kst}: S&P 500 ETF(SPYM) 종가의 미국장 기준일이 보고서와 다릅니다.`);
+  }
+  const base = report.quotes[SIGNAL_CORE] ?? { sector: "ETF", rank: null, themes: "", score: null, base_score: null, theme_strength: null, trend_200: null };
+  return { ...report, quotes: { ...report.quotes, [CORE_ETF]: { ...base, ticker: CORE_ETF, name: quote.name, close: quote.close } } };
+}
+const toCore = <T extends { ticker: string; name: string }>(item: T, report: Report): T =>
+  item.ticker === SIGNAL_CORE ? { ...item, ticker: CORE_ETF, name: report.quotes[CORE_ETF]?.name ?? "SPDR Portfolio S&P 500 ETF" } : item;
+/** Account targets refer to SPYM; the report's selection rules refer to IVV. */
+const asSignal = (tickers: string[]) => tickers.map(ticker => ticker === CORE_ETF ? SIGNAL_CORE : ticker);
 function price(report: Report, ticker: string): number {
+  if (ticker === CORE_ETF && !report.quotes[CORE_ETF]) {
+    throw new Error(`${report.report_date_kst}: S&P 500 ETF(SPYM) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
+  }
   const value = report.quotes[ticker]?.close;
   if (!Number.isFinite(value) || !(value > 0)) throw new Error(`${report.report_date_kst}: ${ticker} 종가 누락으로 계좌 갱신을 중단했습니다.`);
   return value;
@@ -178,31 +201,33 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       let names: Order["names"];
       const notes: Record<string, string> = {};
       if (strategy === "i1") {
-        names = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, account.targetNames);
+        names = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
       } else {
         const input = inputs[day];
         if (!input) throw new MissingStrategyInputs(day);
         if (input.signal_market_date !== report.signal_market_date) throw new Error(`${day}: I2·S1 계산 자료의 미국장 기준일이 보고서와 다릅니다.`);
         if (strategy === "i2") {
-          const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, account.targetNames);
+          const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
           const sized = i2Weights(input, base.map(item => item.ticker).filter(ticker => ticker !== "IVV"));
           names = [...(base.some(item => item.ticker === "IVV") ? [] : [{ ticker: "IVV", name: report.quotes.IVV?.name ?? "IVV" }]), ...base]
             .map(item => ({ ...item, weight: sized.weights[item.ticker] ?? 0 }));
-          for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어: IVV 20% 고정"
+          for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
             : `I1 선정 종목 · 하프 켈리 ${(item.weight! * 100).toFixed(1)}%${sized.fallback ? ` (관측 ${sized.observations}일 부족 등으로 균등 배분)` : ` (최근 ${sized.observations}거래일 수익률)`}`;
         } else {
-          const picked = s1Names(report, input, account.targetNames, equity);
+          const picked = s1Names(report, input, asSignal(account.targetNames), equity);
           names = picked.names.map(({ ticker, name, weight }) => ({ ticker, name, weight }));
           for (const item of picked.names) notes[item.ticker] = item.note ?? "";
         }
       }
+      if (notes[SIGNAL_CORE] !== undefined) notes[CORE_ETF] = notes[SIGNAL_CORE];
+      names = names.map(item => toCore(item, report));
       const changed = names.length !== account.targetNames.length || names.some(item => !account.targetNames.includes(item.ticker));
       selectionDetails = names.map(item => {
-        const candidate = report.candidates.find(row => row.ticker === item.ticker)!;
+        const candidate = report.candidates.find(row => row.ticker === (item.ticker === CORE_ETF ? SIGNAL_CORE : item.ticker))!;
         return { ticker: item.ticker, rank: candidate.rank, score: candidate.score, baseScore: candidate.base_score,
           themeScore: candidate.theme_strength, sector: candidate.sector, theme: candidate.themes,
           ...(item.weight === undefined ? {} : { weight: item.weight }),
-          reason: notes[item.ticker] ?? (item.ticker === "IVV" ? "시장 코어: IVV 우선 편입" : !initial && account.targetNames.includes(item.ticker) && candidate.rank <= report.policy.hold_rank ? `유지순위 ${report.policy.hold_rank}위 이내 · 분산 제한 통과` : "점수 순위와 섹터·상관 제한을 통과하여 선정") };
+          reason: notes[item.ticker] ?? (item.ticker === CORE_ETF ? "시장 코어: S&P 500 ETF(SPYM, IVV 대체) 우선 편입" : !initial && account.targetNames.includes(item.ticker) && candidate.rank <= report.policy.hold_rank ? `유지순위 ${report.policy.hold_rank}위 이내 · 분산 제한 통과` : "점수 순위와 섹터·상관 제한을 통과하여 선정") };
       });
       selectionReportDate = day;
       const i1 = strategy === "i1";

@@ -37,6 +37,10 @@ S1_POLICY = {
     "pool_price_weight": 0.20, "price_margin": 0.90,
     "ordering": "mom_12_1", "ordering_source": "F1 2025-12-31 annual selection (MOM), frozen",
 }
+# Integer-share accounts cannot buy a 20% IVV slice in small accounts (one IVV share
+# is several hundred dollars), so browser accounts hold the same S&P 500 exposure
+# through a low-priced ETF. IVV stays the signal/sizing proxy inside the reports.
+CORE_ETF = {"ticker": "SPYM", "name": "SPDR Portfolio S&P 500 ETF", "proxy_for": "IVV"}
 I2_POLICY = {"ivv_weight": 0.20, "stock_cap_each_full_kelly": 0.40, "stock_budget_full_kelly": 0.80,
              "kelly_fraction": 0.5, "lookback": RETURN_LOOKBACK, "min_observations": RETURN_MIN_OBSERVATIONS,
              "fee_daily": I2_FEE_DAILY}
@@ -102,6 +106,35 @@ def stage_inputs(store, day: str, inputs: dict) -> None:
     store.stage(f"portfolio-reports/strategy-inputs/{day}.json", inputs)
 
 
+def core_quote_from_frame(frame: pd.DataFrame, signal_date: str, *, report_date: str, source: str) -> dict:
+    """Close of the account core ETF on the report's US signal session (exact date only)."""
+    signal = pd.Timestamp(signal_date).normalize()
+    rows = frame.loc[pd.to_datetime(frame["date"]).dt.normalize().eq(signal)].dropna(subset=["close"])
+    close = _finite(rows["close"].iloc[-1]) if not rows.empty else None
+    if close is None or close <= 0:
+        raise ValueError(f"{CORE_ETF['ticker']} close is missing for US session {signal.date()}")
+    return {"schema_version": 1, "report_date_kst": report_date, "signal_market_date": str(signal.date()),
+            **CORE_ETF, "close": round(close, 6), "source": source}
+
+
+def fetch_core_frame(first_signal: str, last_signal: str) -> pd.DataFrame:
+    from .support import _download_yahoo_frame
+    return _download_yahoo_frame(CORE_ETF["ticker"], pd.Timestamp(first_signal) - pd.Timedelta(days=7),
+                                 pd.Timestamp(last_signal) + pd.Timedelta(days=1), timeout=20, max_retries=4)
+
+
+def core_quote_for_payload(payload: dict) -> dict:
+    signal = payload["signal_market_date"]
+    return core_quote_from_frame(fetch_core_frame(signal, signal), signal, report_date=payload["report_date_kst"],
+                                 source="Yahoo adjusted close collected at publication")
+
+
+def stage_core_quote(store, day: str, quote: dict) -> None:
+    if quote.get("report_date_kst") != day:
+        raise ValueError("Core ETF quote date mismatch")
+    store.stage(f"portfolio-reports/core-quotes/{day}.json", quote)
+
+
 # ---------------------------------------------------------------- backfill for already published reports
 def _gics_snapshot(day: str) -> Path | None:
     from .support import PROJECT_ROOT, UNIVERSE_CACHE
@@ -152,6 +185,28 @@ def _refresh_prices(symbols: set[str], days: list[str], output: Path) -> dict[st
     return failures
 
 
+def _backfill_core_quotes(store, index: dict, days: list[str] | None, output: Path) -> tuple[list[str], dict]:
+    sessions = {item["reportDate"]: item["marketDate"] for item in index["reports"]
+                if not days or item["reportDate"] in set(days)}
+    missing = sorted(day for day in sessions if f"portfolio-reports/core-quotes/{day}.json" not in store.manifest["objects"])
+    if not missing:
+        return [], {}
+    try:
+        frame = fetch_core_frame(min(sessions[day] for day in missing), max(sessions[day] for day in missing))
+    except Exception as error:  # record, never hide
+        return [], {day: f"{type(error).__name__}: {error}" for day in missing}
+    done, failed = [], {}
+    for day in missing:
+        try:
+            quote = core_quote_from_frame(frame, sessions[day], report_date=day, source="Yahoo adjusted close (backfill)")
+            write_json(quote, output / "core-quotes" / f"{day}.json")
+            stage_core_quote(store, day, quote)
+            done.append(day)
+        except Exception as error:
+            failed[day] = str(error)
+    return done, failed
+
+
 def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[str] | None = None) -> dict:
     if not store.manifest.get("dailyStartDate"):
         raise ValueError("Portfolio archive is not initialized; refusing to backfill")
@@ -181,8 +236,10 @@ def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[st
             done.append(day)
         except Exception as error:  # record, never hide
             failed[day] = str(error)
-    result = {"requested": missing, "staged": done, "failed": failed, "priceRefreshFailed": price_failures}
-    if done:
+    core_done, core_failed = _backfill_core_quotes(store, index, days, output)
+    result = {"requested": missing, "staged": done, "failed": failed, "priceRefreshFailed": price_failures,
+              "coreQuotesStaged": core_done, "coreQuotesFailed": core_failed}
+    if done or core_done:
         store.commit()
     write_json(result, output / "backfill.json")
     return result
@@ -199,7 +256,7 @@ def main():
     result = backfill(ReportStore.from_environment("portfolio"), output=args.output,
                       refresh_prices=args.refresh_prices, days=args.day)
     print(json.dumps(result, ensure_ascii=False))
-    if result["failed"]:
+    if result["failed"] or result["coreQuotesFailed"]:
         raise SystemExit(1)
 
 

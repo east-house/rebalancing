@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PortfolioStrategyInputs } from "../../api/portfolioReport";
-import { advanceAccount, createAccount } from "./portfolioReportModel";
+import { advanceAccount, createAccount, withCoreQuote } from "./portfolioReportModel";
 import { MissingStrategyInputs, i2Weights, s1Names } from "./portfolioStrategies";
 import { chain, fixture } from "./accountTestData";
 
@@ -56,11 +56,38 @@ describe("weighted accounts", () => {
       { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
     const i2 = advanceAccount(createAccount("2026-08-31", 10000, "i2"), reports, data);
     const day = i2.days.at(-1)!;
-    const ivv = day.holdings.find(item => item.ticker === "IVV")!;
+    expect(day.holdings.some(item => item.ticker === "IVV")).toBe(false);
+    const ivv = day.holdings.find(item => item.ticker === "SPYM")!;
     expect(ivv.value / day.equity).toBeGreaterThan(0.17); expect(ivv.value / day.equity).toBeLessThan(0.21);
     expect(day.cash / day.equity).toBeGreaterThan(0.35);
     const s1 = advanceAccount(createAccount("2026-08-31", 10000, "s1"), reports, data);
-    expect(s1.days.at(-1)!.holdings.map(item => item.ticker).sort()).toEqual(["B", "D", "IVV", "Z"]);
+    expect(s1.days.at(-1)!.holdings.map(item => item.ticker).sort()).toEqual(["B", "D", "SPYM", "Z"]);
     expect(s1.days.at(-1)!.cash / s1.days.at(-1)!.equity).toBeLessThan(0.05);
+  });
+});
+
+describe("S&P 500 core ETF substitution", () => {
+  it("buys SPYM for the 20% core when one IVV share is larger than the slice", () => {
+    const reports = chain().map(report => {
+      const quotes: Record<string, typeof report.quotes.IVV> = { ...report.quotes, IVV: { ...report.quotes.IVV, close: 770 } };
+      delete quotes.SPYM;
+      return withCoreQuote({ ...report, quotes }, { schema_version: 1, report_date_kst: report.report_date_kst,
+        signal_market_date: report.signal_market_date, ticker: "SPYM", name: "SPDR Portfolio S&P 500 ETF", proxy_for: "IVV", close: 88 });
+    });
+    for (const strategy of ["i1", "i2", "s1"] as const) {
+      const data = Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
+        { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
+      const day = advanceAccount(createAccount("2026-08-31", 2819, strategy), reports, data).days.at(-1)!;
+      const core = day.holdings.find(item => item.ticker === "SPYM");
+      expect(core, strategy).toBeTruthy();
+      expect(core!.value / day.equity).toBeGreaterThan(0.15);
+      expect(core!.value / day.equity).toBeLessThan(0.21);
+      expect(day.holdings.some(item => item.ticker === "IVV")).toBe(false);
+    }
+  });
+  it("rejects a SPYM close from a different US session", () => {
+    const report = fixture();
+    expect(() => withCoreQuote(report, { schema_version: 1, report_date_kst: report.report_date_kst, signal_market_date: "2026-08-27",
+      ticker: "SPYM", name: "x", proxy_for: "IVV", close: 88 })).toThrow("미국장 기준일");
   });
 });

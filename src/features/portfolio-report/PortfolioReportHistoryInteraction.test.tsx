@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ACCOUNT_KEY, advanceAccount, createAccount } from "./portfolioReportModel";
 import { chain } from "./accountTestData";
 import PortfolioReportPage from "./PortfolioReportPage";
-vi.mock("../../api/portfolioReport", () => ({ loadPortfolioReportIndex: vi.fn(async () => ({ reports: [] })), loadPortfolioReport: vi.fn() }));
+vi.mock("../../api/portfolioReport", () => ({ loadPortfolioReportIndex: vi.fn(async () => ({ reports: [] })), loadPortfolioReport: vi.fn(), loadPortfolioCoreQuote: vi.fn() }));
 afterEach(() => { cleanup(); localStorage.clear(); });
 it("views the saved historical account rather than pricing today's holdings backwards", async () => {
   const reports = chain(); reports[1].candidates.find(item => item.ticker === "A")!.rank = 20;

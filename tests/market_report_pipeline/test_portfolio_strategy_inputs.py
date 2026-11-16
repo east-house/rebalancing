@@ -71,3 +71,40 @@ def test_price_refresh_records_unavailable_symbol_without_aborting(monkeypatch, 
     audit = json.loads((tmp_path / "historical-price-gaps.json").read_text(encoding="utf-8"))
     assert sorted(row["symbol"] for row in audit["audit"]) == ["AAA", "IVV"]
     assert audit["failures"] == failures
+
+
+def test_core_quote_uses_exact_signal_session_only():
+    from market_report_pipeline.portfolio_strategy_inputs import CORE_ETF, core_quote_from_frame
+    frame = pd.DataFrame({"date": pd.to_datetime(["2026-09-10", "2026-09-11", "2026-09-14"]), "close": [87.0, 88.5, 99.0]})
+    quote = core_quote_from_frame(frame, "2026-09-11", report_date="2026-09-14", source="test")
+    assert quote["ticker"] == CORE_ETF["ticker"] == "SPYM" and quote["proxy_for"] == "IVV"
+    assert quote["close"] == 88.5 and quote["signal_market_date"] == "2026-09-11"
+    with pytest.raises(ValueError, match="missing for US session 2026-09-12"):
+        core_quote_from_frame(frame, "2026-09-12", report_date="2026-09-14", source="test")
+
+
+def test_evening_publication_stores_core_quote_beside_report(monkeypatch):
+    now = datetime(2026, 9, 14, 10, 15, tzinfo=timezone.utc)
+    monkeypatch.setattr(report_time, "utc_now", lambda: now)
+    store = ReportStore(FakeS3(), "b", "portfolio")
+    payload = {"report_date_kst": "2026-09-14", "signal_market_date": "2026-09-11", "proposed_execution_date": "2026-09-14", "generated_at": now.isoformat()}
+    quote = {"report_date_kst": "2026-09-14", "signal_market_date": "2026-09-11", "ticker": "SPYM", "close": 88.5}
+    evening.publish_portfolio(store, "2026-09-14", dict(payload), None, quote)
+    assert store.load("portfolio-reports/core-quotes/2026-09-14.json") == quote
+    other = ReportStore(FakeS3(), "b", "portfolio")
+    evening.publish_portfolio(other, "2026-09-14", dict(payload))
+    assert other.load("portfolio-reports/2026-09-14.json") == store.load("portfolio-reports/2026-09-14.json")
+
+
+def test_core_quote_backfill_fills_only_missing_days(monkeypatch, tmp_path):
+    from market_report_pipeline import portfolio_strategy_inputs as module
+    store = ReportStore(FakeS3(), "b", "portfolio")
+    store.manifest["objects"]["portfolio-reports/core-quotes/2026-09-14.json"] = {"key": "x"}
+    index = {"reports": [{"reportDate": "2026-09-14", "marketDate": "2026-09-11"},
+                         {"reportDate": "2026-09-15", "marketDate": "2026-09-14"},
+                         {"reportDate": "2026-09-16", "marketDate": "2026-09-15"}]}
+    frame = pd.DataFrame({"date": pd.to_datetime(["2026-09-11", "2026-09-14"]), "close": [88.0, 89.0]})
+    monkeypatch.setattr(module, "fetch_core_frame", lambda first, last: frame)
+    done, failed = module._backfill_core_quotes(store, index, None, tmp_path)
+    assert done == ["2026-09-15"] and list(failed) == ["2026-09-16"]
+    assert store.staged and "portfolio-reports/core-quotes/2026-09-15.json" in store.staged

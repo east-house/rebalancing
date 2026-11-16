@@ -145,6 +145,22 @@ export async function loadPortfolioStrategyInputs(day: string, releaseId?: strin
   return value;
 }
 
+/** Close of the account core ETF (SPYM, an S&P 500 ETF used instead of IVV) on the report's US session. */
+export interface PortfolioCoreQuote {
+  schema_version: 1; report_date_kst: string; signal_market_date: string;
+  ticker: string; name: string; proxy_for: string; close: number; source?: string;
+}
+
+export async function loadPortfolioCoreQuote(day: string, releaseId?: string): Promise<PortfolioCoreQuote> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
+  const value = await reportJson<PortfolioCoreQuote>(`/api/portfolio-reports/${day}/core-quote${releaseId ? `?release=${releaseId}` : ""}`,
+    `/data/portfolio-reports/core-quotes/${day}.json`);
+  if (value?.schema_version !== 1 || value.report_date_kst !== day || !(value.close > 0) || !value.ticker) {
+    throw new Error(`${day}: S&P 500 ETF(SPYM) 종가 자료 형식이 올바르지 않습니다.`);
+  }
+  return value;
+}
+
 export async function loadPortfolioReport(day = "latest", releaseId?: string): Promise<PortfolioReportPayload> {
   if (day !== "latest" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
   return parsePayload(await reportJson(`/api/portfolio-reports/${day}${releaseId ? `?release=${releaseId}` : ""}`, `/data/portfolio-reports/${day}.json`));
