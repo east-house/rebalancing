@@ -121,6 +121,30 @@ export async function loadPortfolioReportIndex(): Promise<PortfolioReportIndex> 
   return reportJson("/api/portfolio-reports", "/data/portfolio-reports/index.json");
 }
 
+/** Supplementary I2/S1 inputs published beside each immutable I1 report. */
+export interface PortfolioStrategyInputs {
+  schema_version: 1;
+  report_date_kst: string;
+  signal_market_date: string;
+  returns: Record<string, (number | null)[]>;
+  tickers: Record<string, { mom_12_1: number | null; gics_sector: string | null }>;
+  i2: { ivv_weight: number; stock_cap_each_full_kelly: number; stock_budget_full_kelly: number;
+    kelly_fraction: number; lookback: number; min_observations: number; fee_daily: number };
+  s1: { ivv_weight: number; stock_budget: number; positions: number; pool_size: number; hold_order_rank: number;
+    max_names_per_gics_sector: number; pool_price_weight: number; price_margin: number; ordering: string; ordering_source: string };
+  source?: string;
+}
+
+export async function loadPortfolioStrategyInputs(day: string, releaseId?: string): Promise<PortfolioStrategyInputs> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
+  const value = await reportJson<PortfolioStrategyInputs>(`/api/portfolio-reports/${day}/strategy-inputs${releaseId ? `?release=${releaseId}` : ""}`,
+    `/data/portfolio-reports/strategy-inputs/${day}.json`);
+  if (value?.schema_version !== 1 || value.report_date_kst !== day || typeof value.returns !== "object") {
+    throw new Error(`${day}: I2·S1 계산 자료 형식이 올바르지 않습니다.`);
+  }
+  return value;
+}
+
 export async function loadPortfolioReport(day = "latest", releaseId?: string): Promise<PortfolioReportPayload> {
   if (day !== "latest" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
   return parsePayload(await reportJson(`/api/portfolio-reports/${day}${releaseId ? `?release=${releaseId}` : ""}`, `/data/portfolio-reports/${day}.json`));

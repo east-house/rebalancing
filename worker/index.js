@@ -16,10 +16,16 @@ function reportRoute(path) {
     const filename = suffix ? "latest.json" : "index.json";
     return { product, logical: `${group}/${filename}`, fallback: `/data/${group}/${filename}`, type: "application/json" };
   }
-  const date = /^(\d{4}-\d{2}-\d{2})(\/dashboard)?$/.exec(suffix);
-  if (!date || date[2] && group !== "market-reports") return { invalid: true };
+  const date = /^(\d{4}-\d{2}-\d{2})(\/dashboard|\/strategy-inputs)?$/.exec(suffix);
+  if (!date || date[2] === "/dashboard" && group !== "market-reports"
+    || date[2] === "/strategy-inputs" && group !== "portfolio-reports") return { invalid: true };
   const instant = new Date(`${date[1]}T00:00:00Z`);
   if (!Number.isFinite(instant.getTime()) || instant.toISOString().slice(0, 10) !== date[1]) return { invalid: true };
+  if (date[2] === "/strategy-inputs") {
+    // Supplementary I2/S1 inputs published beside the immutable I1 report of the same date.
+    return { product, logical: `${group}/strategy-inputs/${date[1]}.json`,
+      fallback: `/data/${group}/strategy-inputs/${date[1]}.json`, type: "application/json" };
+  }
   const ext = date[2] ? "png" : "json";
   return { product, logical: `${group}/${group === "trading-test-reports" ? "reports/" : ""}${date[1]}.${ext}`,
     fallback: `/data/${group}/${date[1]}.${ext}`, type: date[2] ? "image/png" : "application/json" };

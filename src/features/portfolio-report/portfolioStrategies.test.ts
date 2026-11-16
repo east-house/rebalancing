@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import type { PortfolioStrategyInputs } from "../../api/portfolioReport";
+import { advanceAccount, createAccount } from "./portfolioReportModel";
+import { MissingStrategyInputs, i2Weights, s1Names } from "./portfolioStrategies";
+import { chain, fixture } from "./accountTestData";
+
+function inputs(day: string, market: string, returns: Record<string, number[]> = {}): PortfolioStrategyInputs {
+  return {
+    schema_version: 1, report_date_kst: day, signal_market_date: market, returns,
+    tickers: { A: { mom_12_1: 0.1, gics_sector: "Information Technology" }, B: { mom_12_1: 0.9, gics_sector: "Information Technology" },
+      C: { mom_12_1: 0.5, gics_sector: "Energy" }, D: { mom_12_1: 0.3, gics_sector: "Health Care" }, Z: { mom_12_1: 0.8, gics_sector: "Energy" } },
+    i2: { ivv_weight: 0.2, stock_cap_each_full_kelly: 0.4, stock_budget_full_kelly: 0.8, kelly_fraction: 0.5, lookback: 252, min_observations: 126, fee_daily: (2 * 0.0025 + 0.0000206) / 21 },
+    s1: { ivv_weight: 0.2, stock_budget: 0.8, positions: 3, pool_size: 20, hold_order_rank: 5, max_names_per_gics_sector: 1, pool_price_weight: 0.2, price_margin: 0.9, ordering: "mom_12_1", ordering_source: "test" },
+  };
+}
+const series = (seed: number, drift: number) => Array.from({ length: 252 }, (_, t) => drift + 0.01 * Math.sin(seed * 7 + t * 1.3));
+
+describe("I2 half-Kelly sizing", () => {
+  it("keeps IVV at 20%, each stock at most 20% and stocks at most 40%", () => {
+    const input = inputs("d", "m", { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, -0.001) });
+    const { weights, fallback } = i2Weights(input, ["A", "B", "C"]);
+    expect(fallback).toBe(false);
+    expect(weights.IVV).toBe(0.2);
+    const stocks = ["A", "B", "C"].map(t => weights[t]);
+    stocks.forEach(w => { expect(w).toBeGreaterThanOrEqual(0); expect(w).toBeLessThanOrEqual(0.2 + 1e-9); });
+    expect(stocks.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(0.4 + 1e-9);
+    expect(weights.C).toBeLessThan(weights.A);
+  });
+  it("falls back to equal 40% when history is short", () => {
+    const input = inputs("d", "m", { IVV: [0.01, 0.0], A: [0.02, 0.01], B: [0.0, 0.01] });
+    const { weights, fallback } = i2Weights(input, ["A", "B"]);
+    expect(fallback).toBe(true); expect(weights.A).toBeCloseTo(0.2); expect(weights.B).toBeCloseTo(0.2);
+  });
+});
+
+describe("S1 selection", () => {
+  it("orders the leader pool by momentum and keeps one stock per GICS sector", () => {
+    const report = fixture();
+    const { names } = s1Names(report, inputs("2026-08-31", "2026-08-28"), [], 10000);
+    // B (IT, 0.9) -> Z (Energy, 0.8) -> C (Energy, skipped) -> D (Health Care, 0.3) ; A (IT) skipped.
+    expect(names.map(item => item.ticker)).toEqual(["IVV", "B", "Z", "D"]);
+    expect(names[0].weight).toBe(0.2); expect(names[1].weight).toBeCloseTo(0.8 / 3);
+  });
+  it("skips names whose one share is unaffordable for the account", () => {
+    const report = fixture(); report.candidates.find(item => item.ticker === "B")!.close = 5000; report.quotes.B.close = 5000;
+    const { names } = s1Names(report, inputs("2026-08-31", "2026-08-28"), [], 10000);
+    expect(names.map(item => item.ticker)).not.toContain("B");
+  });
+});
+
+describe("weighted accounts", () => {
+  it("requires published inputs before an I2/S1 decision and leaves planned cash for I2", () => {
+    const reports = chain();
+    expect(() => advanceAccount(createAccount("2026-08-31", 10000, "i2"), reports)).toThrow(MissingStrategyInputs);
+    const data = Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
+      { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
+    const i2 = advanceAccount(createAccount("2026-08-31", 10000, "i2"), reports, data);
+    const day = i2.days.at(-1)!;
+    const ivv = day.holdings.find(item => item.ticker === "IVV")!;
+    expect(ivv.value / day.equity).toBeGreaterThan(0.17); expect(ivv.value / day.equity).toBeLessThan(0.21);
+    expect(day.cash / day.equity).toBeGreaterThan(0.35);
+    const s1 = advanceAccount(createAccount("2026-08-31", 10000, "s1"), reports, data);
+    expect(s1.days.at(-1)!.holdings.map(item => item.ticker).sort()).toEqual(["B", "D", "IVV", "Z"]);
+    expect(s1.days.at(-1)!.cash / s1.days.at(-1)!.equity).toBeLessThan(0.05);
+  });
+});

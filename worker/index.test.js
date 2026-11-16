@@ -206,6 +206,19 @@ describe("market report Worker API", () => {
 });
 
 describe("portfolio report Worker API", () => {
+  it("serves I2/S1 strategy inputs beside portfolio reports only", async () => {
+    const worker = (await import("./index.js")).default;
+    const manifest = { releaseId: "r1", objects: { "portfolio-reports/strategy-inputs/2026-09-14.json": { key: "obj/abc", contentType: "application/json" } } };
+    const get = vi.fn(async (key) => key.endsWith("/current.json") ? { body: JSON.stringify(manifest) } : { body: JSON.stringify({ schema_version: 1 }) });
+    const response = await worker.fetch(new Request("https://example.com/api/portfolio-reports/2026-09-14/strategy-inputs"), { MARKET_DATA: { get } }, {});
+    expect(response.status).toBe(200);
+    expect(get).toHaveBeenCalledWith("obj/abc");
+    const rejected = await worker.fetch(new Request("https://example.com/api/market-reports/2026-09-14/strategy-inputs"), { MARKET_DATA: { get } }, {});
+    expect(rejected.status).toBe(400);
+    const dashboard = await worker.fetch(new Request("https://example.com/api/portfolio-reports/2026-09-14/dashboard"), { MARKET_DATA: { get } }, {});
+    expect(dashboard.status).toBe(400);
+  });
+
   it("uses the independent evening publication and exposes its schedule", async () => {
     const worker = (await import("./index.js")).default;
     const manifest = { releaseId: "evening", objects: {}, jobs: { "2026-09-14": { status: "running" } } };

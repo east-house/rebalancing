@@ -1,0 +1,59 @@
+name: Backfill portfolio strategy inputs (I2/S1)
+# Adds supplementary I2/S1 inputs beside already published I1 portfolio reports.
+# Published I1 report objects are not modified. Manual trigger only; no schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "Optional single Korean report date (YYYY-MM-DD); empty = every published date missing inputs"
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: production-portfolio-evening
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MPLBACKEND: Agg
+      PYTHONUNBUFFERED: "1"
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-market-report.txt
+      - uses: actions/cache/restore@v5
+        with:
+          path: |
+            data/cache/market-report
+            data/raw/us_market
+          key: market-report-${{ runner.os }}-strategy-inputs-${{ github.run_id }}
+          restore-keys: market-report-${{ runner.os }}-
+      - name: Install dependencies and fonts
+        run: bash scripts/install-report-dependencies.sh
+      - name: Validate report pipeline
+        run: python -m pytest tests/market_report_pipeline -q
+      - name: Backfill missing strategy inputs
+        shell: bash
+        env:
+          REQUESTED_DAY: ${{ inputs.day }}
+        run: |
+          args=(--refresh-prices)
+          if [[ -n "${REQUESTED_DAY}" ]]; then args+=(--day "${REQUESTED_DAY}"); fi
+          python -m market_report_pipeline.portfolio_strategy_inputs "${args[@]}"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: portfolio-strategy-inputs-${{ github.run_id }}
+          path: action-output/portfolio-strategy-inputs/
+          if-no-files-found: ignore
+          retention-days: 30

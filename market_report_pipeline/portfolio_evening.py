@@ -27,7 +27,7 @@ def initialize_archive(store: ReportStore, morning: ReportStore) -> None:
     store.commit()
 
 
-def publish_portfolio(store: ReportStore, day: str, payload: dict) -> None:
+def publish_portfolio(store: ReportStore, day: str, payload: dict, inputs: dict | None = None) -> None:
     if day < PORTFOLIO_EVENING_START or day not in due_dates("portfolio", day, set()):
         raise ValueError("Portfolio report is not due yet")
     context = report_context(day, "portfolio")
@@ -49,6 +49,10 @@ def publish_portfolio(store: ReportStore, day: str, payload: dict) -> None:
     entries[day] = {"reportDate": day, "marketDate": payload["signal_market_date"], "generatedAt": payload["generated_at"]}
     ordered = sorted(entries.values(), key=lambda item: item["reportDate"], reverse=True)
     store.stage(key, payload)
+    if inputs is not None:
+        # Supplementary I2/S1 inputs; the I1 report object itself is unchanged.
+        from .portfolio_strategy_inputs import stage_inputs
+        stage_inputs(store, day, inputs)
     store.stage("portfolio-reports/index.json", {"schemaVersion": 1, "reports": ordered, "latestReportDate": ordered[0]["reportDate"]})
     if day == ordered[0]["reportDate"]:
         store.stage("portfolio-reports/latest.json", payload)
@@ -87,9 +91,18 @@ def main():
             from .us_daily_portfolio_report import build_device_payload, load_market_data
             output = Path("action-output/portfolio-evening") / day
             collect(["run", "--as-of", day, "--output", str(output)])
-            payload = build_device_payload(load_market_data(pd.Timestamp(day)), pd.Timestamp(day))
+            data = load_market_data(pd.Timestamp(day))
+            payload = build_device_payload(data, pd.Timestamp(day))
             write_json(payload, output / "portfolio.json")
-            publish_portfolio(store, day, payload)
+            inputs = None
+            try:
+                from .portfolio_strategy_inputs import inputs_from_market_data
+                inputs = inputs_from_market_data(data, payload)
+                write_json(inputs, output / "strategy-inputs.json")
+            except Exception as input_error:  # I1 publication must not depend on the I2/S1 inputs
+                write_json({"error": str(input_error)}, output / "strategy-inputs-error.json")
+                print(json.dumps({"date": day, "strategyInputs": "failed", "error": str(input_error)}))
+            publish_portfolio(store, day, payload, inputs)
             print(json.dumps({"date": day, "status": "published", "signalDate": payload["signal_market_date"], "executionDate": payload["proposed_execution_date"]}))
         except Exception as error:
             # Discard staged partial outputs and leave the last complete publication readable.
