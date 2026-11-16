@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 import numpy as np
 import pandas as pd
@@ -52,3 +53,21 @@ def test_evening_publication_stores_inputs_beside_unchanged_report(monkeypatch):
     evening.publish_portfolio(other, "2026-09-14", dict(payload))
     assert other.load("portfolio-reports/2026-09-14.json") == store.load("portfolio-reports/2026-09-14.json")
     assert other.load("portfolio-reports/strategy-inputs/2026-09-14.json") is None
+
+
+def test_price_refresh_records_unavailable_symbol_without_aborting(monkeypatch, tmp_path):
+    from market_report_pipeline import repair_portfolio_history
+    from market_report_pipeline.portfolio_strategy_inputs import _refresh_prices
+
+    def fake_fill(symbols, days, output):
+        (symbol,) = symbols
+        if symbol == "KVUE":
+            raise RuntimeError("Yahoo KVUE 수집 실패: 'open'")
+        return [{"symbol": symbol, "missingBefore": [], "missingAfter": []}]
+
+    monkeypatch.setattr(repair_portfolio_history, "fill_price_gaps", fake_fill)
+    failures = _refresh_prices({"IVV", "KVUE", "AAA"}, ["2026-09-14"], tmp_path)
+    assert list(failures) == ["KVUE"] and "KVUE" in failures["KVUE"]
+    audit = json.loads((tmp_path / "historical-price-gaps.json").read_text(encoding="utf-8"))
+    assert sorted(row["symbol"] for row in audit["audit"]) == ["AAA", "IVV"]
+    assert audit["failures"] == failures

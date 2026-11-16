@@ -124,6 +124,34 @@ def _load_closes(tickers: set[str]) -> pd.DataFrame:
     return pd.DataFrame(columns).sort_index()
 
 
+def _refresh_prices(symbols: set[str], days: list[str], output: Path) -> dict[str, str]:
+    """Fill cached price gaps symbol by symbol.
+
+    One unavailable symbol (for example a delisted constituent that Yahoo no
+    longer serves) must not abort the backfill: its failure is recorded and the
+    already cached closes are used. IVV is still required by
+    ``compute_strategy_inputs``, so a missing IVV fails the affected days.
+    """
+    import tempfile
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .repair_portfolio_history import fill_price_gaps
+
+    def refresh(symbol: str):
+        with tempfile.TemporaryDirectory() as scratch:
+            try:
+                return symbol, fill_price_gaps({symbol}, days, Path(scratch)), None
+            except Exception as error:  # recorded below, never hidden
+                return symbol, [], f"{type(error).__name__}: {error}"
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(refresh, sorted(symbols)))
+    failures = {symbol: error for symbol, _, error in results if error}
+    audit = [row for _, rows, _ in results for row in rows]
+    write_json({"audit": audit, "failures": failures}, output / "historical-price-gaps.json")
+    return failures
+
+
 def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[str] | None = None) -> dict:
     if not store.manifest.get("dailyStartDate"):
         raise ValueError("Portfolio archive is not initialized; refusing to backfill")
@@ -134,9 +162,7 @@ def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[st
     missing = [day for day in wanted if f"portfolio-reports/strategy-inputs/{day}.json" not in store.manifest["objects"]]
     reports = {day: store.load(f"portfolio-reports/{day}.json") for day in missing}
     symbols = {"IVV", *(str(row["ticker"]) for report in reports.values() for row in report["candidates"])}
-    if refresh_prices and missing:
-        from .repair_portfolio_history import fill_price_gaps
-        fill_price_gaps(symbols, missing, output)
+    price_failures = _refresh_prices(symbols, missing, output) if refresh_prices and missing else {}
     closes = _load_closes(symbols)
     done, failed = [], {}
     for day in missing:
@@ -155,7 +181,7 @@ def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[st
             done.append(day)
         except Exception as error:  # record, never hide
             failed[day] = str(error)
-    result = {"requested": missing, "staged": done, "failed": failed}
+    result = {"requested": missing, "staged": done, "failed": failed, "priceRefreshFailed": price_failures}
     if done:
         store.commit()
     write_json(result, output / "backfill.json")
