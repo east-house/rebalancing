@@ -1,5 +1,5 @@
 import type { PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
-import { MissingStrategyInputs, STRATEGIES, i2Weights, s1Names, type StrategyId } from "./portfolioStrategies";
+import { DEFAULT_CASH, MAX_CASH, MissingStrategyInputs, STRATEGIES, i2Weights, s1Names, type StrategyId } from "./portfolioStrategies";
 
 export interface Holding {
   ticker: string; name: string; shares: number; cost: number;
@@ -36,7 +36,10 @@ export interface PortfolioAccount {
   /** Absent means the original I1 account (backward compatible). */
   strategy?: StrategyId;
   targetWeights?: Record<string, number>;
-  /** Share of equity kept as cash at every rebalance (0 = fully follow the strategy). */
+  /**
+   * Chosen cash share. I1/S1: kept uninvested at every rebalance (absent = 0).
+   * I2: replaces the design's planned cash (absent = 40%, the original design).
+   */
   cashReserve?: number;
 }
 export const ACCOUNT_KEY = "stock_strategy.us_portfolio.integer.v3";
@@ -44,6 +47,7 @@ export const LEGACY_KEY = "stock_strategy.us_portfolio.device.v1";
 /** I1 keeps its original storage key; I2 and S1 accounts are stored separately. */
 export const accountKey = (strategy: StrategyId) => strategy === "i1" ? ACCOUNT_KEY : `${ACCOUNT_KEY}.${strategy}`;
 export const strategyOf = (account: PortfolioAccount): StrategyId => account.strategy ?? "i1";
+export const cashReserveOf = (account: PortfolioAccount): number => account.cashReserve ?? DEFAULT_CASH[strategyOf(account)];
 
 function nextWeekday(day: string): string {
   const value = new Date(`${day}T00:00:00Z`);
@@ -51,17 +55,16 @@ function nextWeekday(day: string): string {
   return value.toISOString().slice(0, 10);
 }
 
-export const MAX_CASH_RESERVE = 0.9;
-export function createAccount(startDate: string, initialCapital: number, strategy: StrategyId = "i1", cashReserve = 0): PortfolioAccount {
+export function createAccount(startDate: string, initialCapital: number, strategy: StrategyId = "i1", cashReserve = DEFAULT_CASH[strategy]): PortfolioAccount {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isFinite(initialCapital) || initialCapital <= 0) {
     throw new Error("시작일과 0보다 큰 투자금을 입력해 주세요.");
   }
-  if (!Number.isFinite(cashReserve) || cashReserve < 0 || cashReserve > MAX_CASH_RESERVE) {
-    throw new Error("현금 비중은 0%에서 90% 사이로 선택해 주세요.");
+  if (!Number.isFinite(cashReserve) || cashReserve < 0 || cashReserve > MAX_CASH[strategy] + 1e-12) {
+    throw new Error(`현금 비중은 0%에서 ${Math.round(MAX_CASH[strategy] * 100)}% 사이로 선택해 주세요.`);
   }
   return { version: 3, startDate, initialCapital, createdAt: new Date().toISOString(),
     cash: initialCapital, holdings: [], trades: [], days: [], targetNames: [], reviewedMonth: "", pending: null,
-    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }), ...(cashReserve > 0 ? { cashReserve } : {}) };
+    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }), ...(strategy === "i2" || cashReserve > 0 ? { cashReserve } : {}) };
 }
 const targetWeight = (order: Order, ticker: string) => {
   const item = order.names.find(name => name.ticker === ticker);
@@ -203,7 +206,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
     });
     const equity = account.cash + holdings.reduce((sum, item) => sum + item.value, 0);
     const initial = account.days.length === 0, month = day.slice(0, 7);
-    const reserve = account.cashReserve ?? 0;
+    const reserve = cashReserveOf(account);
     if (!account.pending && (initial || month !== account.reviewedMonth)) {
       let names: Order["names"];
       const notes: Record<string, string> = {};
@@ -216,10 +219,14 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
         if (strategy === "i2") {
           const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
           const sized = i2Weights(input, base.map(item => item.ticker).filter(ticker => ticker !== "IVV"));
+          // The chosen cash share replaces the design's planned cash: the half-Kelly stock
+          // weights (designed to sum to at most 40%) are rescaled to a 1 - 20% - cash ceiling.
+          const design = input.i2.stock_budget_full_kelly * input.i2.kelly_fraction;
+          const ceiling = Math.max(0, 1 - input.i2.ivv_weight - reserve), scale = ceiling / design;
           names = [...(base.some(item => item.ticker === "IVV") ? [] : [{ ticker: "IVV", name: report.quotes.IVV?.name ?? "IVV" }]), ...base]
-            .map(item => ({ ...item, weight: sized.weights[item.ticker] ?? 0 }));
+            .map(item => ({ ...item, weight: item.ticker === "IVV" ? sized.weights.IVV : (sized.weights[item.ticker] ?? 0) * scale }));
           for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
-            : `I1 선정 종목 · 하프 켈리 ${(item.weight! * 100).toFixed(1)}%${sized.fallback ? ` (관측 ${sized.observations}일 부족 등으로 균등 배분)` : ` (최근 ${sized.observations}거래일 수익률)`}`;
+            : `I1 선정 종목 · 하프 켈리 ${((sized.weights[item.ticker] ?? 0) * 100).toFixed(1)}%${Math.abs(scale - 1) < 1e-9 ? "" : ` × ${scale.toFixed(2)} = ${(item.weight! * 100).toFixed(1)}%`} (현금 비중 ${Math.round(reserve * 100)}% → 개별 종목 한도 ${Math.round(ceiling * 100)}%)${sized.fallback ? ` · 관측 ${sized.observations}일 부족 등으로 균등 배분` : ` · 최근 ${sized.observations}거래일 수익률`}`;
         } else {
           const picked = s1Names(report, input, asSignal(account.targetNames), equity * (1 - reserve));
           names = picked.names.map(({ ticker, name, weight }) => ({ ticker, name, weight }));
@@ -228,8 +235,8 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       }
       if (notes[SIGNAL_CORE] !== undefined) notes[CORE_ETF] = notes[SIGNAL_CORE];
       names = names.map(item => toCore(item, report));
-      if (reserve > 0) {
-        // Scale every target so the chosen cash share stays uninvested at each rebalance.
+      if (reserve > 0 && strategy !== "i2") {
+        // I1/S1: scale every target so the chosen cash share stays uninvested at each rebalance.
         const count = names.length;
         names = names.map(item => ({ ...item, weight: (item.weight ?? 1 / count) * (1 - reserve) }));
       }

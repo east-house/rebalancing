@@ -95,21 +95,44 @@ describe("S&P 500 core ETF substitution", () => {
 describe("chosen cash reserve", () => {
   const data = (reports: ReturnType<typeof chain>) => Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
     { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
-  it("keeps the chosen share in cash and scales every target weight", () => {
+  it("I1/S1: keeps the chosen share in cash by scaling every target weight (default 0%)", () => {
     const reports = chain();
-    for (const strategy of ["i1", "i2", "s1"] as const) {
-      const plain = advanceAccount(createAccount("2026-08-31", 10000, strategy), reports, data(reports)).days.at(-1)!;
+    for (const strategy of ["i1", "s1"] as const) {
+      expect(createAccount("2026-08-31", 10000, strategy).cashReserve, strategy).toBeUndefined();
       const reserved = advanceAccount(createAccount("2026-08-31", 10000, strategy, 0.3), reports, data(reports));
       const day = reserved.days.at(-1)!;
       expect(reserved.cashReserve).toBe(0.3);
-      expect(day.cash / day.equity, strategy).toBeGreaterThan(Math.min(0.29, plain.cash / plain.equity + 0.25));
+      expect(day.cash / day.equity, strategy).toBeGreaterThan(0.29);
       const total = Object.values(day.targetWeights ?? {}).reduce((sum, value) => sum + value, 0);
-      expect(total, strategy).toBeLessThanOrEqual(0.7 + 1e-9);
+      expect(total, strategy).toBeCloseTo(0.7, 9);
+      expect(day.targetWeights!.SPYM, strategy).toBeCloseTo(0.14, 9);
       expect(day.holdings.some(item => item.ticker === "SPYM"), strategy).toBe(true);
     }
   });
-  it("rejects reserves outside 0-90%", () => {
+  it("I2: the chosen cash share replaces the 40% planned cash and rescales the half-Kelly stock weights", () => {
+    const reports = chain();
+    const run = (reserve?: number) => advanceAccount(createAccount("2026-08-31", 10000, "i2", reserve), reports, data(reports));
+    const design = run(), thirty = run(0.3), none = run(0);
+    expect(createAccount("2026-08-31", 10000, "i2").cashReserve).toBe(0.4);
+    const weights = (account: ReturnType<typeof run>) => account.days.at(-1)!.targetWeights!;
+    const stocks = (w: Record<string, number>) => Object.entries(w).filter(([ticker]) => ticker !== "SPYM");
+    expect(weights(design).SPYM).toBe(0.2); expect(weights(thirty).SPYM).toBe(0.2); expect(weights(none).SPYM).toBe(0.2);
+    const base = Object.fromEntries(stocks(weights(design)));
+    expect(Object.values(base).some(value => value > 0)).toBe(true);
+    for (const [ticker, value] of stocks(weights(thirty))) expect(value, ticker).toBeCloseTo(base[ticker] * 1.25, 9);
+    for (const [ticker, value] of stocks(weights(none))) expect(value, ticker).toBeCloseTo(base[ticker] * 2, 9);
+    const sum = (w: Record<string, number>) => stocks(w).reduce((total, [, value]) => total + value, 0);
+    expect(sum(weights(design))).toBeLessThanOrEqual(0.4 + 1e-9);
+    expect(sum(weights(thirty))).toBeLessThanOrEqual(0.5 + 1e-9);
+    expect(stocks(weights(thirty)).every(([, value]) => value <= 0.25 + 1e-9)).toBe(true);
+    // Legacy I2 accounts without a stored cash share keep the original 40% design.
+    const legacy = createAccount("2026-08-31", 10000, "i2"); delete legacy.cashReserve;
+    expect(advanceAccount(legacy, reports, data(reports)).days.at(-1)!.targetWeights).toEqual(weights(design));
+    expect(thirty.days.at(-1)!.selectionDetails!.find(item => item.ticker !== "SPYM" && (item.weight ?? 0) > 0)!.reason).toContain("현금 비중 30% → 개별 종목 한도 50%");
+  });
+  it("rejects cash shares outside the allowed range", () => {
     expect(() => createAccount("2026-08-31", 10000, "i1", 0.95)).toThrow("현금 비중");
     expect(() => createAccount("2026-08-31", 10000, "i1", -0.1)).toThrow("현금 비중");
+    expect(() => createAccount("2026-08-31", 10000, "i2", 0.85)).toThrow("0%에서 80%");
   });
 });

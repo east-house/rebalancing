@@ -7,10 +7,18 @@ export const STRATEGIES: StrategyInfo[] = [
   { id: "i1", label: "I1 (기존)", title: "I1 코어·위성",
     summary: "S&P 500 ETF(SPYM, IVV 대체) 포함 최대 5종목 동일비중(각 20%). 현금을 거의 두지 않습니다." },
   { id: "i2", label: "I2", title: "I2 · I1 종목 + 하프 켈리 비중",
-    summary: "I1과 같은 종목에 S&P 500 ETF(SPYM) 20% 고정, 개별 종목은 하프 켈리로 합계 최대 40%(종목당 최대 20%). 나머지는 현금." },
+    summary: "I1과 같은 종목에 S&P 500 ETF(SPYM) 20% 고정, 개별 종목은 하프 켈리 비율로 합계 한도(80% − 현금 비중) 안에서 배분. 기본 현금 비중 40%(개별 종목 한도 40%)." },
   { id: "s1", label: "S1", title: "S1 · 주도주 3종목 + 섹터 분산",
     summary: "I1 점수 상위 20개 주도주를 12-1 모멘텀 순으로 정렬해 GICS 섹터당 1종목씩 3종목(각 26.7%) + S&P 500 ETF(SPYM) 20%. 현금 없음." },
 ];
+
+/**
+ * Default cash share per strategy. For I2 the chosen cash share replaces the original
+ * planned cash (40%): the individual-stock ceiling becomes 1 - 20% core - cash.
+ * For I1 and S1 the chosen share scales every target weight down.
+ */
+export const DEFAULT_CASH: Record<StrategyId, number> = { i1: 0, i2: 0.4, s1: 0 };
+export const MAX_CASH: Record<StrategyId, number> = { i1: 0.9, i2: 0.8, s1: 0.9 };
 
 export class MissingStrategyInputs extends Error {
   constructor(public day: string) { super(`${day}: I2·S1 계산 자료가 아직 게시되지 않았습니다.`); }

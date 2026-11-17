@@ -65,5 +65,15 @@ it("starts an account with the chosen start date and cash share", async () => {
   expect(await screen.findByLabelText("계좌 손익 요약")).toBeTruthy();
   const saved = JSON.parse(localStorage.getItem(ACCOUNT_KEY)!);
   expect(saved.startDate).toBe("2026-09-01"); expect(saved.cashReserve).toBe(0.2);
-  expect(screen.getAllByText(/현금 비중 20.0%/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/현금 비중 20.0% 설정 \(기본 0.0%\)/).length).toBeGreaterThan(0);
+});
+it("defaults the cash share to each strategy's design (I2 40%, I1/S1 0%)", async () => {
+  render(<PortfolioReportPage {...navigation} />);
+  await waitFor(() => expect((screen.getByRole("button", { name: "이 금액으로 계좌 시작" }) as HTMLButtonElement).disabled).toBe(false));
+  expect((screen.getByLabelText("현금 비중") as HTMLSelectElement).value).toBe("0");
+  fireEvent.click(screen.getByRole("button", { name: /^I2/ }));
+  expect((screen.getByLabelText("현금 비중") as HTMLSelectElement).value).toBe("0.4");
+  expect(screen.getByRole("option", { name: "40% (기본 설계)" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^S1/ }));
+  expect((screen.getByLabelText("현금 비중") as HTMLSelectElement).value).toBe("0");
 });
