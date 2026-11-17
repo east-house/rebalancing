@@ -274,7 +274,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
           const pctOf = (value: number) => `${(value * 100).toFixed(1)}%`;
           names = [SIGNAL_CORE, ...kept].map(ticker => ({ ticker, name: ticker === SIGNAL_CORE ? report.quotes.IVV?.name ?? "IVV" : nameOf(ticker), weight: combined[ticker] ?? 0 }));
           for (const item of names) notes[item.ticker] = item.ticker === SIGNAL_CORE ? "시장 코어 20% 고정 (두 묶음 공통)"
-            : `월말 묶음(${a.reportDate}) ${pctOf(a.weights[item.ticker] ?? 0)} · 월중 묶음(${b.reportDate}) ${pctOf(b.weights[item.ticker] ?? 0)} → 각 50% 합산 ${pctOf(item.weight)} (하프 켈리, 현금 비중 ${Math.round(reserve * 100)}%)`;
+            : `월말 묶음(${a.reportDate}) ${pctOf(a.weights[item.ticker] ?? 0)} · 월중 묶음(${b.reportDate}) ${pctOf(b.weights[item.ticker] ?? 0)} → 각 50% 합산 ${pctOf(item.weight ?? 0)} (하프 켈리, 현금 비중 ${Math.round(reserve * 100)}%)`;
           extra.push(`${initial ? "최초 투자: 두 묶음 모두 시작 보고서로 계산했습니다." : monthDue ? `월말 묶음을 다시 계산했습니다(월중 묶음은 ${b.reportDate} 그대로).` : `월중 묶음을 다시 계산했습니다(월말 묶음은 ${a.reportDate} 그대로).`} 두 묶음을 50%씩 합산합니다.`);
           if (cut.length) extra.push(`개별 종목 ${H2B_MAX_STOCKS}개 상한: ${cut.map(ticker => `${ticker} ${pctOf(combined[ticker])}`).join(", ")}는 제외하고 그 몫은 BIL로 보유합니다.`);
         }
