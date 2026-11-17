@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, WalletCards } from "lucide-react";
-import { loadPortfolioCashQuote, loadPortfolioCoreQuote, loadPortfolioReport, loadPortfolioReportIndex, loadPortfolioStrategyInputs, type PortfolioReportIndex, type PortfolioStrategyInputs } from "../../api/portfolioReport";
+import { loadPortfolioCashQuote, loadPortfolioCoreQuote, loadPortfolioReport, loadPortfolioReportIndex, loadPortfolioStrategyInputs, type PortfolioReportIndex, type PortfolioReportPayload, type PortfolioStrategyInputs } from "../../api/portfolioReport";
 import { useReportRefresh } from "../../api/useReportRefresh";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import PortfolioDecisionReport from "./PortfolioDecisionReport";
 import PortfolioPublicationStatus from "./PortfolioPublicationStatus";
 import { CASH_ETF, CORE_ETF, LEGACY_KEY, accountKey, advanceAccount, cashReserveOf, createAccount, isCashEtf, isCore, strategyOf, withCashQuote, withCoreQuote, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
-import { DEFAULT_CASH, H2B_MAX_STOCKS, H2B_MID_DAY, MissingStrategyInputs, STRATEGIES, holdsBil, type StrategyId } from "./portfolioStrategies";
+import { DEFAULT_CASH, H2B_MAX_STOCKS, H2B_MID_DAY, MissingStrategyInputs, STRATEGIES, h2bMidReached, holdsBil, type StrategyId } from "./portfolioStrategies";
 import "./portfolioReportPage.css";
 import "./portfolioAccount.css";
 
@@ -75,7 +75,7 @@ async function loadInputs(days: string[], releaseId: string | undefined, into: R
 export async function updateAccount(account: PortfolioAccount, index: PortfolioReportIndex): Promise<PortfolioAccount> {
   const dates = index.reports.map(item => item.reportDate).filter(day => day >= account.startDate && day > (account.days.at(-1)?.reportDate ?? "")).sort();
   if (new Set(dates).size !== dates.length) throw new Error("보고서 목록에 중복 날짜가 있습니다.");
-  const reports = [];
+  const reports: PortfolioReportPayload[] = [];
   for (let i = 0; i < dates.length; i += 4) {
     reports.push(...await Promise.all(dates.slice(i, i + 4).map(async day => {
       const report = await loadPortfolioReport(day, index.releaseId);
@@ -96,10 +96,11 @@ export async function updateAccount(account: PortfolioAccount, index: PortfolioR
   }
   if (strategyOf(account) === "i1") return advanceAccount(account, reports);
   // I2/C1 decide only on the start day and monthly review days; preload the first reports of each month.
-  // H2b also reviews its mid-month tranche on the first report dated on or after the 16th.
+  // H2b also reviews its mid-month tranche on the report whose US session is the last one on or before the 15th.
   const inputs: Record<string, PortfolioStrategyInputs> = {};
-  const mid = (day: string) => Number(day.slice(8, 10)) >= H2B_MID_DAY;
-  const firstMid = (i: number) => strategyOf(account) === "h2b" && mid(dates[i]) && (i === 0 || !mid(dates[i - 1]) || dates[i].slice(0, 7) !== dates[i - 1].slice(0, 7));
+  const mid = (i: number) => h2bMidReached(reports[i].signal_market_date, reports[i].proposed_execution_date);
+  const usMonth = (i: number) => reports[i].signal_market_date.slice(0, 7);
+  const firstMid = (i: number) => strategyOf(account) === "h2b" && mid(i) && (i === 0 || !mid(i - 1) || usMonth(i) !== usMonth(i - 1));
   await loadInputs(dates.filter((day, i) => i === 0 || day.slice(0, 7) !== dates[i - 1].slice(0, 7) || (i > 1 && day.slice(0, 7) !== dates[i - 2].slice(0, 7))
     || firstMid(i) || (i > 0 && firstMid(i - 1))), index.releaseId, inputs);
   for (let attempt = 0; attempt < 24; attempt++) {
@@ -258,7 +259,7 @@ export default function PortfolioReportPage(props: Props) {
         <PortfolioDecisionReport days={visibleDays} releaseId={index?.releaseId} strategy={strategy} cashReserve={cashReserveOf(account)} />
         <section className="portfolio-report-card account-notice"><h2>변경사항과 다음 주문</h2>
           <p>{day.trades.length ? `미국 ${day.marketDate} 종가로 ${day.trades.length}건의 매매를 반영했습니다.` : "이 보고일에 새로 반영된 체결은 없습니다."}</p>
-          {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {pendingWeights ? day.pending.names.map(item => `${item.ticker} ${share(item.weight ?? 0)}`).join(" · ") + ` · 계획 현금 ${share(Math.max(0, 1 - day.pending.names.reduce((sum, item) => sum + (item.weight ?? 0), 0)))}` : `${day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중`}</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 매월 첫 보고일에 종목과 목표비중을 다시 확인합니다.{strategy === "h2b" ? ` 월중 묶음은 매월 ${H2B_MID_DAY}일 이후 첫 보고일에 다시 확인합니다.` : ""}</p>}
+          {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {pendingWeights ? day.pending.names.map(item => `${item.ticker} ${share(item.weight ?? 0)}`).join(" · ") + ` · 계획 현금 ${share(Math.max(0, 1 - day.pending.names.reduce((sum, item) => sum + (item.weight ?? 0), 0)))}` : `${day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중`}</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 매월 첫 보고일에 종목과 목표비중을 다시 확인합니다.{strategy === "h2b" ? ` 월중 묶음은 매월 미국장 ${H2B_MID_DAY}일 이전 마지막 거래일 종가를 기준으로 하는 보고서에서 다시 확인합니다.` : ""}</p>}
           <details><summary>누적 변경 알림 ({visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).length})</summary>{visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).map(item => <p key={item.reportDate}>{item.reportDate} · {item.trades.length ? `${item.trades.length}건 체결` : item.pending?.reason}</p>)}</details>
         </section>
         <section className="portfolio-report-card"><EquityChart days={visibleDays} capital={account.initialCapital} /></section>

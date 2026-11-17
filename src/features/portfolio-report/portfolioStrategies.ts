@@ -28,11 +28,18 @@ export const holdsBil = (strategy: StrategyId) => strategy === "c1" || strategy 
 /** H2b: at most this many individual stocks across the two tranches (largest combined weights). */
 export const H2B_MAX_STOCKS = 4;
 /**
- * H2b only: the mid-month tranche is reviewed on the first report dated on or after this
- * Korean day of the month. Its US signal session is the last one on or before the 15th
- * (research SPEC_C1PLUS). The monthly rule of every other strategy is unchanged.
+ * H2b only: the mid-month tranche uses the last US session on or before this day of the US
+ * month (research SPEC_C1PLUS) and executes at the next session's close. The monthly rule of
+ * every other strategy is unchanged (it still follows the Korean report date).
  */
-export const H2B_MID_DAY = 16;
+export const H2B_MID_DAY = 15;
+
+/**
+ * True once a report's US session is that month's mid-month signal session or later: the next
+ * US session (the report's proposed execution date, holiday aware) falls after the 15th.
+ */
+export const h2bMidReached = (signalDate: string, executionDate: string) =>
+  executionDate > `${signalDate.slice(0, 7)}-${String(H2B_MID_DAY).padStart(2, "0")}`;
 
 export class MissingStrategyInputs extends Error {
   constructor(public day: string) { super(`${day}: I2·C1·H2b 계산 자료가 아직 게시되지 않았습니다.`); }

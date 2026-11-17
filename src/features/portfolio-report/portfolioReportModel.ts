@@ -1,5 +1,5 @@
 import type { PortfolioCashQuote, PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
-import { DEFAULT_CASH, H2B_MAX_STOCKS, H2B_MID_DAY, MAX_CASH, MissingStrategyInputs, STRATEGIES, holdsBil, i2Weights, usesKelly, type StrategyId } from "./portfolioStrategies";
+import { DEFAULT_CASH, H2B_MAX_STOCKS, MAX_CASH, MissingStrategyInputs, STRATEGIES, h2bMidReached, holdsBil, i2Weights, usesKelly, type StrategyId } from "./portfolioStrategies";
 
 export interface Holding {
   ticker: string; name: string; shares: number; cost: number;
@@ -228,8 +228,11 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
     const initial = account.days.length === 0, month = day.slice(0, 7);
     const reserve = cashReserveOf(account);
     const monthDue = initial || month !== account.reviewedMonth;
-    // H2b only: the mid-month tranche is reviewed on the first report dated on or after the 16th.
-    const halfDue = strategy === "h2b" && !initial && Number(day.slice(8, 10)) >= H2B_MID_DAY && account.reviewedHalf !== month;
+    // H2b only: the mid-month tranche is reviewed on the report whose US session is the last one on
+    // or before the 15th (keyed by the US month); a report blocked by a pending order catches up next.
+    const signalMonth = report.signal_market_date.slice(0, 7);
+    const midReached = h2bMidReached(report.signal_market_date, report.proposed_execution_date);
+    const halfDue = strategy === "h2b" && !initial && midReached && account.reviewedHalf !== signalMonth;
     if (!account.pending && (monthDue || halfDue)) {
       let names: Order["names"];
       const notes: Record<string, string> = {};
@@ -257,7 +260,8 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
         } else {
           // H2b: refresh the tranche that is due (both on the start day), each from its own I1 path.
           const tranches = { ...(account.tranches ?? {}) };
-          for (const key of initial ? ["a", "b"] as const : monthDue ? ["a"] as const : ["b"] as const) {
+          const due: ("a" | "b")[] = initial || (monthDue && halfDue) ? ["a", "b"] : monthDue ? ["a"] : ["b"];
+          for (const key of due) {
             const previousNames = tranches[key]?.names.map(item => item.ticker) ?? asSignal(account.targetNames);
             const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, previousNames);
             const sized = kelly(base, {});
@@ -275,7 +279,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
           names = [SIGNAL_CORE, ...kept].map(ticker => ({ ticker, name: ticker === SIGNAL_CORE ? report.quotes.IVV?.name ?? "IVV" : nameOf(ticker), weight: combined[ticker] ?? 0 }));
           for (const item of names) notes[item.ticker] = item.ticker === SIGNAL_CORE ? "시장 코어 20% 고정 (두 묶음 공통)"
             : `월말 묶음(${a.reportDate}) ${pctOf(a.weights[item.ticker] ?? 0)} · 월중 묶음(${b.reportDate}) ${pctOf(b.weights[item.ticker] ?? 0)} → 각 50% 합산 ${pctOf(item.weight ?? 0)} (하프 켈리, 현금 비중 ${Math.round(reserve * 100)}%)`;
-          extra.push(`${initial ? "최초 투자: 두 묶음 모두 시작 보고서로 계산했습니다." : monthDue ? `월말 묶음을 다시 계산했습니다(월중 묶음은 ${b.reportDate} 그대로).` : `월중 묶음을 다시 계산했습니다(월말 묶음은 ${a.reportDate} 그대로).`} 두 묶음을 50%씩 합산합니다.`);
+          extra.push(`${initial ? "최초 투자: 두 묶음 모두 시작 보고서로 계산했습니다." : due.length === 2 ? "밀린 월중 점검과 월간 점검이 겹쳐 두 묶음을 모두 다시 계산했습니다." : monthDue ?`월말 묶음을 다시 계산했습니다(월중 묶음은 ${b.reportDate} 그대로).` : `월중 묶음을 다시 계산했습니다(월말 묶음은 ${a.reportDate} 그대로).`} 두 묶음을 50%씩 합산합니다.`);
           if (cut.length) extra.push(`개별 종목 ${H2B_MAX_STOCKS}개 상한: ${cut.map(ticker => `${ticker} ${pctOf(combined[ticker])}`).join(", ")}는 제외하고 그 몫은 BIL로 보유합니다.`);
         }
       }
@@ -319,7 +323,7 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       explanation.push(initial ? (i1 ? "최초 투자: i1 선정 종목으로 정수 매수 주문을 준비했습니다." : `최초 투자: ${label} 목표 비중으로 정수 매수 주문을 준비했습니다.`) : changed ? `${review}에서 목표 종목이 변경되어 교체 주문을 준비했습니다.` : `${review} 결과 목표 종목은 같습니다. 체결 종가에서 종목별 목표비중 차이를 확인하며, 기준 미만인 기존 종목은 거래하지 않습니다.`);
       explanation.push(...extra);
       if (monthDue) account.reviewedMonth = month;
-      if (halfDue || (initial && strategy === "h2b" && Number(day.slice(8, 10)) >= H2B_MID_DAY)) account.reviewedHalf = month;
+      if (halfDue || (initial && strategy === "h2b" && midReached)) account.reviewedHalf = signalMonth;
     }
     if (account.pending) explanation.push(`미국 ${account.pending.executionDate} 종가가 확인되는 보고서까지 주문을 대기합니다. 대기 주문은 아직 체결된 거래가 아닙니다.`);
     if (!explanation.length) explanation.push("금일 거래 없음: 월간 종목 점검일이 아니고 대기 주문도 없어 기존 수량을 유지합니다. 일별 순위가 달라져도 매일 종목을 교체하지 않습니다.");

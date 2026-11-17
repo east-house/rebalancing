@@ -171,17 +171,42 @@ describe("H2b = two C1 tranches (month-end and mid-month)", () => {
     for (const item of c1w) expect(h2bw.find(other => other.ticker === item.ticker)?.weight ?? 0, item.ticker).toBeCloseTo(item.weight ?? 0, 9);
     expect(h2b.days.at(-1)!.holdings.some(item => item.ticker === "BIL")).toBe(true);
   });
-  it("refreshes only the mid-month tranche on the first report dated on or after the 16th; C1 keeps the monthly rule", () => {
+  it("refreshes only the mid-month tranche on the report whose US session is the last one on or before the 15th; C1 keeps the monthly rule", () => {
     const reports = mid(), data = dataFor(reports);
     const h2b = advanceAccount(createAccount("2026-09-14", 10000, "h2b"), reports, data);
+    expect(h2b.days.find(item => item.reportDate === "2026-09-15")!.pending).toBeNull();
     const day16 = h2b.days.find(item => item.reportDate === "2026-09-16")!;
     expect(day16.pending!.reason).toMatch(/^월중 점검: H2b 월중 묶음 갱신/);
+    expect(day16.pending!.signalDate).toBe("2026-09-15"); expect(day16.pending!.executionDate).toBe("2026-09-16");
     expect(day16.explanation!.join(" ")).toContain("월말 묶음은 2026-09-14 그대로");
     expect(h2b.tranches!.a!.reportDate).toBe("2026-09-14"); expect(h2b.tranches!.b!.reportDate).toBe("2026-09-16");
     expect(h2b.reviewedHalf).toBe("2026-09");
     expect(h2b.days.find(item => item.reportDate === "2026-09-17")!.pending).toBeNull();
     const c1 = advanceAccount(createAccount("2026-09-14", 10000, "c1"), reports, data);
     expect(c1.days.find(item => item.reportDate === "2026-09-16")!.pending).toBeNull();
+  });
+  it("uses the US session date: when the 15th is a Saturday the mid-month signal is Friday the 14th", () => {
+    // 2026-08-15 is a Saturday: the Korean Monday 08-17 report closes US Fri 08-14 and executes US Mon 08-17.
+    const reports = [fixture("2026-08-14", "2026-08-13", "2026-08-14"), fixture("2026-08-17", "2026-08-14", "2026-08-17"),
+      fixture("2026-08-18", "2026-08-17", "2026-08-18"), fixture("2026-08-19", "2026-08-18", "2026-08-19")];
+    const h2b = advanceAccount(createAccount("2026-08-14", 10000, "h2b"), reports, dataFor(reports));
+    const day = h2b.days.find(item => item.reportDate === "2026-08-17")!;
+    expect(day.pending!.reason).toMatch(/^월중 점검: H2b 월중 묶음 갱신/);
+    expect(day.pending!.signalDate).toBe("2026-08-14"); expect(day.pending!.executionDate).toBe("2026-08-17");
+    expect(h2b.tranches!.b!.signalDate).toBe("2026-08-14"); expect(h2b.reviewedHalf).toBe("2026-08");
+    expect(h2b.days.find(item => item.reportDate === "2026-08-18")!.pending).toBeNull();
+    expect(h2b.days.find(item => item.reportDate === "2026-08-19")!.pending).toBeNull();
+  });
+  it("uses the US session date: when the 15th is a US holiday the signal is the session before it", () => {
+    // 2027-02-15 is Presidents' Day (Monday): the Korean 02-15 report closes US Fri 02-12 and executes US Tue 02-16.
+    const reports = [fixture("2027-02-12", "2027-02-11", "2027-02-12"), fixture("2027-02-15", "2027-02-12", "2027-02-16"),
+      fixture("2027-02-16", "2027-02-12", "2027-02-16"), fixture("2027-02-17", "2027-02-16", "2027-02-17")];
+    const h2b = advanceAccount(createAccount("2027-02-12", 10000, "h2b"), reports, dataFor(reports));
+    const day = h2b.days.find(item => item.reportDate === "2027-02-15")!;
+    expect(day.pending!.reason).toMatch(/^월중 점검: H2b 월중 묶음 갱신/);
+    expect(day.pending!.signalDate).toBe("2027-02-12"); expect(day.pending!.executionDate).toBe("2027-02-16");
+    expect(h2b.reviewedHalf).toBe("2027-02");
+    expect(h2b.days.find(item => item.reportDate === "2027-02-17")!.pending).toBeNull();
   });
   it("keeps at most four individual stocks and moves the cut weight to BIL", () => {
     const reports = mid();
