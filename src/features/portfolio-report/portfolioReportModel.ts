@@ -1,5 +1,5 @@
 import type { PortfolioCashQuote, PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
-import { DEFAULT_CASH, MAX_CASH, MissingStrategyInputs, STRATEGIES, i2Weights, usesKelly, type StrategyId } from "./portfolioStrategies";
+import { DEFAULT_CASH, H2B_MAX_STOCKS, H2B_MID_DAY, MAX_CASH, MissingStrategyInputs, STRATEGIES, holdsBil, i2Weights, usesKelly, type StrategyId } from "./portfolioStrategies";
 
 export interface Holding {
   ticker: string; name: string; shares: number; cost: number;
@@ -41,7 +41,13 @@ export interface PortfolioAccount {
    * I2/C1: replaces the design's planned cash (absent = 40%, the original design); C1 holds it in BIL.
    */
   cashReserve?: number;
+  /** H2b: the month-end (a) and mid-month (b) C1 tranches; each keeps its own I1 selection path. */
+  tranches?: { a?: Tranche; b?: Tranche };
+  /** H2b: month (YYYY-MM) whose mid-month tranche review is done. */
+  reviewedHalf?: string;
 }
+/** One H2b tranche: its I1 selection (signal tickers, IVV) and C1 weights before BIL. */
+export interface Tranche { reportDate: string; signalDate: string; names: { ticker: string; name: string }[]; weights: Record<string, number>; }
 export const ACCOUNT_KEY = "stock_strategy.us_portfolio.integer.v3";
 export const LEGACY_KEY = "stock_strategy.us_portfolio.device.v1";
 /** I1 keeps its original storage key; I2 and C1 accounts are stored separately. */
@@ -138,7 +144,7 @@ function execute(account: PortfolioAccount, report: Report, order: Order, explan
   const equity = account.cash + account.holdings.reduce((sum, item) => sum + item.shares * price(report, item.ticker), 0);
   const targets = new Map(order.names.map(item => [item.ticker,
     Math.floor(equity * targetWeight(order, item.ticker) / price(report, item.ticker))]));
-  if (order.reason.startsWith("월간")) {
+  if (order.reason.startsWith("월간") || order.reason.startsWith("월중")) {
     for (const holding of account.holdings) {
       if (!targets.has(holding.ticker)) continue;
       const gap = Math.abs(holding.shares * price(report, holding.ticker) / equity - targetWeight(order, holding.ticker));
@@ -221,31 +227,61 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
     const equity = account.cash + holdings.reduce((sum, item) => sum + item.value, 0);
     const initial = account.days.length === 0, month = day.slice(0, 7);
     const reserve = cashReserveOf(account);
-    if (!account.pending && (initial || month !== account.reviewedMonth)) {
+    const monthDue = initial || month !== account.reviewedMonth;
+    // H2b only: the mid-month tranche is reviewed on the first report dated on or after the 16th.
+    const halfDue = strategy === "h2b" && !initial && Number(day.slice(8, 10)) >= H2B_MID_DAY && account.reviewedHalf !== month;
+    if (!account.pending && (monthDue || halfDue)) {
       let names: Order["names"];
       const notes: Record<string, string> = {};
+      const extra: string[] = [];
       if (strategy === "i1") {
         names = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
       } else {
         const input = inputs[day];
         if (!input) throw new MissingStrategyInputs(day);
-        if (input.signal_market_date !== report.signal_market_date) throw new Error(`${day}: I2·C1 계산 자료의 미국장 기준일이 보고서와 다릅니다.`);
-        {
-          const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
+        if (input.signal_market_date !== report.signal_market_date) throw new Error(`${day}: I2·C1·H2b 계산 자료의 미국장 기준일이 보고서와 다릅니다.`);
+        const kelly = (base: { ticker: string; name: string }[], into: Record<string, string>) => {
           const sized = i2Weights(input, base.map(item => item.ticker).filter(ticker => ticker !== "IVV"));
           // The chosen cash share replaces the design's planned cash: the half-Kelly stock
           // weights (designed to sum to at most 40%) are rescaled to a 1 - 20% - cash ceiling.
           const design = input.i2.stock_budget_full_kelly * input.i2.kelly_fraction;
           const ceiling = Math.max(0, 1 - input.i2.ivv_weight - reserve), scale = ceiling / design;
-          names = [...(base.some(item => item.ticker === "IVV") ? [] : [{ ticker: "IVV", name: report.quotes.IVV?.name ?? "IVV" }]), ...base]
+          const sizedNames = [...(base.some(item => item.ticker === "IVV") ? [] : [{ ticker: "IVV", name: report.quotes.IVV?.name ?? "IVV" }]), ...base]
             .map(item => ({ ...item, weight: item.ticker === "IVV" ? sized.weights.IVV : (sized.weights[item.ticker] ?? 0) * scale }));
-          for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
-            : `I1 선정 종목 · 하프 켈리 ${((sized.weights[item.ticker] ?? 0) * 100).toFixed(1)}%${Math.abs(scale - 1) < 1e-9 ? "" : ` × ${scale.toFixed(2)} = ${(item.weight! * 100).toFixed(1)}%`} (현금 비중 ${Math.round(reserve * 100)}% → 개별 종목 한도 ${Math.round(ceiling * 100)}%)${sized.fallback ? ` · 관측 ${sized.observations}일 부족 등으로 균등 배분` : ` · 최근 ${sized.observations}거래일 수익률`}`;
+          for (const item of sizedNames) into[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
+            : `I1 선정 종목 · 하프 켈리 ${((sized.weights[item.ticker] ?? 0) * 100).toFixed(1)}%${Math.abs(scale - 1) < 1e-9 ? "" : ` × ${scale.toFixed(2)} = ${(item.weight * 100).toFixed(1)}%`} (현금 비중 ${Math.round(reserve * 100)}% → 개별 종목 한도 ${Math.round(ceiling * 100)}%)${sized.fallback ? ` · 관측 ${sized.observations}일 부족 등으로 균등 배분` : ` · 최근 ${sized.observations}거래일 수익률`}`;
+          return sizedNames;
+        };
+        if (strategy !== "h2b") {
+          names = kelly(initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames)), notes);
+        } else {
+          // H2b: refresh the tranche that is due (both on the start day), each from its own I1 path.
+          const tranches = { ...(account.tranches ?? {}) };
+          for (const key of initial ? ["a", "b"] as const : monthDue ? ["a"] as const : ["b"] as const) {
+            const previousNames = tranches[key]?.names.map(item => item.ticker) ?? asSignal(account.targetNames);
+            const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, previousNames);
+            const sized = kelly(base, {});
+            tranches[key] = { reportDate: day, signalDate: report.signal_market_date, names: base,
+              weights: Object.fromEntries(sized.map(item => [item.ticker, item.weight])) };
+          }
+          account.tranches = tranches;
+          const a = tranches.a!, b = tranches.b!, combined: Record<string, number> = {};
+          for (const tranche of [a, b]) for (const [ticker, weight] of Object.entries(tranche.weights)) combined[ticker] = (combined[ticker] ?? 0) + 0.5 * weight;
+          const stocks = Object.keys(combined).filter(ticker => ticker !== SIGNAL_CORE && combined[ticker] > 1e-12)
+            .sort((x, y) => combined[y] - combined[x] || x.localeCompare(y));
+          const kept = stocks.slice(0, H2B_MAX_STOCKS), cut = stocks.slice(H2B_MAX_STOCKS);
+          const nameOf = (ticker: string) => [...a.names, ...b.names].find(item => item.ticker === ticker)?.name ?? report.quotes[ticker]?.name ?? ticker;
+          const pctOf = (value: number) => `${(value * 100).toFixed(1)}%`;
+          names = [SIGNAL_CORE, ...kept].map(ticker => ({ ticker, name: ticker === SIGNAL_CORE ? report.quotes.IVV?.name ?? "IVV" : nameOf(ticker), weight: combined[ticker] ?? 0 }));
+          for (const item of names) notes[item.ticker] = item.ticker === SIGNAL_CORE ? "시장 코어 20% 고정 (두 묶음 공통)"
+            : `월말 묶음(${a.reportDate}) ${pctOf(a.weights[item.ticker] ?? 0)} · 월중 묶음(${b.reportDate}) ${pctOf(b.weights[item.ticker] ?? 0)} → 각 50% 합산 ${pctOf(item.weight)} (하프 켈리, 현금 비중 ${Math.round(reserve * 100)}%)`;
+          extra.push(`${initial ? "최초 투자: 두 묶음 모두 시작 보고서로 계산했습니다." : monthDue ? `월말 묶음을 다시 계산했습니다(월중 묶음은 ${b.reportDate} 그대로).` : `월중 묶음을 다시 계산했습니다(월말 묶음은 ${a.reportDate} 그대로).`} 두 묶음을 50%씩 합산합니다.`);
+          if (cut.length) extra.push(`개별 종목 ${H2B_MAX_STOCKS}개 상한: ${cut.map(ticker => `${ticker} ${pctOf(combined[ticker])}`).join(", ")}는 제외하고 그 몫은 BIL로 보유합니다.`);
         }
       }
       if (notes[SIGNAL_CORE] !== undefined) notes[CORE_ETF] = notes[SIGNAL_CORE];
       names = names.map(item => toCore(item, report)).filter(item => item.ticker !== CASH_ETF);
-      if (strategy === "c1") {
+      if (holdsBil(strategy)) {
         // C1: the cash share left by the I2 sizing (chosen cash + unused Kelly budget) is held in BIL.
         const invested = names.reduce((sum, item) => sum + (item.weight ?? 0), 0), bill = Math.max(0, 1 - invested);
         if (bill > 1e-9) {
@@ -262,22 +298,28 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       selectionDetails = names.map(item => {
         if (item.ticker === CASH_ETF) return { ticker: item.ticker, rank: 0, score: 0, baseScore: 0, themeScore: 0, sector: "현금 대체",
           theme: "1~3개월 미국 국채", ...(item.weight === undefined ? {} : { weight: item.weight }), reason: notes[CASH_ETF] ?? "남는 현금 몫 → BIL" };
-        const candidate = report.candidates.find(row => row.ticker === (item.ticker === CORE_ETF ? SIGNAL_CORE : item.ticker))!;
-        return { ticker: item.ticker, rank: candidate.rank, score: candidate.score, baseScore: candidate.base_score,
-          themeScore: candidate.theme_strength, sector: candidate.sector, theme: candidate.themes,
+        const signalTicker = item.ticker === CORE_ETF ? SIGNAL_CORE : item.ticker;
+        // H2b can keep a tranche stock that left today's candidate list; fall back to the report quote row.
+        const candidate = report.candidates.find(row => row.ticker === signalTicker), quote = report.quotes[signalTicker];
+        const rank = candidate?.rank ?? quote?.rank ?? 0;
+        return { ticker: item.ticker, rank, score: candidate?.score ?? quote?.score ?? 0, baseScore: candidate?.base_score ?? quote?.base_score ?? 0,
+          themeScore: candidate?.theme_strength ?? quote?.theme_strength ?? 0, sector: candidate?.sector ?? quote?.sector ?? "—", theme: candidate?.themes ?? quote?.themes ?? "",
           ...(item.weight === undefined ? {} : { weight: item.weight }),
-          reason: notes[item.ticker] ?? (item.ticker === CORE_ETF ? "시장 코어: S&P 500 ETF(SPYM, IVV 대체) 우선 편입" : !initial && account.targetNames.includes(item.ticker) && candidate.rank <= report.policy.hold_rank ? `유지순위 ${report.policy.hold_rank}위 이내 · 분산 제한 통과` : "점수 순위와 섹터·상관 제한을 통과하여 선정") };
+          reason: notes[item.ticker] ?? (item.ticker === CORE_ETF ? "시장 코어: S&P 500 ETF(SPYM, IVV 대체) 우선 편입" : !initial && account.targetNames.includes(item.ticker) && rank > 0 && rank <= report.policy.hold_rank ? `유지순위 ${report.policy.hold_rank}위 이내 · 분산 제한 통과` : "점수 순위와 섹터·상관 제한을 통과하여 선정") };
       });
       selectionReportDate = day;
-      const i1 = strategy === "i1";
+      const i1 = strategy === "i1", review = monthDue ? "월간 점검" : "월중 점검";
+      const tranche = strategy !== "h2b" ? "" : monthDue ? " 월말 묶음 갱신" : " 월중 묶음 갱신";
       account.pending = { reportDate: day, signalDate: report.signal_market_date,
         executionDate: report.proposed_execution_date, names, feeRate: report.policy.transaction_cost_each_side ?? 0.001,
         driftThreshold: report.policy.drift_threshold, selectionDetails,
         reason: initial ? (i1 ? "시작일 i1 최초 매수" : `시작일 ${label} 최초 매수`)
-          : changed ? (i1 ? "월간 점검: 유지순위·섹터·상관 제한에 따른 종목 교체" : `월간 점검: ${label} 규칙에 따른 종목 교체`)
-          : (i1 ? "월간 점검: 동일 종목의 비중 확인" : `월간 점검: ${label} 동일 종목의 목표비중 확인`) };
-      explanation.push(initial ? (i1 ? "최초 투자: i1 선정 종목으로 정수 매수 주문을 준비했습니다." : `최초 투자: ${label} 목표 비중으로 정수 매수 주문을 준비했습니다.`) : changed ? "월간 점검에서 목표 종목이 변경되어 교체 주문을 준비했습니다." : "월간 점검 결과 목표 종목은 같습니다. 체결 종가에서 종목별 목표비중 차이를 확인하며, 기준 미만인 기존 종목은 거래하지 않습니다.");
-      account.reviewedMonth = month;
+          : changed ? (i1 ? "월간 점검: 유지순위·섹터·상관 제한에 따른 종목 교체" : `${review}: ${label}${tranche} 규칙에 따른 종목 교체`)
+          : (i1 ? "월간 점검: 동일 종목의 비중 확인" : `${review}: ${label}${tranche} 동일 종목의 목표비중 확인`) };
+      explanation.push(initial ? (i1 ? "최초 투자: i1 선정 종목으로 정수 매수 주문을 준비했습니다." : `최초 투자: ${label} 목표 비중으로 정수 매수 주문을 준비했습니다.`) : changed ? `${review}에서 목표 종목이 변경되어 교체 주문을 준비했습니다.` : `${review} 결과 목표 종목은 같습니다. 체결 종가에서 종목별 목표비중 차이를 확인하며, 기준 미만인 기존 종목은 거래하지 않습니다.`);
+      explanation.push(...extra);
+      if (monthDue) account.reviewedMonth = month;
+      if (halfDue || (initial && strategy === "h2b" && Number(day.slice(8, 10)) >= H2B_MID_DAY)) account.reviewedHalf = month;
     }
     if (account.pending) explanation.push(`미국 ${account.pending.executionDate} 종가가 확인되는 보고서까지 주문을 대기합니다. 대기 주문은 아직 체결된 거래가 아닙니다.`);
     if (!explanation.length) explanation.push("금일 거래 없음: 월간 종목 점검일이 아니고 대기 주문도 없어 기존 수량을 유지합니다. 일별 순위가 달라져도 매일 종목을 교체하지 않습니다.");

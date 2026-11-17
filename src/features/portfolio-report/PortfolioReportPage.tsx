@@ -7,7 +7,7 @@ import SiteFooter from "../../components/SiteFooter";
 import PortfolioDecisionReport from "./PortfolioDecisionReport";
 import PortfolioPublicationStatus from "./PortfolioPublicationStatus";
 import { CASH_ETF, CORE_ETF, LEGACY_KEY, accountKey, advanceAccount, cashReserveOf, createAccount, isCashEtf, isCore, strategyOf, withCashQuote, withCoreQuote, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
-import { DEFAULT_CASH, MissingStrategyInputs, STRATEGIES, type StrategyId } from "./portfolioStrategies";
+import { DEFAULT_CASH, H2B_MAX_STOCKS, H2B_MID_DAY, MissingStrategyInputs, STRATEGIES, holdsBil, type StrategyId } from "./portfolioStrategies";
 import "./portfolioReportPage.css";
 import "./portfolioAccount.css";
 
@@ -24,7 +24,7 @@ const ids = STRATEGIES.map(item => item.id);
 const RESERVE_OPTIONS = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
 /** "현금 비중 30.0% 설정 (기본 40.0%)" or "현금 비중 40.0% (기본 설계)"; C1 holds that share in BIL. */
 export function reserveLabel(strategy: StrategyId, value: number) {
-  const base = DEFAULT_CASH[strategy], what = strategy === "c1" ? "현금 몫(BIL 보유)" : "현금 비중";
+  const base = DEFAULT_CASH[strategy], what = holdsBil(strategy) ? "현금 몫(BIL 보유)" : "현금 비중";
   return Math.abs(value - base) < 1e-9 ? `${what} ${share(value)} (기본 설계)` : `${what} ${share(value)} 설정 (기본 ${share(base)})`;
 }
 function savedAccount(strategy: StrategyId): PortfolioAccount | null {
@@ -86,7 +86,7 @@ export async function updateAccount(account: PortfolioAccount, index: PortfolioR
         if (reason instanceof Error && reason.message.includes("미국장 기준일")) throw reason;
         throw new Error(`${day}: S&P 500 ETF(${CORE_ETF}) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
       }
-      if (strategyOf(account) !== "c1") return withCore;
+      if (!holdsBil(strategyOf(account))) return withCore;
       try { return withCashQuote(withCore, await loadPortfolioCashQuote(day, index.releaseId)); }
       catch (reason) {
         if (reason instanceof Error && reason.message.includes("미국장 기준일")) throw reason;
@@ -96,8 +96,12 @@ export async function updateAccount(account: PortfolioAccount, index: PortfolioR
   }
   if (strategyOf(account) === "i1") return advanceAccount(account, reports);
   // I2/C1 decide only on the start day and monthly review days; preload the first reports of each month.
+  // H2b also reviews its mid-month tranche on the first report dated on or after the 16th.
   const inputs: Record<string, PortfolioStrategyInputs> = {};
-  await loadInputs(dates.filter((day, i) => i === 0 || day.slice(0, 7) !== dates[i - 1].slice(0, 7) || (i > 1 && day.slice(0, 7) !== dates[i - 2].slice(0, 7))), index.releaseId, inputs);
+  const mid = (day: string) => Number(day.slice(8, 10)) >= H2B_MID_DAY;
+  const firstMid = (i: number) => strategyOf(account) === "h2b" && mid(dates[i]) && (i === 0 || !mid(dates[i - 1]) || dates[i].slice(0, 7) !== dates[i - 1].slice(0, 7));
+  await loadInputs(dates.filter((day, i) => i === 0 || day.slice(0, 7) !== dates[i - 1].slice(0, 7) || (i > 1 && day.slice(0, 7) !== dates[i - 2].slice(0, 7))
+    || firstMid(i) || (i > 0 && firstMid(i - 1))), index.releaseId, inputs);
   for (let attempt = 0; attempt < 24; attempt++) {
     try { return advanceAccount(account, reports, inputs); }
     catch (error) {
@@ -124,9 +128,10 @@ function EquityChart({ days, capital }: { days: AccountDay[]; capital: number })
 function AllocationCard({ day, strategy, reserve }: { day: AccountDay; strategy: StrategyId; reserve: number }) {
   const mix = allocation(day), target = targetMix(day);
   return <section className="portfolio-report-card account-allocation" aria-label="자산 구성">
-    <h2>자산 구성 · 현금{strategy === "c1" ? "·단기국채" : ""}과 S&amp;P 500 ETF</h2>
+    <h2>자산 구성 · 현금{holdsBil(strategy) ? "·단기국채" : ""}과 S&amp;P 500 ETF</h2>
     <p className="allocation-note">계좌는 IVV(1주 약 $770) 대신 같은 S&amp;P 500 지수를 따르는 SPYM(1주 약 $90)으로 코어 20%를 보유합니다. 순위·비중 계산은 보고서의 IVV 자료를 그대로 씁니다.</p>
-    {strategy === "c1" && <p className="allocation-note">C1은 I2가 현금으로 두는 몫을 1~3개월 미국 국채 ETF(BIL)로 보유합니다. BIL도 매일 가격이 움직이며 배당 지급일에 가격이 내려가고 배당으로 보전됩니다.</p>}
+    {strategy === "h2b" && <p className="allocation-note">H2b는 월말 신호 묶음과 월중 신호 묶음의 C1 목표를 50%씩 합칩니다. 개별 종목은 합산 비중이 큰 {H2B_MAX_STOCKS}개까지 보유하고, 남는 몫은 단기국채 ETF(BIL)로 둡니다.</p>}
+    {holdsBil(strategy) && <p className="allocation-note">{strategy === "h2b" ? "H2b(C1과 같이)는" : "C1은"} I2가 현금으로 두는 몫을 1~3개월 미국 국채 ETF(BIL)로 보유합니다. BIL도 매일 가격이 움직이며 배당 지급일에 가격이 내려가고 배당으로 보전됩니다.</p>}
     <div className="allocation-bar" role="img" aria-label={`개별 주식 ${share(mix.stocks)}, S&P 500 ETF ${share(mix.ivv)}, 단기국채 BIL ${share(mix.bil)}, 현금 ${share(mix.cash)}`}>
       <span className="is-stocks" style={{ width: `${mix.stocks * 100}%` }} />
       <span className="is-ivv" style={{ width: `${mix.ivv * 100}%` }} />
@@ -136,7 +141,7 @@ function AllocationCard({ day, strategy, reserve }: { day: AccountDay; strategy:
     <div className="allocation-legend">
       <div><i className="is-stocks" /><span>개별 주식 {mix.stockCount}종목</span><strong>{share(mix.stocks)}</strong><small>{money(mix.stockValue)}</small></div>
       <div><i className="is-ivv" /><span>S&amp;P 500 ETF (SPYM)</span><strong>{share(mix.ivv)}</strong><small>{money(mix.ivvValue)}</small></div>
-      {(strategy === "c1" || mix.bil > 0) && <div><i className="is-bil" /><span>단기국채 ETF (BIL)</span><strong>{share(mix.bil)}</strong><small>{money(mix.bilValue)}</small></div>}
+      {(holdsBil(strategy) || mix.bil > 0) && <div><i className="is-bil" /><span>단기국채 ETF (BIL)</span><strong>{share(mix.bil)}</strong><small>{money(mix.bilValue)}</small></div>}
       <div><i className="is-cash" /><span>현금</span><strong>{share(mix.cash)}</strong><small>{money(mix.cashValue)}</small></div>
     </div>
     {target && <p className="allocation-target">{day.pending ? "대기 주문의 목표" : "현재 목표"} 비중: 개별 주식 {share(target.stocks)} · S&amp;P 500 ETF {share(target.ivv)}{target.bil > 0 ? ` · 단기국채 BIL ${share(target.bil)}` : ""} · 계획 현금 {share(target.cash)} ({reserveLabel(strategy, reserve)})
@@ -158,7 +163,7 @@ function Comparison({ accounts, current, onSelect }: { accounts: Record<Strategy
 export default function PortfolioReportPage(props: Props) {
   const refresh = useReportRefresh();
   const [strategy, setStrategy] = useState<StrategyId>(savedSelection);
-  const [accounts, setAccounts] = useState<Record<StrategyId, PortfolioAccount | null>>(() => ({ i1: savedAccount("i1"), i2: savedAccount("i2"), c1: savedAccount("c1") }));
+  const [accounts, setAccounts] = useState<Record<StrategyId, PortfolioAccount | null>>(() => ({ i1: savedAccount("i1"), i2: savedAccount("i2"), c1: savedAccount("c1"), h2b: savedAccount("h2b") }));
   const [index, setIndex] = useState<PortfolioReportIndex | null>(null);
   const [capital, setCapital] = useState(2819);
   const [start, setStart] = useState("2026-08-17");
@@ -227,7 +232,7 @@ export default function PortfolioReportPage(props: Props) {
       {error && <p role="alert" className="portfolio-report-alert">{error}</p>}
       <PortfolioPublicationStatus reportDate={day?.reportDate ?? index?.reports[0]?.reportDate} generatedAt={day?.sourceRevision ?? index?.reports.find(item => item.reportDate === (day?.reportDate ?? index.reports[0]?.reportDate))?.generatedAt} />
       <Comparison accounts={accounts} current={strategy} onSelect={select} />
-      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일 · 초기 투자금 · 현금 비중</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다. {strategy === "i1" ? "현금 비중을 고르면(기본 0%) 매 리밸런싱마다 총자산의 그 비율을 현금으로 두고, 나머지에 매매법의 목표 비중을 같은 비율로 적용합니다." : `${strategy === "c1" ? "C1" : "I2"}의 현금 비중은 기존 설계의 계획 현금(기본 40%)을 대신합니다. S&P 500 ETF 20%는 그대로 두고 개별 종목 합계 한도가 (80% − 현금 비중)이 되며, 종목 간 비율은 하프 켈리 계산을 따릅니다.${strategy === "c1" ? " C1은 이 현금 몫(하프 켈리 미사용분 포함)을 현금 대신 단기국채 ETF(BIL)로 보유합니다." : ""}`}{strategy !== "i1" && " I2·C1은 해당 날짜의 계산 자료(수익률)가 게시된 보고일부터 시작할 수 있습니다."}</p>
+      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일 · 초기 투자금 · 현금 비중</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다. {strategy === "i1" ? "현금 비중을 고르면(기본 0%) 매 리밸런싱마다 총자산의 그 비율을 현금으로 두고, 나머지에 매매법의 목표 비중을 같은 비율로 적용합니다." : `${info.label}의 현금 비중은 기존 설계의 계획 현금(기본 40%)을 대신합니다. S&P 500 ETF 20%는 그대로 두고 개별 종목 합계 한도가 (80% − 현금 비중)이 되며, 종목 간 비율은 하프 켈리 계산을 따릅니다.${holdsBil(strategy) ? ` ${info.label}은 이 현금 몫(하프 켈리 미사용분 포함)을 현금 대신 단기국채 ETF(BIL)로 보유합니다.` : ""}${strategy === "h2b" ? " 시작일에는 두 묶음을 같은 시작 보고서로 계산합니다." : ""}`}{strategy !== "i1" && " I2·C1·H2b는 해당 날짜의 계산 자료(수익률)가 게시된 보고일부터 시작할 수 있습니다."}</p>
         <div className="portfolio-report-controls"><label>시작 보고일<select aria-label="시작 보고일" value={start} onChange={event => setStart(event.target.value)}>{[...(index?.reports ?? [])].sort((a, b) => a.reportDate.localeCompare(b.reportDate)).map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate}</option>)}</select></label>
           <label>초기 투자금(USD)<input aria-label="초기 투자금(USD)" type="number" min="1" step="1" value={capital} onChange={event => setCapital(Number(event.target.value))} /></label>
           <label>현금 비중<select aria-label="현금 비중" value={reserve} onChange={event => setReserve(Number(event.target.value))}>{RESERVE_OPTIONS.map(value => <option key={value} value={value}>{`${Math.round(value * 100)}%${Math.abs(value - DEFAULT_CASH[strategy]) < 1e-9 ? " (기본 설계)" : ""}`}</option>)}</select></label>
@@ -253,7 +258,7 @@ export default function PortfolioReportPage(props: Props) {
         <PortfolioDecisionReport days={visibleDays} releaseId={index?.releaseId} strategy={strategy} cashReserve={cashReserveOf(account)} />
         <section className="portfolio-report-card account-notice"><h2>변경사항과 다음 주문</h2>
           <p>{day.trades.length ? `미국 ${day.marketDate} 종가로 ${day.trades.length}건의 매매를 반영했습니다.` : "이 보고일에 새로 반영된 체결은 없습니다."}</p>
-          {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {pendingWeights ? day.pending.names.map(item => `${item.ticker} ${share(item.weight ?? 0)}`).join(" · ") + ` · 계획 현금 ${share(Math.max(0, 1 - day.pending.names.reduce((sum, item) => sum + (item.weight ?? 0), 0)))}` : `${day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중`}</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 매월 첫 보고일에 종목과 목표비중을 다시 확인합니다.</p>}
+          {day.pending ? <><strong>{day.pending.reason}</strong><p>판단에 사용한 미국장 {day.pending.signalDate} → 체결 예정 미국장 {day.pending.executionDate}</p><p>목표 종목: {pendingWeights ? day.pending.names.map(item => `${item.ticker} ${share(item.weight ?? 0)}`).join(" · ") + ` · 계획 현금 ${share(Math.max(0, 1 - day.pending.names.reduce((sum, item) => sum + (item.weight ?? 0), 0)))}` : `${day.pending.names.map(item => item.ticker).join(" · ")} · 동일비중`}</p><p>해당 거래일 종가가 확인되는 보고서에서 정수 수량을 계산해 자동 반영합니다.</p></> : <p>현재 보유를 유지합니다. 매월 첫 보고일에 종목과 목표비중을 다시 확인합니다.{strategy === "h2b" ? ` 월중 묶음은 매월 ${H2B_MID_DAY}일 이후 첫 보고일에 다시 확인합니다.` : ""}</p>}
           <details><summary>누적 변경 알림 ({visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).length})</summary>{visibleDays.filter(item => item.trades.length || item.pending?.reportDate === item.reportDate).map(item => <p key={item.reportDate}>{item.reportDate} · {item.trades.length ? `${item.trades.length}건 체결` : item.pending?.reason}</p>)}</details>
         </section>
         <section className="portfolio-report-card"><EquityChart days={visibleDays} capital={account.initialCapital} /></section>

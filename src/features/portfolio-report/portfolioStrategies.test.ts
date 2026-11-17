@@ -156,3 +156,52 @@ describe("chosen cash reserve", () => {
     expect(() => createAccount("2026-08-31", 10000, "i2", 0.85)).toThrow("0%에서 80%");
   });
 });
+
+describe("H2b = two C1 tranches (month-end and mid-month)", () => {
+  const mid = () => [fixture("2026-09-14", "2026-09-11", "2026-09-14"), fixture("2026-09-15", "2026-09-14", "2026-09-15"),
+    fixture("2026-09-16", "2026-09-15", "2026-09-16"), fixture("2026-09-17", "2026-09-16", "2026-09-17")];
+  it("starts with both tranches from the start report, i.e. the C1 target", () => {
+    const reports = chain(), data = dataFor(reports);
+    const c1 = advanceAccount(createAccount("2026-08-31", 10000, "c1"), reports, data);
+    const h2b = advanceAccount(createAccount("2026-08-31", 10000, "h2b"), reports, data);
+    expect(h2b.cashReserve).toBe(0.4);
+    // 08-31 is after the 15th, so only the month-end tranche is refreshed when September starts.
+    expect(h2b.tranches!.a!.reportDate).toBe("2026-09-01"); expect(h2b.tranches!.b!.reportDate).toBe("2026-08-31");
+    const c1w = c1.days[0].pending!.names, h2bw = h2b.days[0].pending!.names;
+    for (const item of c1w) expect(h2bw.find(other => other.ticker === item.ticker)?.weight ?? 0, item.ticker).toBeCloseTo(item.weight ?? 0, 9);
+    expect(h2b.days.at(-1)!.holdings.some(item => item.ticker === "BIL")).toBe(true);
+  });
+  it("refreshes only the mid-month tranche on the first report dated on or after the 16th; C1 keeps the monthly rule", () => {
+    const reports = mid(), data = dataFor(reports);
+    const h2b = advanceAccount(createAccount("2026-09-14", 10000, "h2b"), reports, data);
+    const day16 = h2b.days.find(item => item.reportDate === "2026-09-16")!;
+    expect(day16.pending!.reason).toMatch(/^월중 점검: H2b 월중 묶음 갱신/);
+    expect(day16.explanation!.join(" ")).toContain("월말 묶음은 2026-09-14 그대로");
+    expect(h2b.tranches!.a!.reportDate).toBe("2026-09-14"); expect(h2b.tranches!.b!.reportDate).toBe("2026-09-16");
+    expect(h2b.reviewedHalf).toBe("2026-09");
+    expect(h2b.days.find(item => item.reportDate === "2026-09-17")!.pending).toBeNull();
+    const c1 = advanceAccount(createAccount("2026-09-14", 10000, "c1"), reports, data);
+    expect(c1.days.find(item => item.reportDate === "2026-09-16")!.pending).toBeNull();
+  });
+  it("keeps at most four individual stocks and moves the cut weight to BIL", () => {
+    const reports = mid();
+    const fresh = ["E", "F", "G", "Z"];
+    reports[2] = (() => {
+      const report = reports[2];
+      const candidates = report.candidates.map(item => ["A", "B", "C", "D"].includes(item.ticker) ? { ...item, rank: item.rank + 10 } : item.ticker === "Z" ? { ...item, rank: 5 } : item)
+        .concat(fresh.slice(0, 3).map((ticker, i) => ({ ...report.candidates[1], ticker, name: `Company ${ticker}`, sector: ticker, rank: i + 2 })));
+      return { ...report, candidates, quotes: { ...report.quotes, ...Object.fromEntries(candidates.map(item => [item.ticker, { ...report.quotes.A, ...item }])) } };
+    })();
+    reports[3] = { ...reports[3], quotes: { ...reports[3].quotes, ...Object.fromEntries(fresh.map(ticker => [ticker, { ...reports[3].quotes.A, ticker, name: `Company ${ticker}` }])) } };
+    const h2b = advanceAccount(createAccount("2026-09-14", 10000, "h2b"), reports, dataFor(reports));
+    const day16 = h2b.days.find(item => item.reportDate === "2026-09-16")!;
+    expect(h2b.tranches!.b!.names.map(item => item.ticker)).toEqual(expect.arrayContaining(["E", "F", "G", "Z"]));
+    const stocks = day16.pending!.names.filter(item => !["SPYM", "BIL"].includes(item.ticker));
+    expect(stocks.length).toBe(4);
+    expect(day16.explanation!.join(" ")).toContain("개별 종목 4개 상한");
+    const total = day16.pending!.names.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    expect(total).toBeCloseTo(1, 9);
+    const after = h2b.days.at(-1)!;
+    expect(after.holdings.filter(item => !["SPYM", "BIL"].includes(item.ticker)).length).toBeLessThanOrEqual(4);
+  });
+});

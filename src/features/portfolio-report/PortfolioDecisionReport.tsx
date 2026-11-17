@@ -33,6 +33,21 @@ function StrategyRules({ strategy, cashReserve }: { strategy: StrategyId; cashRe
       <li>개선은 국채 이자에서 나오므로 금리가 내려가면 줄어듭니다.</li>
     </ul>
   </details>;
+  if (strategy === "h2b") return <details><summary>H2b는 어떤 규칙으로 종목과 비중을 정하나요?</summary>
+    <ol>
+      <li>C1을 두 묶음으로 나눠 운용합니다. 월말 묶음은 매월 첫 한국 평일 보고서(직전 미국 월말 종가)에서, 월중 묶음은 매월 16일 이후 첫 한국 평일 보고서(15일 이전 마지막 미국 거래일 종가)에서 다시 계산합니다. 시작일에는 두 묶음을 같은 시작 보고서로 계산합니다.</li>
+      <li>각 묶음은 C1과 같습니다. I1 규칙으로 종목을 고르고(묶음마다 자기 직전 종목으로 유지순위 판단), 최근 252거래일 수익률로 하프 켈리 비중을 구하며, S&amp;P 500 ETF(SPYM) 20%를 고정합니다. 이 계좌: {changed ? `현금 몫 ${pct0(cashReserve)} 설정 (기본 40%)` : "현금 몫 40% (기본 설계)"} → 묶음별 개별 종목 합계 한도 {pct0(ceiling)}.</li>
+      <li>계좌 목표 = 월말 묶음 × 50% + 월중 묶음 × 50%. 한 묶음이 갱신될 때마다 다음 미국 거래일 종가에 정수 주식으로 맞춥니다. 개별 종목은 합산 비중이 큰 4개까지만 보유하고 나머지 몫과 남는 현금 몫은 BIL로 둡니다.</li>
+      <li>목표와 차이가 3%p 미만인 종목(BIL 포함)은 거래하지 않고, 편도 비용 0.10%를 차감합니다. 매매는 한 달에 두 번 일어날 수 있습니다.</li>
+    </ol>
+    <p>연구 결과(SPEC_C1PLUS, C1 대비, $21,000·편도 0.25%·2%p 밴드):</p>
+    <ul>
+      <li>2021-08-31~2023-12-29: CAGR 10.53%(C1 8.54%), MDD −11.92%(−11.33%), 샤프 0.76(0.61)</li>
+      <li>2023-12-29~2026-10-09: CAGR 37.32%(32.38%), MDD −15.95%(−15.20%), 샤프 1.75(1.52), 베타 0.832(0.804)</li>
+      <li>신호 후 1~3거래일 늦게 체결해도 CAGR·샤프·소르티노·하방 편차는 C1보다 좋았지만, MDD는 6개 경우 중 5개에서 컸고(최대 2.39%p) 베타는 모두 높았습니다.</li>
+      <li>2022년과 2025년에는 C1보다 낮았습니다. 종목 수 증가(평균 약 2.4 → 3.5개)와 월 2회 갱신의 효과를 날짜 분산 효과와 나눠 확인하지 못했습니다. 검증 중인 후보입니다.</li>
+    </ul>
+  </details>;
   return null;
 }
 
@@ -71,7 +86,7 @@ export default function PortfolioDecisionReport({ days, releaseId, strategy = "i
     {!day.explanation && <p>이 날짜는 상세 판단 기록을 추가하기 전에 저장된 계좌입니다. 기존 체결은 재계산하지 않으며 아래 점수는 선정 보고서를 다시 조회한 참고 정보입니다.</p>}
     {sourceDate && <p>최근 기록된 선정 판단: {sourceDate} 보고서. 아래는 해당 판단의 목표 종목이며, 실제 보유 수량은 ‘보유 종목과 수익’에서 확인할 수 있습니다.</p>}
     {error && <p role="status">{error}</p>}
-    {!!rows.length && <div className="portfolio-report-table-wrap"><table><thead><tr><th>목표 종목</th><th>선정 순위</th><th>기본 / 테마 / 종합 점수</th><th>분산 분류</th><th>목표 비중</th><th>선정 이유</th></tr></thead><tbody>{rows.map(row => <tr key={row.ticker}><td><strong>{row.ticker}</strong></td><td>{isCashEtf(row.ticker) ? "—" : `${row.rank}위`}</td><td>{isCashEtf(row.ticker) ? "현금 대체" : isCore(row.ticker) ? "코어 우선순위 부여" : `${(row.baseScore * 100).toFixed(1)} / ${(row.themeScore * 100).toFixed(1)} / ${(row.score * 100).toFixed(1)}`}</td><td>{row.sector}<small>{row.theme}</small></td><td>{row.weight !== undefined ? `${(row.weight * 100).toFixed(1)}%` : `${(100 / rows.length).toFixed(1)}% (동일)`}</td><td>{row.reason}</td></tr>)}</tbody></table></div>}
+    {!!rows.length && <div className="portfolio-report-table-wrap"><table><thead><tr><th>목표 종목</th><th>선정 순위</th><th>기본 / 테마 / 종합 점수</th><th>분산 분류</th><th>목표 비중</th><th>선정 이유</th></tr></thead><tbody>{rows.map(row => <tr key={row.ticker}><td><strong>{row.ticker}</strong></td><td>{isCashEtf(row.ticker) || !row.rank ? "—" : `${row.rank}위`}</td><td>{isCashEtf(row.ticker) ? "현금 대체" : isCore(row.ticker) ? "코어 우선순위 부여" : `${(row.baseScore * 100).toFixed(1)} / ${(row.themeScore * 100).toFixed(1)} / ${(row.score * 100).toFixed(1)}`}</td><td>{row.sector}<small>{row.theme}</small></td><td>{row.weight !== undefined ? `${(row.weight * 100).toFixed(1)}%` : `${(100 / rows.length).toFixed(1)}% (동일)`}</td><td>{row.reason}</td></tr>)}</tbody></table></div>}
     <StrategyRules strategy={strategy} cashReserve={cashReserve} />
     <details><summary>{strategy === "i1" ? "i1은 어떤 규칙으로 종목을 고르고 매매하나요?" : "참고: I1 점수와 종목 선정 규칙"}</summary>
       <ol>
