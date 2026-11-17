@@ -121,7 +121,7 @@ export async function loadPortfolioReportIndex(): Promise<PortfolioReportIndex> 
   return reportJson("/api/portfolio-reports", "/data/portfolio-reports/index.json");
 }
 
-/** Supplementary I2/S1 inputs published beside each immutable I1 report. */
+/** Supplementary I2/C1 inputs published beside each immutable I1 report. */
 export interface PortfolioStrategyInputs {
   schema_version: 1;
   report_date_kst: string;
@@ -140,7 +140,7 @@ export async function loadPortfolioStrategyInputs(day: string, releaseId?: strin
   const value = await reportJson<PortfolioStrategyInputs>(`/api/portfolio-reports/${day}/strategy-inputs${releaseId ? `?release=${releaseId}` : ""}`,
     `/data/portfolio-reports/strategy-inputs/${day}.json`);
   if (value?.schema_version !== 1 || value.report_date_kst !== day || typeof value.returns !== "object") {
-    throw new Error(`${day}: I2·S1 계산 자료 형식이 올바르지 않습니다.`);
+    throw new Error(`${day}: I2·C1 계산 자료 형식이 올바르지 않습니다.`);
   }
   return value;
 }
@@ -157,6 +157,22 @@ export async function loadPortfolioCoreQuote(day: string, releaseId?: string): P
     `/data/portfolio-reports/core-quotes/${day}.json`);
   if (value?.schema_version !== 1 || value.report_date_kst !== day || !(value.close > 0) || !value.ticker) {
     throw new Error(`${day}: S&P 500 ETF(SPYM) 종가 자료 형식이 올바르지 않습니다.`);
+  }
+  return value;
+}
+
+/** Close of the C1 cash ETF (BIL, 1-3 month Treasury bills) on the report's US session. */
+export interface PortfolioCashQuote {
+  schema_version: 1; report_date_kst: string; signal_market_date: string;
+  ticker: string; name: string; proxy_for: string; close: number; source?: string;
+}
+
+export async function loadPortfolioCashQuote(day: string, releaseId?: string): Promise<PortfolioCashQuote> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("잘못된 보고서 날짜입니다.");
+  const value = await reportJson<PortfolioCashQuote>(`/api/portfolio-reports/${day}/cash-quote${releaseId ? `?release=${releaseId}` : ""}`,
+    `/data/portfolio-reports/cash-quotes/${day}.json`);
+  if (value?.schema_version !== 1 || value.report_date_kst !== day || !(value.close > 0) || !value.ticker) {
+    throw new Error(`${day}: 단기국채 ETF(BIL) 종가 자료 형식이 올바르지 않습니다.`);
   }
   return value;
 }

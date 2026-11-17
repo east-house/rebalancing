@@ -9,7 +9,8 @@ export function fixture(day = "2026-08-31", market = "2026-08-28", execution = d
     generated_at: `${day}T00:00:00Z`, stale_preview: false,
     strategy: { ...raw.strategy, id: "i1_core_satellite" },
     candidates, quotes: { ...Object.fromEntries(candidates.map(item => [item.ticker, item])),
-      SPYM: { ...candidates[0], ticker: "SPYM", name: "SPDR Portfolio S&P 500 ETF", rank: null, close: 50 } },
+      SPYM: { ...candidates[0], ticker: "SPYM", name: "SPDR Portfolio S&P 500 ETF", rank: null, close: 50 },
+      BIL: { ...candidates[0], ticker: "BIL", name: "SPDR Bloomberg 1-3 Month T-Bill ETF", sector: "현금 대체", rank: null, close: 90 } },
     selection: candidates.slice(0, 5).map(item => ({ ...item, reference_close: item.close, weight: 0.2 })),
     selection_correlations: Object.fromEntries(names.map(name => [name, Object.fromEntries(names.map(other => [other, name === other ? 1 : 0]))])),
     policy: { ...raw.policy, stop_loss: null, trailing_stop: null, hold_rank: 10, transaction_cost_each_side: 0.001 } };

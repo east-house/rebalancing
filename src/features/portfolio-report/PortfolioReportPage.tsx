@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, WalletCards } from "lucide-react";
-import { loadPortfolioCoreQuote, loadPortfolioReport, loadPortfolioReportIndex, loadPortfolioStrategyInputs, type PortfolioReportIndex, type PortfolioStrategyInputs } from "../../api/portfolioReport";
+import { loadPortfolioCashQuote, loadPortfolioCoreQuote, loadPortfolioReport, loadPortfolioReportIndex, loadPortfolioStrategyInputs, type PortfolioReportIndex, type PortfolioStrategyInputs } from "../../api/portfolioReport";
 import { useReportRefresh } from "../../api/useReportRefresh";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import PortfolioDecisionReport from "./PortfolioDecisionReport";
 import PortfolioPublicationStatus from "./PortfolioPublicationStatus";
-import { CORE_ETF, LEGACY_KEY, accountKey, advanceAccount, cashReserveOf, createAccount, isCore, strategyOf, withCoreQuote, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
+import { CASH_ETF, CORE_ETF, LEGACY_KEY, accountKey, advanceAccount, cashReserveOf, createAccount, isCashEtf, isCore, strategyOf, withCashQuote, withCoreQuote, type PortfolioAccount, type AccountDay } from "./portfolioReportModel";
 import { DEFAULT_CASH, MissingStrategyInputs, STRATEGIES, type StrategyId } from "./portfolioStrategies";
 import "./portfolioReportPage.css";
 import "./portfolioAccount.css";
@@ -22,10 +22,10 @@ const share = (value: number) => `${(value * 100).toFixed(1)}%`;
 const signed = (value: number) => `${value > 0 ? "+" : ""}${money(value)}`;
 const ids = STRATEGIES.map(item => item.id);
 const RESERVE_OPTIONS = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
-/** "현금 비중 30.0% 설정 (기본 40.0%)" or "현금 비중 40.0% (기본 설계)". */
+/** "현금 비중 30.0% 설정 (기본 40.0%)" or "현금 비중 40.0% (기본 설계)"; C1 holds that share in BIL. */
 export function reserveLabel(strategy: StrategyId, value: number) {
-  const base = DEFAULT_CASH[strategy];
-  return Math.abs(value - base) < 1e-9 ? `현금 비중 ${share(value)} (기본 설계)` : `현금 비중 ${share(value)} 설정 (기본 ${share(base)})`;
+  const base = DEFAULT_CASH[strategy], what = strategy === "c1" ? "현금 몫(BIL 보유)" : "현금 비중";
+  return Math.abs(value - base) < 1e-9 ? `${what} ${share(value)} (기본 설계)` : `${what} ${share(value)} 설정 (기본 ${share(base)})`;
 }
 function savedAccount(strategy: StrategyId): PortfolioAccount | null {
   try {
@@ -44,22 +44,24 @@ function download(value: unknown, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Cash, S&P 500 core ETF (SPYM, or IVV held by older accounts) and individual-stock shares of equity. */
+/** Cash, BIL (C1 cash ETF), S&P 500 core ETF (SPYM, or IVV held by older accounts) and individual-stock shares of equity. */
 export function allocation(day: AccountDay) {
   const ivv = day.holdings.filter(item => isCore(item.ticker)).reduce((sum, item) => sum + item.value, 0);
-  const stocks = day.holdings.filter(item => !isCore(item.ticker));
+  const bil = day.holdings.filter(item => isCashEtf(item.ticker)).reduce((sum, item) => sum + item.value, 0);
+  const stocks = day.holdings.filter(item => !isCore(item.ticker) && !isCashEtf(item.ticker));
   const stockValue = stocks.reduce((sum, item) => sum + item.value, 0);
   const equity = day.equity || 1;
-  return { cash: day.cash / equity, ivv: ivv / equity, stocks: stockValue / equity, stockCount: stocks.length,
-    cashValue: day.cash, ivvValue: ivv, stockValue };
+  return { cash: day.cash / equity, ivv: ivv / equity, bil: bil / equity, stocks: stockValue / equity, stockCount: stocks.length,
+    cashValue: day.cash, ivvValue: ivv, bilValue: bil, stockValue };
 }
 function targetMix(day: AccountDay) {
   const names = day.pending?.names ?? (day.targetNames ?? []).map(ticker => ({ ticker, weight: day.targetWeights?.[ticker] }));
   if (!names.length) return null;
   const weight = (item: { ticker: string; weight?: number }) => item.weight ?? 1 / names.length;
   const ivv = names.filter(item => isCore(item.ticker)).reduce((sum, item) => sum + weight(item), 0);
-  const stocks = names.filter(item => !isCore(item.ticker)).reduce((sum, item) => sum + weight(item), 0);
-  return { ivv, stocks, cash: Math.max(0, 1 - ivv - stocks), names: names.map(item => ({ ticker: item.ticker, weight: weight(item) })) };
+  const bil = names.filter(item => isCashEtf(item.ticker)).reduce((sum, item) => sum + weight(item), 0);
+  const stocks = names.filter(item => !isCore(item.ticker) && !isCashEtf(item.ticker)).reduce((sum, item) => sum + weight(item), 0);
+  return { ivv, bil, stocks, cash: Math.max(0, 1 - ivv - bil - stocks), names: names.map(item => ({ ticker: item.ticker, weight: weight(item) })) };
 }
 
 async function loadInputs(days: string[], releaseId: string | undefined, into: Record<string, PortfolioStrategyInputs>) {
@@ -78,15 +80,22 @@ export async function updateAccount(account: PortfolioAccount, index: PortfolioR
     reports.push(...await Promise.all(dates.slice(i, i + 4).map(async day => {
       const report = await loadPortfolioReport(day, index.releaseId);
       if (report.report_date_kst !== day || (index.releaseId && report.releaseId !== index.releaseId)) throw new Error("보고서 날짜 또는 게시 버전이 일치하지 않습니다.");
-      try { return withCoreQuote(report, await loadPortfolioCoreQuote(day, index.releaseId)); }
+      let withCore;
+      try { withCore = withCoreQuote(report, await loadPortfolioCoreQuote(day, index.releaseId)); }
       catch (reason) {
         if (reason instanceof Error && reason.message.includes("미국장 기준일")) throw reason;
         throw new Error(`${day}: S&P 500 ETF(${CORE_ETF}) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
       }
+      if (strategyOf(account) !== "c1") return withCore;
+      try { return withCashQuote(withCore, await loadPortfolioCashQuote(day, index.releaseId)); }
+      catch (reason) {
+        if (reason instanceof Error && reason.message.includes("미국장 기준일")) throw reason;
+        throw new Error(`${day}: 단기국채 ETF(${CASH_ETF}) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
+      }
     })));
   }
   if (strategyOf(account) === "i1") return advanceAccount(account, reports);
-  // I2/S1 decide only on the start day and monthly review days; preload the first reports of each month.
+  // I2/C1 decide only on the start day and monthly review days; preload the first reports of each month.
   const inputs: Record<string, PortfolioStrategyInputs> = {};
   await loadInputs(dates.filter((day, i) => i === 0 || day.slice(0, 7) !== dates[i - 1].slice(0, 7) || (i > 1 && day.slice(0, 7) !== dates[i - 2].slice(0, 7))), index.releaseId, inputs);
   for (let attempt = 0; attempt < 24; attempt++) {
@@ -94,10 +103,10 @@ export async function updateAccount(account: PortfolioAccount, index: PortfolioR
     catch (error) {
       if (!(error instanceof MissingStrategyInputs) || inputs[error.day]) throw error;
       try { inputs[error.day] = await loadPortfolioStrategyInputs(error.day, index.releaseId); }
-      catch { throw new Error(`${error.day}: I2·S1 계산 자료가 아직 게시되지 않았습니다. 이전 날짜는 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`); }
+      catch { throw new Error(`${error.day}: I2·C1 계산 자료가 아직 게시되지 않았습니다. 이전 날짜는 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`); }
     }
   }
-  throw new Error("I2·S1 계산 자료를 불러오지 못했습니다.");
+  throw new Error("I2·C1 계산 자료를 불러오지 못했습니다.");
 }
 
 function EquityChart({ days, capital }: { days: AccountDay[]; capital: number }) {
@@ -115,19 +124,22 @@ function EquityChart({ days, capital }: { days: AccountDay[]; capital: number })
 function AllocationCard({ day, strategy, reserve }: { day: AccountDay; strategy: StrategyId; reserve: number }) {
   const mix = allocation(day), target = targetMix(day);
   return <section className="portfolio-report-card account-allocation" aria-label="자산 구성">
-    <h2>자산 구성 · 현금과 S&amp;P 500 ETF</h2>
+    <h2>자산 구성 · 현금{strategy === "c1" ? "·단기국채" : ""}과 S&amp;P 500 ETF</h2>
     <p className="allocation-note">계좌는 IVV(1주 약 $770) 대신 같은 S&amp;P 500 지수를 따르는 SPYM(1주 약 $90)으로 코어 20%를 보유합니다. 순위·비중 계산은 보고서의 IVV 자료를 그대로 씁니다.</p>
-    <div className="allocation-bar" role="img" aria-label={`개별 주식 ${share(mix.stocks)}, S&P 500 ETF ${share(mix.ivv)}, 현금 ${share(mix.cash)}`}>
+    {strategy === "c1" && <p className="allocation-note">C1은 I2가 현금으로 두는 몫을 1~3개월 미국 국채 ETF(BIL)로 보유합니다. BIL도 매일 가격이 움직이며 배당 지급일에 가격이 내려가고 배당으로 보전됩니다.</p>}
+    <div className="allocation-bar" role="img" aria-label={`개별 주식 ${share(mix.stocks)}, S&P 500 ETF ${share(mix.ivv)}, 단기국채 BIL ${share(mix.bil)}, 현금 ${share(mix.cash)}`}>
       <span className="is-stocks" style={{ width: `${mix.stocks * 100}%` }} />
       <span className="is-ivv" style={{ width: `${mix.ivv * 100}%` }} />
+      <span className="is-bil" style={{ width: `${mix.bil * 100}%` }} />
       <span className="is-cash" style={{ width: `${mix.cash * 100}%` }} />
     </div>
     <div className="allocation-legend">
       <div><i className="is-stocks" /><span>개별 주식 {mix.stockCount}종목</span><strong>{share(mix.stocks)}</strong><small>{money(mix.stockValue)}</small></div>
       <div><i className="is-ivv" /><span>S&amp;P 500 ETF (SPYM)</span><strong>{share(mix.ivv)}</strong><small>{money(mix.ivvValue)}</small></div>
+      {(strategy === "c1" || mix.bil > 0) && <div><i className="is-bil" /><span>단기국채 ETF (BIL)</span><strong>{share(mix.bil)}</strong><small>{money(mix.bilValue)}</small></div>}
       <div><i className="is-cash" /><span>현금</span><strong>{share(mix.cash)}</strong><small>{money(mix.cashValue)}</small></div>
     </div>
-    {target && <p className="allocation-target">{day.pending ? "대기 주문의 목표" : "현재 목표"} 비중: 개별 주식 {share(target.stocks)} · S&amp;P 500 ETF {share(target.ivv)} · 계획 현금 {share(target.cash)} ({reserveLabel(strategy, reserve)})
+    {target && <p className="allocation-target">{day.pending ? "대기 주문의 목표" : "현재 목표"} 비중: 개별 주식 {share(target.stocks)} · S&amp;P 500 ETF {share(target.ivv)}{target.bil > 0 ? ` · 단기국채 BIL ${share(target.bil)}` : ""} · 계획 현금 {share(target.cash)} ({reserveLabel(strategy, reserve)})
       <small>{target.names.map(item => `${item.ticker} ${share(item.weight)}`).join(" · ")}. 정수 주식만 사므로 실제 현금은 계획보다 조금 많을 수 있습니다.</small></p>}
   </section>;
 }
@@ -136,17 +148,17 @@ function Comparison({ accounts, current, onSelect }: { accounts: Record<Strategy
   const rows = STRATEGIES.map(info => ({ info, account: accounts[info.id], day: accounts[info.id]?.days.at(-1) }));
   if (rows.filter(row => row.day).length < 2) return null;
   return <section className="portfolio-report-card"><h2>매매법 비교</h2><p>시작일·투자금·현금 비중이 다르면 수익률을 직접 비교할 수 없습니다. 같은 조건으로 시작하면 같은 조건의 비교가 됩니다.</p>
-    <div className="portfolio-report-table-wrap"><table><thead><tr><th>매매법</th><th>시작일 / 투자금</th><th>최신 보고일</th><th>총자산</th><th>수익률</th><th>현금</th><th>S&amp;P 500 ETF</th><th>개별 주식</th></tr></thead>
+    <div className="portfolio-report-table-wrap"><table><thead><tr><th>매매법</th><th>시작일 / 투자금</th><th>최신 보고일</th><th>총자산</th><th>수익률</th><th>현금</th><th>단기국채 BIL</th><th>S&amp;P 500 ETF</th><th>개별 주식</th></tr></thead>
       <tbody>{rows.map(({ info, account, day }) => { const mix = day ? allocation(day) : null; return <tr key={info.id} className={info.id === current ? "is-current" : undefined}>
         <td><button type="button" onClick={() => onSelect(info.id)}>{info.label}</button></td>
-        {account && day && mix ? <><td>{account.startDate}<small>{money(account.initialCapital)} · {reserveLabel(info.id, cashReserveOf(account))}</small></td><td>{day.reportDate}</td><td>{money(day.equity)}</td><td className={day.returnRate >= 0 ? "is-up" : "is-down"}>{pct(day.returnRate)}</td><td>{share(mix.cash)}</td><td>{share(mix.ivv)}</td><td>{share(mix.stocks)} · {mix.stockCount}종목</td></> : <td colSpan={7}>계좌 미시작</td>}
+        {account && day && mix ? <><td>{account.startDate}<small>{money(account.initialCapital)} · {reserveLabel(info.id, cashReserveOf(account))}</small></td><td>{day.reportDate}</td><td>{money(day.equity)}</td><td className={day.returnRate >= 0 ? "is-up" : "is-down"}>{pct(day.returnRate)}</td><td>{share(mix.cash)}</td><td>{share(mix.bil)}</td><td>{share(mix.ivv)}</td><td>{share(mix.stocks)} · {mix.stockCount}종목</td></> : <td colSpan={8}>계좌 미시작</td>}
       </tr>; })}</tbody></table></div></section>;
 }
 
 export default function PortfolioReportPage(props: Props) {
   const refresh = useReportRefresh();
   const [strategy, setStrategy] = useState<StrategyId>(savedSelection);
-  const [accounts, setAccounts] = useState<Record<StrategyId, PortfolioAccount | null>>(() => ({ i1: savedAccount("i1"), i2: savedAccount("i2"), s1: savedAccount("s1") }));
+  const [accounts, setAccounts] = useState<Record<StrategyId, PortfolioAccount | null>>(() => ({ i1: savedAccount("i1"), i2: savedAccount("i2"), c1: savedAccount("c1") }));
   const [index, setIndex] = useState<PortfolioReportIndex | null>(null);
   const [capital, setCapital] = useState(2819);
   const [start, setStart] = useState("2026-08-17");
@@ -215,7 +227,7 @@ export default function PortfolioReportPage(props: Props) {
       {error && <p role="alert" className="portfolio-report-alert">{error}</p>}
       <PortfolioPublicationStatus reportDate={day?.reportDate ?? index?.reports[0]?.reportDate} generatedAt={day?.sourceRevision ?? index?.reports.find(item => item.reportDate === (day?.reportDate ?? index.reports[0]?.reportDate))?.generatedAt} />
       <Comparison accounts={accounts} current={strategy} onSelect={select} />
-      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일 · 초기 투자금 · 현금 비중</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다. {strategy === "i2" ? "I2의 현금 비중은 기존 설계의 계획 현금(기본 40%)을 대신합니다. S&P 500 ETF 20%는 그대로 두고 개별 종목 합계 한도가 (80% − 현금 비중)이 되며, 종목 간 비율은 하프 켈리 계산을 따릅니다." : "현금 비중을 고르면(기본 0%) 매 리밸런싱마다 총자산의 그 비율을 현금으로 두고, 나머지에 매매법의 목표 비중을 같은 비율로 적용합니다."}{strategy !== "i1" && " I2·S1은 해당 날짜의 계산 자료(수익률·모멘텀·섹터)가 게시된 보고일부터 시작할 수 있습니다."}</p>
+      {!account && <section className="portfolio-report-card"><h2>{info.label.split(" ")[0]} 시작일 · 초기 투자금 · 현금 비중</h2><p>시작 보고서의 {info.label.split(" ")[0]} 목표 종목·비중으로 다음 미국 거래일 종가에 가상 매수합니다. 1주 미만은 매수하지 않고 현금으로 남깁니다. {strategy === "i1" ? "현금 비중을 고르면(기본 0%) 매 리밸런싱마다 총자산의 그 비율을 현금으로 두고, 나머지에 매매법의 목표 비중을 같은 비율로 적용합니다." : `${strategy === "c1" ? "C1" : "I2"}의 현금 비중은 기존 설계의 계획 현금(기본 40%)을 대신합니다. S&P 500 ETF 20%는 그대로 두고 개별 종목 합계 한도가 (80% − 현금 비중)이 되며, 종목 간 비율은 하프 켈리 계산을 따릅니다.${strategy === "c1" ? " C1은 이 현금 몫(하프 켈리 미사용분 포함)을 현금 대신 단기국채 ETF(BIL)로 보유합니다." : ""}`}{strategy !== "i1" && " I2·C1은 해당 날짜의 계산 자료(수익률)가 게시된 보고일부터 시작할 수 있습니다."}</p>
         <div className="portfolio-report-controls"><label>시작 보고일<select aria-label="시작 보고일" value={start} onChange={event => setStart(event.target.value)}>{[...(index?.reports ?? [])].sort((a, b) => a.reportDate.localeCompare(b.reportDate)).map(item => <option key={item.reportDate} value={item.reportDate}>{item.reportDate}</option>)}</select></label>
           <label>초기 투자금(USD)<input aria-label="초기 투자금(USD)" type="number" min="1" step="1" value={capital} onChange={event => setCapital(Number(event.target.value))} /></label>
           <label>현금 비중<select aria-label="현금 비중" value={reserve} onChange={event => setReserve(Number(event.target.value))}>{RESERVE_OPTIONS.map(value => <option key={value} value={value}>{`${Math.round(value * 100)}%${Math.abs(value - DEFAULT_CASH[strategy]) < 1e-9 ? " (기본 설계)" : ""}`}</option>)}</select></label>
@@ -248,14 +260,14 @@ export default function PortfolioReportPage(props: Props) {
         <section className="portfolio-report-card"><h2>보유 종목과 수익</h2><p>평균매수단가는 매수 비용을 포함합니다. 비중은 총자산(현금 포함) 대비입니다. S&amp;P 500 ETF(SPYM, IVV 대체)는 시장 코어로 따로 표시합니다.</p>
           {(day.targetNames ?? []).some(ticker => !day.holdings.some(item => item.ticker === ticker)) && <p>목표 종목 중 미보유: {(day.targetNames ?? []).filter(ticker => !day.holdings.some(item => item.ticker === ticker)).join(" · ")}. 배정금액으로 1주를 살 수 없으면 해당 금액은 현금으로 남깁니다.</p>}
           {!day.holdings.length ? <p>아직 체결된 보유 종목이 없습니다. 주문 대기 또는 1주 매수에 필요한 금액 부족으로 현금을 보유하고 있습니다.</p> : <div className="portfolio-report-table-wrap"><table><thead><tr><th>종목</th><th>구분</th><th>비중</th><th>최초 매수일 / 최근 매수일</th><th>수량</th><th>평균매수단가</th><th>기준 종가</th><th>매수원가</th><th>평가액</th><th>평가손익</th><th>수익률</th></tr></thead><tbody>
-            {[...day.holdings].sort((a, b) => (isCore(a.ticker) ? -1 : isCore(b.ticker) ? 1 : b.value - a.value)).map(item => <tr key={item.ticker} className={isCore(item.ticker) ? "is-core" : undefined}><td><strong>{item.ticker}</strong><small>{item.name}</small></td><td>{isCore(item.ticker) ? "시장 ETF(코어)" : "개별 주식"}</td><td>{share(item.value / day.equity)}</td><td>{item.firstBuyDate}<small>{item.lastBuyDate}</small></td><td>{item.shares}주</td><td>{money(item.cost / item.shares)}</td><td>{money(item.close)}</td><td>{money(item.cost)}</td><td>{money(item.value)}</td><td className={item.pnl >= 0 ? "is-up" : "is-down"}>{signed(item.pnl)}</td><td>{pct(item.returnRate)}</td></tr>)}
+            {[...day.holdings].sort((a, b) => { const order = (t: string) => isCore(t) ? 0 : isCashEtf(t) ? 2 : 1; return order(a.ticker) - order(b.ticker) || b.value - a.value; }).map(item => <tr key={item.ticker} className={isCore(item.ticker) ? "is-core" : isCashEtf(item.ticker) ? "is-bil" : undefined}><td><strong>{item.ticker}</strong><small>{item.name}</small></td><td>{isCore(item.ticker) ? "시장 ETF(코어)" : isCashEtf(item.ticker) ? "현금 대체(단기국채 ETF)" : "개별 주식"}</td><td>{share(item.value / day.equity)}</td><td>{item.firstBuyDate}<small>{item.lastBuyDate}</small></td><td>{item.shares}주</td><td>{money(item.cost / item.shares)}</td><td>{money(item.close)}</td><td>{money(item.cost)}</td><td>{money(item.value)}</td><td className={item.pnl >= 0 ? "is-up" : "is-down"}>{signed(item.pnl)}</td><td>{pct(item.returnRate)}</td></tr>)}
             <tr className="is-cash"><td><strong>현금</strong></td><td>현금</td><td>{share(day.cash / day.equity)}</td><td colSpan={5}>—</td><td>{money(day.cash)}</td><td colSpan={2}>—</td></tr>
           </tbody></table></div>}
         </section>
         <section className="portfolio-report-card"><h2>매수·매도 내역</h2><p>매매는 가상 체결이며, 편도 거래비용 0.10%를 반영합니다. 날짜는 미국 체결 거래일입니다.</p>
           {!visibleTrades.length ? <p>체결 내역이 없습니다.</p> : <div className="portfolio-report-table-wrap"><table><thead><tr><th>체결일</th><th>종목</th><th>매매</th><th>수량</th><th>체결가</th><th>거래금액</th><th>거래비용</th><th>실현손익</th><th>변경 사유 / 판단 기준일</th></tr></thead><tbody>{[...visibleTrades].reverse().map(item => <tr key={item.id}><td>{item.executionDate}</td><td>{item.ticker}</td><td>{item.side === "BUY" ? "매수" : "매도"}</td><td>{item.shares}주</td><td>{money(item.price)}</td><td>{money(item.shares * item.price)}</td><td>{money(item.fee)}</td><td>{item.side === "SELL" ? signed(item.realizedPnl) : "—"}</td><td>{item.reason}<small>미국 {item.signalDate} 종가</small></td></tr>)}</tbody></table></div>}
         </section>
-        <section className="portfolio-report-card"><h2>일별 자산 기록</h2><div className="portfolio-report-table-wrap"><table><thead><tr><th>한국 보고일</th><th>미국장 기준일</th><th>총자산</th><th>현금</th><th>현금 비중</th><th>S&amp;P 500 ETF 비중</th><th>총손익</th><th>수익률</th><th>체결</th></tr></thead><tbody>{[...visibleDays].reverse().map(item => { const mix = allocation(item); return <tr key={item.reportDate}><td><button type="button" onClick={() => setViewDate(item.reportDate)}>{item.reportDate}</button></td><td>{item.marketDate}</td><td>{money(item.equity)}</td><td>{money(item.cash)}</td><td>{share(mix.cash)}</td><td>{share(mix.ivv)}</td><td>{signed(item.totalPnl)}</td><td>{pct(item.returnRate)}</td><td>{item.trades.length}건</td></tr>; })}</tbody></table></div></section>
+        <section className="portfolio-report-card"><h2>일별 자산 기록</h2><div className="portfolio-report-table-wrap"><table><thead><tr><th>한국 보고일</th><th>미국장 기준일</th><th>총자산</th><th>현금</th><th>현금 비중</th><th>단기국채 BIL 비중</th><th>S&amp;P 500 ETF 비중</th><th>총손익</th><th>수익률</th><th>체결</th></tr></thead><tbody>{[...visibleDays].reverse().map(item => { const mix = allocation(item); return <tr key={item.reportDate}><td><button type="button" onClick={() => setViewDate(item.reportDate)}>{item.reportDate}</button></td><td>{item.marketDate}</td><td>{money(item.equity)}</td><td>{money(item.cash)}</td><td>{share(mix.cash)}</td><td>{share(mix.bil)}</td><td>{share(mix.ivv)}</td><td>{signed(item.totalPnl)}</td><td>{pct(item.returnRate)}</td><td>{item.trades.length}건</td></tr>; })}</tbody></table></div></section>
         <button type="button" className="portfolio-report-secondary" disabled={busy} onClick={() => {
           if (!window.confirm(`현재 ${info.label.split(" ")[0]} 계좌를 백업 보관하고 새 시작일·투자금·현금 비중으로 시작할까요?`)) return;
           try { localStorage.setItem(`${accountKey(strategy)}.previous`, JSON.stringify(account)); localStorage.removeItem(accountKey(strategy)); setAccounts(previous => ({ ...previous, [strategy]: null })); setViewDate(""); }

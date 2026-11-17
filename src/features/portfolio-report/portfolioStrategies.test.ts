@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PortfolioStrategyInputs } from "../../api/portfolioReport";
-import { advanceAccount, createAccount, withCoreQuote } from "./portfolioReportModel";
-import { MissingStrategyInputs, i2Weights, s1Names } from "./portfolioStrategies";
+import { advanceAccount, createAccount, withCashQuote, withCoreQuote } from "./portfolioReportModel";
+import { MissingStrategyInputs, i2Weights } from "./portfolioStrategies";
 import { chain, fixture } from "./accountTestData";
 
 function inputs(day: string, market: string, returns: Record<string, number[]> = {}): PortfolioStrategyInputs {
@@ -33,23 +33,43 @@ describe("I2 half-Kelly sizing", () => {
   });
 });
 
-describe("S1 selection", () => {
-  it("orders the leader pool by momentum and keeps one stock per GICS sector", () => {
-    const report = fixture();
-    const { names } = s1Names(report, inputs("2026-08-31", "2026-08-28"), [], 10000);
-    // B (IT, 0.9) -> Z (Energy, 0.8) -> C (Energy, skipped) -> D (Health Care, 0.3) ; A (IT) skipped.
-    expect(names.map(item => item.ticker)).toEqual(["IVV", "B", "Z", "D"]);
-    expect(names[0].weight).toBe(0.2); expect(names[1].weight).toBeCloseTo(0.8 / 3);
+const returns = { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) };
+const dataFor = (reports: ReturnType<typeof chain>) => Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date, returns)]));
+
+describe("C1 = I2 with the cash share held in BIL", () => {
+  it("uses the same stocks and weights as I2 and puts the remaining share in BIL", () => {
+    const reports = chain(), data = dataFor(reports);
+    const i2 = advanceAccount(createAccount("2026-08-31", 10000, "i2"), reports, data).days.at(-1)!;
+    const c1 = advanceAccount(createAccount("2026-08-31", 10000, "c1"), reports, data).days.at(-1)!;
+    const { BIL: bil, ...rest } = c1.targetWeights!;
+    expect(rest).toEqual(i2.targetWeights);
+    const invested = Object.values(rest).reduce((sum, value) => sum + value, 0);
+    expect(bil).toBeCloseTo(1 - invested, 9);
+    expect(bil).toBeGreaterThanOrEqual(0.4 - 1e-9);
+    const held = c1.holdings.find(item => item.ticker === "BIL")!;
+    expect(held.value / c1.equity).toBeGreaterThan(bil - 0.03);
+    expect(c1.cash / c1.equity).toBeLessThan(0.05);
+    expect(i2.cash / i2.equity).toBeGreaterThan(0.35);
+    expect(c1.selectionDetails!.find(item => item.ticker === "BIL")!.reason).toContain("단기국채 ETF(BIL)");
   });
-  it("skips names whose one share is unaffordable for the account", () => {
-    const report = fixture(); report.candidates.find(item => item.ticker === "B")!.close = 5000; report.quotes.B.close = 5000;
-    const { names } = s1Names(report, inputs("2026-08-31", "2026-08-28"), [], 10000);
-    expect(names.map(item => item.ticker)).not.toContain("B");
+  it("lowers the BIL share when a smaller cash share is chosen", () => {
+    const reports = chain(), data = dataFor(reports);
+    const design = advanceAccount(createAccount("2026-08-31", 10000, "c1"), reports, data).days.at(-1)!.targetWeights!;
+    const thirty = advanceAccount(createAccount("2026-08-31", 10000, "c1", 0.3), reports, data).days.at(-1)!.targetWeights!;
+    expect(thirty.BIL).toBeLessThan(design.BIL);
+    expect(Object.values(thirty).reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 9);
+  });
+  it("stops instead of trading when the BIL close is missing or from another session", () => {
+    const reports = chain().map(report => { const quotes: Record<string, typeof report.quotes.IVV> = { ...report.quotes }; delete quotes.BIL; return { ...report, quotes }; });
+    expect(() => advanceAccount(createAccount("2026-08-31", 10000, "c1"), reports, dataFor(reports))).toThrow("BIL");
+    const report = fixture();
+    expect(() => withCashQuote(report, { schema_version: 1, report_date_kst: report.report_date_kst, signal_market_date: "2026-08-27",
+      ticker: "BIL", name: "x", proxy_for: "cash", close: 91 })).toThrow("미국장 기준일");
   });
 });
 
 describe("weighted accounts", () => {
-  it("requires published inputs before an I2/S1 decision and leaves planned cash for I2", () => {
+  it("requires published inputs before an I2/C1 decision and leaves planned cash for I2", () => {
     const reports = chain();
     expect(() => advanceAccount(createAccount("2026-08-31", 10000, "i2"), reports)).toThrow(MissingStrategyInputs);
     const data = Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
@@ -60,9 +80,7 @@ describe("weighted accounts", () => {
     const ivv = day.holdings.find(item => item.ticker === "SPYM")!;
     expect(ivv.value / day.equity).toBeGreaterThan(0.17); expect(ivv.value / day.equity).toBeLessThan(0.21);
     expect(day.cash / day.equity).toBeGreaterThan(0.35);
-    const s1 = advanceAccount(createAccount("2026-08-31", 10000, "s1"), reports, data);
-    expect(s1.days.at(-1)!.holdings.map(item => item.ticker).sort()).toEqual(["B", "D", "SPYM", "Z"]);
-    expect(s1.days.at(-1)!.cash / s1.days.at(-1)!.equity).toBeLessThan(0.05);
+    expect(() => advanceAccount(createAccount("2026-08-31", 10000, "c1"), reports)).toThrow(MissingStrategyInputs);
   });
 });
 
@@ -74,10 +92,12 @@ describe("S&P 500 core ETF substitution", () => {
       return withCoreQuote({ ...report, quotes }, { schema_version: 1, report_date_kst: report.report_date_kst,
         signal_market_date: report.signal_market_date, ticker: "SPYM", name: "SPDR Portfolio S&P 500 ETF", proxy_for: "IVV", close: 88 });
     });
-    for (const strategy of ["i1", "i2", "s1"] as const) {
+    for (const strategy of ["i1", "i2", "c1"] as const) {
       const data = Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
         { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
-      const day = advanceAccount(createAccount("2026-08-31", 2819, strategy), reports, data).days.at(-1)!;
+      const priced = strategy === "c1" ? reports.map(report => withCashQuote(report, { schema_version: 1, report_date_kst: report.report_date_kst,
+        signal_market_date: report.signal_market_date, ticker: "BIL", name: "SPDR Bloomberg 1-3 Month T-Bill ETF", proxy_for: "cash", close: 91 })) : reports;
+      const day = advanceAccount(createAccount("2026-08-31", 2819, strategy), priced, data).days.at(-1)!;
       const core = day.holdings.find(item => item.ticker === "SPYM");
       expect(core, strategy).toBeTruthy();
       expect(core!.value / day.equity).toBeGreaterThan(0.15);
@@ -95,9 +115,9 @@ describe("S&P 500 core ETF substitution", () => {
 describe("chosen cash reserve", () => {
   const data = (reports: ReturnType<typeof chain>) => Object.fromEntries(reports.map(r => [r.report_date_kst, inputs(r.report_date_kst, r.signal_market_date,
     { IVV: series(1, 0.0004), A: series(2, 0.003), B: series(3, 0.002), C: series(4, 0.001), D: series(5, 0.0015) })]));
-  it("I1/S1: keeps the chosen share in cash by scaling every target weight (default 0%)", () => {
+  it("I1: keeps the chosen share in cash by scaling every target weight (default 0%)", () => {
     const reports = chain();
-    for (const strategy of ["i1", "s1"] as const) {
+    for (const strategy of ["i1"] as const) {
       expect(createAccount("2026-08-31", 10000, strategy).cashReserve, strategy).toBeUndefined();
       const reserved = advanceAccount(createAccount("2026-08-31", 10000, strategy, 0.3), reports, data(reports));
       const day = reserved.days.at(-1)!;

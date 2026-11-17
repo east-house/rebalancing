@@ -1,13 +1,13 @@
-"""Supplementary per-report inputs for the I2 and S1 browser accounts.
+"""Supplementary per-report inputs for the I2 and C1 browser accounts.
 
 Published I1 reports stay immutable. This module publishes a separate object
 ``portfolio-reports/strategy-inputs/{reportDate}.json`` that holds only the
-price-derived values the browser needs to size I2 and to rank S1:
+price-derived values the browser needs to size I2/C1 (C1 = I2 with its cash share held in BIL):
 
 * I2: daily returns (last 252 sessions through the report's US signal session)
   for IVV and the top-ranked I1 candidates, plus the research fee constant.
   The browser solves the same half-Kelly problem as ``src/us_i2_strategy.py``.
-* S1: 12-1 momentum and GICS sector for every I1 candidate.
+* 12-1 momentum, GICS sector and the S1 policy are still published for compatibility; the browser no longer uses them (S1 was replaced by C1).
 
 No date/time rule is defined here: the report's own ``signal_market_date`` is
 the only cutoff, and no observation after that session is used.
@@ -41,6 +41,10 @@ S1_POLICY = {
 # is several hundred dollars), so browser accounts hold the same S&P 500 exposure
 # through a low-priced ETF. IVV stays the signal/sizing proxy inside the reports.
 CORE_ETF = {"ticker": "SPYM", "name": "SPDR Portfolio S&P 500 ETF", "proxy_for": "IVV"}
+# C1 accounts hold their planned (idle) cash in a 1-3 month Treasury bill ETF.
+CASH_ETF = {"ticker": "BIL", "name": "SPDR Bloomberg 1-3 Month T-Bill ETF", "proxy_for": "cash"}
+# (spec, logical folder) of the per-report ETF closes published beside the immutable I1 report.
+ETF_QUOTES = {"core": (CORE_ETF, "core-quotes"), "cash": (CASH_ETF, "cash-quotes")}
 I2_POLICY = {"ivv_weight": 0.20, "stock_cap_each_full_kelly": 0.40, "stock_budget_full_kelly": 0.80,
              "kelly_fraction": 0.5, "lookback": RETURN_LOOKBACK, "min_observations": RETURN_MIN_OBSERVATIONS,
              "fee_daily": I2_FEE_DAILY}
@@ -56,7 +60,7 @@ def _finite(value: Any) -> float | None:
 
 def compute_strategy_inputs(closes: pd.DataFrame, signal_date: str | pd.Timestamp, candidates: list[dict],
                             gics: dict[str, str], *, report_date: str, source: str) -> dict:
-    """Derive I2/S1 inputs from closes known on ``signal_date`` (inclusive)."""
+    """Derive I2/C1 inputs from closes known on ``signal_date`` (inclusive)."""
     signal = pd.Timestamp(signal_date)
     history = closes.sort_index().loc[:signal]
     if history.empty or history.index[-1] != signal:
@@ -106,33 +110,52 @@ def stage_inputs(store, day: str, inputs: dict) -> None:
     store.stage(f"portfolio-reports/strategy-inputs/{day}.json", inputs)
 
 
-def core_quote_from_frame(frame: pd.DataFrame, signal_date: str, *, report_date: str, source: str) -> dict:
-    """Close of the account core ETF on the report's US signal session (exact date only)."""
+def etf_quote_from_frame(frame: pd.DataFrame, signal_date: str, *, report_date: str, source: str, spec: dict) -> dict:
+    """Close of an account ETF on the report's US signal session (exact date only)."""
     signal = pd.Timestamp(signal_date).normalize()
     rows = frame.loc[pd.to_datetime(frame["date"]).dt.normalize().eq(signal)].dropna(subset=["close"])
     close = _finite(rows["close"].iloc[-1]) if not rows.empty else None
     if close is None or close <= 0:
-        raise ValueError(f"{CORE_ETF['ticker']} close is missing for US session {signal.date()}")
+        raise ValueError(f"{spec['ticker']} close is missing for US session {signal.date()}")
     return {"schema_version": 1, "report_date_kst": report_date, "signal_market_date": str(signal.date()),
-            **CORE_ETF, "close": round(close, 6), "source": source}
+            **spec, "close": round(close, 6), "source": source}
 
 
-def fetch_core_frame(first_signal: str, last_signal: str) -> pd.DataFrame:
+def fetch_etf_frame(ticker: str, first_signal: str, last_signal: str) -> pd.DataFrame:
     from .support import _download_yahoo_frame
-    return _download_yahoo_frame(CORE_ETF["ticker"], pd.Timestamp(first_signal) - pd.Timedelta(days=7),
+    return _download_yahoo_frame(ticker, pd.Timestamp(first_signal) - pd.Timedelta(days=7),
                                  pd.Timestamp(last_signal) + pd.Timedelta(days=1), timeout=20, max_retries=4)
 
 
-def core_quote_for_payload(payload: dict) -> dict:
+def etf_quote_for_payload(payload: dict, kind: str) -> dict:
+    spec = ETF_QUOTES[kind][0]
     signal = payload["signal_market_date"]
-    return core_quote_from_frame(fetch_core_frame(signal, signal), signal, report_date=payload["report_date_kst"],
-                                 source="Yahoo adjusted close collected at publication")
+    return etf_quote_from_frame(fetch_etf_frame(spec["ticker"], signal, signal), signal, report_date=payload["report_date_kst"],
+                                source="Yahoo adjusted close collected at publication", spec=spec)
+
+
+def stage_etf_quote(store, day: str, quote: dict, kind: str) -> None:
+    spec, folder = ETF_QUOTES[kind]
+    if quote.get("report_date_kst") != day or quote.get("ticker") != spec["ticker"]:
+        raise ValueError(f"{kind} ETF quote date or ticker mismatch")
+    store.stage(f"portfolio-reports/{folder}/{day}.json", quote)
+
+
+# Backward-compatible core (SPYM) helpers.
+def core_quote_from_frame(frame: pd.DataFrame, signal_date: str, *, report_date: str, source: str) -> dict:
+    return etf_quote_from_frame(frame, signal_date, report_date=report_date, source=source, spec=CORE_ETF)
+
+
+def fetch_core_frame(first_signal: str, last_signal: str) -> pd.DataFrame:
+    return fetch_etf_frame(CORE_ETF["ticker"], first_signal, last_signal)
+
+
+def core_quote_for_payload(payload: dict) -> dict:
+    return etf_quote_for_payload(payload, "core")
 
 
 def stage_core_quote(store, day: str, quote: dict) -> None:
-    if quote.get("report_date_kst") != day:
-        raise ValueError("Core ETF quote date mismatch")
-    store.stage(f"portfolio-reports/core-quotes/{day}.json", quote)
+    stage_etf_quote(store, day, quote, "core")
 
 
 # ---------------------------------------------------------------- backfill for already published reports
@@ -185,26 +208,32 @@ def _refresh_prices(symbols: set[str], days: list[str], output: Path) -> dict[st
     return failures
 
 
-def _backfill_core_quotes(store, index: dict, days: list[str] | None, output: Path) -> tuple[list[str], dict]:
+def _backfill_etf_quotes(store, index: dict, days: list[str] | None, output: Path, kind: str) -> tuple[list[str], dict]:
+    spec, folder = ETF_QUOTES[kind]
     sessions = {item["reportDate"]: item["marketDate"] for item in index["reports"]
                 if not days or item["reportDate"] in set(days)}
-    missing = sorted(day for day in sessions if f"portfolio-reports/core-quotes/{day}.json" not in store.manifest["objects"])
+    missing = sorted(day for day in sessions if f"portfolio-reports/{folder}/{day}.json" not in store.manifest["objects"])
     if not missing:
         return [], {}
     try:
-        frame = fetch_core_frame(min(sessions[day] for day in missing), max(sessions[day] for day in missing))
+        first, last = min(sessions[day] for day in missing), max(sessions[day] for day in missing)
+        frame = fetch_core_frame(first, last) if kind == "core" else fetch_etf_frame(spec["ticker"], first, last)
     except Exception as error:  # record, never hide
         return [], {day: f"{type(error).__name__}: {error}" for day in missing}
     done, failed = [], {}
     for day in missing:
         try:
-            quote = core_quote_from_frame(frame, sessions[day], report_date=day, source="Yahoo adjusted close (backfill)")
-            write_json(quote, output / "core-quotes" / f"{day}.json")
-            stage_core_quote(store, day, quote)
+            quote = etf_quote_from_frame(frame, sessions[day], report_date=day, source="Yahoo adjusted close (backfill)", spec=spec)
+            write_json(quote, output / folder / f"{day}.json")
+            stage_etf_quote(store, day, quote, kind)
             done.append(day)
         except Exception as error:
             failed[day] = str(error)
     return done, failed
+
+
+def _backfill_core_quotes(store, index: dict, days: list[str] | None, output: Path) -> tuple[list[str], dict]:
+    return _backfill_etf_quotes(store, index, days, output, "core")
 
 
 def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[str] | None = None) -> dict:
@@ -237,16 +266,18 @@ def backfill(store, *, output: Path, refresh_prices: bool = False, days: list[st
         except Exception as error:  # record, never hide
             failed[day] = str(error)
     core_done, core_failed = _backfill_core_quotes(store, index, days, output)
+    cash_done, cash_failed = _backfill_etf_quotes(store, index, days, output, "cash")
     result = {"requested": missing, "staged": done, "failed": failed, "priceRefreshFailed": price_failures,
-              "coreQuotesStaged": core_done, "coreQuotesFailed": core_failed}
-    if done or core_done:
+              "coreQuotesStaged": core_done, "coreQuotesFailed": core_failed,
+              "cashQuotesStaged": cash_done, "cashQuotesFailed": cash_failed}
+    if done or core_done or cash_done:
         store.commit()
     write_json(result, output / "backfill.json")
     return result
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill I2/S1 strategy inputs for published portfolio reports")
+    parser = argparse.ArgumentParser(description="Backfill I2/C1 strategy inputs and account ETF closes for published portfolio reports")
     parser.add_argument("--output", type=Path, default=Path("action-output/portfolio-strategy-inputs"))
     parser.add_argument("--refresh-prices", action="store_true")
     parser.add_argument("--day", action="append")
@@ -256,7 +287,7 @@ def main():
     result = backfill(ReportStore.from_environment("portfolio"), output=args.output,
                       refresh_prices=args.refresh_prices, days=args.day)
     print(json.dumps(result, ensure_ascii=False))
-    if result["failed"] or result["coreQuotesFailed"]:
+    if result["failed"] or result["coreQuotesFailed"] or result["cashQuotesFailed"]:
         raise SystemExit(1)
 
 

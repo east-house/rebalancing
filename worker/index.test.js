@@ -219,6 +219,17 @@ describe("portfolio report Worker API", () => {
     expect(dashboard.status).toBe(400);
   });
 
+  it("serves the BIL cash quote beside portfolio reports only", async () => {
+    const worker = (await import("./index.js")).default;
+    const manifest = { releaseId: "r1", objects: { "portfolio-reports/cash-quotes/2026-09-14.json": { key: "obj/cash", contentType: "application/json" } } };
+    const get = vi.fn(async (key) => key.endsWith("/current.json") ? { body: JSON.stringify(manifest) } : { body: JSON.stringify({ schema_version: 1 }) });
+    const response = await worker.fetch(new Request("https://example.com/api/portfolio-reports/2026-09-14/cash-quote"), { MARKET_DATA: { get } }, {});
+    expect(response.status).toBe(200);
+    expect(get).toHaveBeenCalledWith("obj/cash");
+    const rejected = await worker.fetch(new Request("https://example.com/api/trading-test-reports/2026-09-14/cash-quote"), { MARKET_DATA: { get } }, {});
+    expect(rejected.status).toBe(400);
+  });
+
   it("serves the SPYM core quote beside portfolio reports only", async () => {
     const worker = (await import("./index.js")).default;
     const manifest = { releaseId: "r1", objects: { "portfolio-reports/core-quotes/2026-09-14.json": { key: "obj/core", contentType: "application/json" } } };

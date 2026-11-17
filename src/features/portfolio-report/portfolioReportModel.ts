@@ -1,5 +1,5 @@
-import type { PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
-import { DEFAULT_CASH, MAX_CASH, MissingStrategyInputs, STRATEGIES, i2Weights, s1Names, type StrategyId } from "./portfolioStrategies";
+import type { PortfolioCashQuote, PortfolioCoreQuote, PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
+import { DEFAULT_CASH, MAX_CASH, MissingStrategyInputs, STRATEGIES, i2Weights, usesKelly, type StrategyId } from "./portfolioStrategies";
 
 export interface Holding {
   ticker: string; name: string; shares: number; cost: number;
@@ -37,14 +37,14 @@ export interface PortfolioAccount {
   strategy?: StrategyId;
   targetWeights?: Record<string, number>;
   /**
-   * Chosen cash share. I1/S1: kept uninvested at every rebalance (absent = 0).
-   * I2: replaces the design's planned cash (absent = 40%, the original design).
+   * Chosen cash share. I1: kept uninvested at every rebalance (absent = 0).
+   * I2/C1: replaces the design's planned cash (absent = 40%, the original design); C1 holds it in BIL.
    */
   cashReserve?: number;
 }
 export const ACCOUNT_KEY = "stock_strategy.us_portfolio.integer.v3";
 export const LEGACY_KEY = "stock_strategy.us_portfolio.device.v1";
-/** I1 keeps its original storage key; I2 and S1 accounts are stored separately. */
+/** I1 keeps its original storage key; I2 and C1 accounts are stored separately. */
 export const accountKey = (strategy: StrategyId) => strategy === "i1" ? ACCOUNT_KEY : `${ACCOUNT_KEY}.${strategy}`;
 export const strategyOf = (account: PortfolioAccount): StrategyId => account.strategy ?? "i1";
 export const cashReserveOf = (account: PortfolioAccount): number => account.cashReserve ?? DEFAULT_CASH[strategyOf(account)];
@@ -64,7 +64,7 @@ export function createAccount(startDate: string, initialCapital: number, strateg
   }
   return { version: 3, startDate, initialCapital, createdAt: new Date().toISOString(),
     cash: initialCapital, holdings: [], trades: [], days: [], targetNames: [], reviewedMonth: "", pending: null,
-    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }), ...(strategy === "i2" || cashReserve > 0 ? { cashReserve } : {}) };
+    ...(strategy === "i1" ? {} : { strategy, targetWeights: {} }), ...(usesKelly(strategy) || cashReserve > 0 ? { cashReserve } : {}) };
 }
 const targetWeight = (order: Order, ticker: string) => {
   const item = order.names.find(name => name.ticker === ticker);
@@ -86,11 +86,25 @@ export function withCoreQuote(report: Report, quote: PortfolioCoreQuote): Report
   const base = report.quotes[SIGNAL_CORE] ?? { sector: "ETF", rank: null, themes: "", score: null, base_score: null, theme_strength: null, trend_200: null };
   return { ...report, quotes: { ...report.quotes, [CORE_ETF]: { ...base, ticker: CORE_ETF, name: quote.name, close: quote.close } } };
 }
+/** C1 holds its planned cash share in a 1-3 month Treasury bill ETF. */
+export const CASH_ETF = "BIL";
+export const isCashEtf = (ticker: string) => ticker === CASH_ETF;
+/** Adds the published BIL close of the report's US session to the report quotes (in memory only). */
+export function withCashQuote(report: Report, quote: PortfolioCashQuote): Report {
+  if (quote.report_date_kst !== report.report_date_kst || quote.signal_market_date !== report.signal_market_date || quote.ticker !== CASH_ETF) {
+    throw new Error(`${report.report_date_kst}: 단기국채 ETF(BIL) 종가의 미국장 기준일이 보고서와 다릅니다.`);
+  }
+  return { ...report, quotes: { ...report.quotes, [CASH_ETF]: { ticker: CASH_ETF, name: quote.name, sector: "현금 대체", close: quote.close,
+    rank: null, themes: "단기 국채", score: null, base_score: null, theme_strength: null, trend_200: null } } };
+}
 const toCore = <T extends { ticker: string; name: string }>(item: T, report: Report): T =>
   item.ticker === SIGNAL_CORE ? { ...item, ticker: CORE_ETF, name: report.quotes[CORE_ETF]?.name ?? "SPDR Portfolio S&P 500 ETF" } : item;
 /** Account targets refer to SPYM; the report's selection rules refer to IVV. */
 const asSignal = (tickers: string[]) => tickers.map(ticker => ticker === CORE_ETF ? SIGNAL_CORE : ticker);
 function price(report: Report, ticker: string): number {
+  if (ticker === CASH_ETF && !report.quotes[CASH_ETF]) {
+    throw new Error(`${report.report_date_kst}: 단기국채 ETF(BIL) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
+  }
   if (ticker === CORE_ETF && !report.quotes[CORE_ETF]) {
     throw new Error(`${report.report_date_kst}: S&P 500 ETF(SPYM) 종가 자료가 아직 게시되지 않았습니다. 'Backfill portfolio strategy inputs' 워크플로를 실행하면 생성됩니다.`);
   }
@@ -215,8 +229,8 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
       } else {
         const input = inputs[day];
         if (!input) throw new MissingStrategyInputs(day);
-        if (input.signal_market_date !== report.signal_market_date) throw new Error(`${day}: I2·S1 계산 자료의 미국장 기준일이 보고서와 다릅니다.`);
-        if (strategy === "i2") {
+        if (input.signal_market_date !== report.signal_market_date) throw new Error(`${day}: I2·C1 계산 자료의 미국장 기준일이 보고서와 다릅니다.`);
+        {
           const base = initial ? report.selection.map(({ ticker, name }) => ({ ticker, name })) : selectNames(report, asSignal(account.targetNames));
           const sized = i2Weights(input, base.map(item => item.ticker).filter(ticker => ticker !== "IVV"));
           // The chosen cash share replaces the design's planned cash: the half-Kelly stock
@@ -227,21 +241,27 @@ export function advanceAccount(original: PortfolioAccount, reports: Report[], in
             .map(item => ({ ...item, weight: item.ticker === "IVV" ? sized.weights.IVV : (sized.weights[item.ticker] ?? 0) * scale }));
           for (const item of names) notes[item.ticker] = item.ticker === "IVV" ? "시장 코어 20% 고정 (S&P 500 ETF, IVV 수익률로 비중 계산)"
             : `I1 선정 종목 · 하프 켈리 ${((sized.weights[item.ticker] ?? 0) * 100).toFixed(1)}%${Math.abs(scale - 1) < 1e-9 ? "" : ` × ${scale.toFixed(2)} = ${(item.weight! * 100).toFixed(1)}%`} (현금 비중 ${Math.round(reserve * 100)}% → 개별 종목 한도 ${Math.round(ceiling * 100)}%)${sized.fallback ? ` · 관측 ${sized.observations}일 부족 등으로 균등 배분` : ` · 최근 ${sized.observations}거래일 수익률`}`;
-        } else {
-          const picked = s1Names(report, input, asSignal(account.targetNames), equity * (1 - reserve));
-          names = picked.names.map(({ ticker, name, weight }) => ({ ticker, name, weight }));
-          for (const item of picked.names) notes[item.ticker] = item.note ?? "";
         }
       }
       if (notes[SIGNAL_CORE] !== undefined) notes[CORE_ETF] = notes[SIGNAL_CORE];
-      names = names.map(item => toCore(item, report));
-      if (reserve > 0 && strategy !== "i2") {
-        // I1/S1: scale every target so the chosen cash share stays uninvested at each rebalance.
+      names = names.map(item => toCore(item, report)).filter(item => item.ticker !== CASH_ETF);
+      if (strategy === "c1") {
+        // C1: the cash share left by the I2 sizing (chosen cash + unused Kelly budget) is held in BIL.
+        const invested = names.reduce((sum, item) => sum + (item.weight ?? 0), 0), bill = Math.max(0, 1 - invested);
+        if (bill > 1e-9) {
+          names = [...names, { ticker: CASH_ETF, name: report.quotes[CASH_ETF]?.name ?? "SPDR Bloomberg 1-3 Month T-Bill ETF", weight: bill }];
+          notes[CASH_ETF] = `남는 현금 몫 ${(bill * 100).toFixed(1)}% → 단기국채 ETF(BIL) (현금 비중 ${Math.round(reserve * 100)}% + 하프 켈리 미사용분)`;
+        }
+      }
+      if (reserve > 0 && strategy === "i1") {
+        // I1: scale every target so the chosen cash share stays uninvested at each rebalance.
         const count = names.length;
         names = names.map(item => ({ ...item, weight: (item.weight ?? 1 / count) * (1 - reserve) }));
       }
       const changed = names.length !== account.targetNames.length || names.some(item => !account.targetNames.includes(item.ticker));
       selectionDetails = names.map(item => {
+        if (item.ticker === CASH_ETF) return { ticker: item.ticker, rank: 0, score: 0, baseScore: 0, themeScore: 0, sector: "현금 대체",
+          theme: "1~3개월 미국 국채", ...(item.weight === undefined ? {} : { weight: item.weight }), reason: notes[CASH_ETF] ?? "남는 현금 몫 → BIL" };
         const candidate = report.candidates.find(row => row.ticker === (item.ticker === CORE_ETF ? SIGNAL_CORE : item.ticker))!;
         return { ticker: item.ticker, rank: candidate.rank, score: candidate.score, baseScore: candidate.base_score,
           themeScore: candidate.theme_strength, sector: candidate.sector, theme: candidate.themes,

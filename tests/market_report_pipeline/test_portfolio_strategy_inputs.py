@@ -108,3 +108,25 @@ def test_core_quote_backfill_fills_only_missing_days(monkeypatch, tmp_path):
     done, failed = module._backfill_core_quotes(store, index, None, tmp_path)
     assert done == ["2026-09-15"] and list(failed) == ["2026-09-16"]
     assert store.staged and "portfolio-reports/core-quotes/2026-09-15.json" in store.staged
+
+
+def test_cash_quote_publication_and_backfill(monkeypatch, tmp_path):
+    from market_report_pipeline import portfolio_strategy_inputs as module
+    now = datetime(2026, 9, 14, 10, 15, tzinfo=timezone.utc)
+    monkeypatch.setattr(report_time, "utc_now", lambda: now)
+    frame = pd.DataFrame({"date": pd.to_datetime(["2026-09-11", "2026-09-14"]), "close": [91.1, 91.2]})
+    quote = module.etf_quote_from_frame(frame, "2026-09-11", report_date="2026-09-14", source="t", spec=module.CASH_ETF)
+    assert quote["ticker"] == "BIL" and quote["close"] == 91.1 and quote["proxy_for"] == "cash"
+    store = ReportStore(FakeS3(), "b", "portfolio")
+    payload = {"report_date_kst": "2026-09-14", "signal_market_date": "2026-09-11", "proposed_execution_date": "2026-09-14", "generated_at": now.isoformat()}
+    evening.publish_portfolio(store, "2026-09-14", dict(payload), None, None, quote)
+    assert store.load("portfolio-reports/cash-quotes/2026-09-14.json") == quote
+    with pytest.raises(ValueError, match="ticker mismatch"):
+        module.stage_etf_quote(store, "2026-09-14", {**quote, "ticker": "SPYM"}, "cash")
+    other = ReportStore(FakeS3(), "b", "portfolio")
+    index = {"reports": [{"reportDate": "2026-09-14", "marketDate": "2026-09-11"}, {"reportDate": "2026-09-15", "marketDate": "2026-09-14"}]}
+    calls = []
+    monkeypatch.setattr(module, "fetch_etf_frame", lambda ticker, first, last: calls.append(ticker) or frame)
+    done, failed = module._backfill_etf_quotes(other, index, None, tmp_path, "cash")
+    assert calls == ["BIL"] and done == ["2026-09-14", "2026-09-15"] and not failed
+    assert other.staged["portfolio-reports/cash-quotes/2026-09-15.json"]

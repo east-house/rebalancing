@@ -1,5 +1,5 @@
-name: Backfill portfolio strategy inputs (I2/S1)
-# Adds supplementary I2/S1 inputs beside already published I1 portfolio reports.
+name: Backfill portfolio strategy inputs (I2/C1)
+# Adds supplementary I2/C1 inputs and account ETF closes (SPYM core, BIL cash) beside already published I1 portfolio reports.
 # Published I1 report objects are not modified. Manual trigger only; no schedule.
 on:
   workflow_dispatch:

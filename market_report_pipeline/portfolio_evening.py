@@ -28,7 +28,7 @@ def initialize_archive(store: ReportStore, morning: ReportStore) -> None:
 
 
 def publish_portfolio(store: ReportStore, day: str, payload: dict, inputs: dict | None = None,
-                      core_quote: dict | None = None) -> None:
+                      core_quote: dict | None = None, cash_quote: dict | None = None) -> None:
     if day < PORTFOLIO_EVENING_START or day not in due_dates("portfolio", day, set()):
         raise ValueError("Portfolio report is not due yet")
     context = report_context(day, "portfolio")
@@ -51,13 +51,17 @@ def publish_portfolio(store: ReportStore, day: str, payload: dict, inputs: dict 
     ordered = sorted(entries.values(), key=lambda item: item["reportDate"], reverse=True)
     store.stage(key, payload)
     if inputs is not None:
-        # Supplementary I2/S1 inputs; the I1 report object itself is unchanged.
+        # Supplementary I2/C1 inputs; the I1 report object itself is unchanged.
         from .portfolio_strategy_inputs import stage_inputs
         stage_inputs(store, day, inputs)
     if core_quote is not None:
         # Account core ETF (SPYM) close for integer-share browser accounts; separate object.
         from .portfolio_strategy_inputs import stage_core_quote
         stage_core_quote(store, day, core_quote)
+    if cash_quote is not None:
+        # C1 cash ETF (BIL) close; separate object.
+        from .portfolio_strategy_inputs import stage_etf_quote
+        stage_etf_quote(store, day, cash_quote, "cash")
     store.stage("portfolio-reports/index.json", {"schemaVersion": 1, "reports": ordered, "latestReportDate": ordered[0]["reportDate"]})
     if day == ordered[0]["reportDate"]:
         store.stage("portfolio-reports/latest.json", payload)
@@ -104,7 +108,7 @@ def main():
                 from .portfolio_strategy_inputs import inputs_from_market_data
                 inputs = inputs_from_market_data(data, payload)
                 write_json(inputs, output / "strategy-inputs.json")
-            except Exception as input_error:  # I1 publication must not depend on the I2/S1 inputs
+            except Exception as input_error:  # I1 publication must not depend on the I2/C1 inputs
                 write_json({"error": str(input_error)}, output / "strategy-inputs-error.json")
                 print(json.dumps({"date": day, "strategyInputs": "failed", "error": str(input_error)}))
             core_quote = None
@@ -115,7 +119,15 @@ def main():
             except Exception as core_error:  # I1 publication must not depend on the account core ETF quote
                 write_json({"error": str(core_error)}, output / "core-quote-error.json")
                 print(json.dumps({"date": day, "coreQuote": "failed", "error": str(core_error)}))
-            publish_portfolio(store, day, payload, inputs, core_quote)
+            cash_quote = None
+            try:
+                from .portfolio_strategy_inputs import etf_quote_for_payload
+                cash_quote = etf_quote_for_payload(payload, "cash")
+                write_json(cash_quote, output / "cash-quote.json")
+            except Exception as cash_error:  # I1 publication must not depend on the C1 cash ETF quote
+                write_json({"error": str(cash_error)}, output / "cash-quote-error.json")
+                print(json.dumps({"date": day, "cashQuote": "failed", "error": str(cash_error)}))
+            publish_portfolio(store, day, payload, inputs, core_quote, cash_quote)
             print(json.dumps({"date": day, "status": "published", "signalDate": payload["signal_market_date"], "executionDate": payload["proposed_execution_date"]}))
         except Exception as error:
             # Discard staged partial outputs and leave the last complete publication readable.

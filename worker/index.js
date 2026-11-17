@@ -16,15 +16,20 @@ function reportRoute(path) {
     const filename = suffix ? "latest.json" : "index.json";
     return { product, logical: `${group}/${filename}`, fallback: `/data/${group}/${filename}`, type: "application/json" };
   }
-  const date = /^(\d{4}-\d{2}-\d{2})(\/dashboard|\/strategy-inputs|\/core-quote)?$/.exec(suffix);
+  const date = /^(\d{4}-\d{2}-\d{2})(\/dashboard|\/strategy-inputs|\/core-quote|\/cash-quote)?$/.exec(suffix);
   if (!date || date[2] === "/dashboard" && group !== "market-reports"
-    || (date[2] === "/strategy-inputs" || date[2] === "/core-quote") && group !== "portfolio-reports") return { invalid: true };
+    || ["/strategy-inputs", "/core-quote", "/cash-quote"].includes(date[2]) && group !== "portfolio-reports") return { invalid: true };
   const instant = new Date(`${date[1]}T00:00:00Z`);
   if (!Number.isFinite(instant.getTime()) || instant.toISOString().slice(0, 10) !== date[1]) return { invalid: true };
   if (date[2] === "/strategy-inputs") {
-    // Supplementary I2/S1 inputs published beside the immutable I1 report of the same date.
+    // Supplementary I2/C1 inputs published beside the immutable I1 report of the same date.
     return { product, logical: `${group}/strategy-inputs/${date[1]}.json`,
       fallback: `/data/${group}/strategy-inputs/${date[1]}.json`, type: "application/json" };
+  }
+  if (date[2] === "/cash-quote") {
+    // C1 cash ETF (BIL) close published beside the immutable I1 report of the same date.
+    return { product, logical: `${group}/cash-quotes/${date[1]}.json`,
+      fallback: `/data/${group}/cash-quotes/${date[1]}.json`, type: "application/json" };
   }
   if (date[2] === "/core-quote") {
     // Account core ETF (SPYM) close published beside the immutable I1 report of the same date.

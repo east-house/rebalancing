@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadPortfolioReport } from "../../api/portfolioReport";
-import { CORE_ETF, SIGNAL_CORE, isCore, type AccountDay, type SelectionDetail } from "./portfolioReportModel";
+import { CORE_ETF, SIGNAL_CORE, isCashEtf, isCore, type AccountDay, type SelectionDetail } from "./portfolioReportModel";
 import { DEFAULT_CASH, type StrategyId } from "./portfolioStrategies";
 
 const pct0 = (value: number) => `${Math.round(value * 1000) / 10}%`;
@@ -18,15 +18,20 @@ function StrategyRules({ strategy, cashReserve }: { strategy: StrategyId; cashRe
     </ol>
     <p>연구 백테스트(검증 기간 2023-12-29~2026-10-09)는 편도 0.25%·2%p 밴드·$21,000 기준이라 이 계좌와 거래·수익률이 완전히 같지는 않습니다.</p>
   </details>;
-  if (strategy === "s1") return <details><summary>S1은 어떤 규칙으로 종목과 비중을 정하나요?</summary>
+  if (strategy === "c1") return <details><summary>C1은 어떤 규칙으로 종목과 비중을 정하나요?</summary>
     <ol>
-      <li>I1 점수(IVV 제외) 상위 20개를 주도주 후보로 둡니다. 계좌 총자산의 18%(=0.9×20%)로 1주를 살 수 있는 가격의 종목만 후보에 넣습니다.</li>
-      <li>후보를 12-1 모멘텀(최근 1개월 제외 12개월 수익률) 높은 순으로 정렬합니다. 정렬 기준은 연구의 2025-12-31 연간 자동 선택 결과(모멘텀)를 고정한 것입니다.</li>
-      <li>정렬 순서대로 GICS 섹터당 1종목씩 최대 3종목을 고릅니다. 기존 보유 종목은 정렬 5위 이내이면 우선 유지합니다. 섹터 정보가 없는 종목은 독립 섹터로 봅니다.</li>
-      <li>기본 비중은 S&amp;P 500 ETF(SPYM) 20% + 개별 종목 3개 각 26.7%(합계 80%)이며 계획 현금은 0%입니다. 이 계좌: {changed ? `현금 비중 ${pct0(cashReserve)} 설정 (기본 0%) → 모든 목표 비중 × ${(1 - cashReserve).toFixed(2)} (SPYM ${pct0(0.2 * (1 - cashReserve))}, 종목당 ${pct0(0.8 / 3 * (1 - cashReserve))})` : "현금 비중 0% (기본 설계)"}. 정수 단위로 남는 금액은 추가로 현금이 됩니다.</li>
-      <li>최초 투자와 매월 첫 한국 평일 보고서에서 판단하고, 다음 미국 거래일 종가에 체결합니다. 목표와 차이 3%p 미만인 기존 종목은 거래하지 않으며 편도 비용 0.10%를 차감합니다.</li>
+      <li>종목과 비중은 I2와 같습니다. I1이 고른 종목에 최근 252거래일 수익률로 하프 켈리 비중을 구하고, S&amp;P 500 ETF(SPYM) 20%를 고정합니다.</li>
+      <li>I2가 현금으로 두는 몫을 1~3개월 미국 국채 ETF(BIL)로 보유합니다. 이 계좌: {changed ? `현금 몫 ${pct0(cashReserve)} 설정 (기본 40%)` : "현금 몫 40% (기본 설계)"} → 개별 종목 합계 한도 {pct0(ceiling)}, 종목당 최대 {pct0(ceiling / 2)}. 하프 켈리가 한도보다 적게 고른 몫도 BIL로 보유합니다. 1주 단위로 남는 금액만 현금입니다.</li>
+      <li>최초 투자와 매월 첫 한국 평일 보고서에서 종목·비중을 다시 정합니다. 다음 미국 거래일 종가에 정수 주식으로 체결합니다. 목표와의 차이가 3%p 미만인 종목(BIL 포함)은 거래하지 않고, 편도 비용 0.10%를 차감합니다.</li>
+      <li>BIL도 가격이 움직입니다. 배당 지급일마다 가격이 약 0.4% 내려가고 배당으로 보전됩니다. 연구 기간 배당 포함 최대 낙폭은 −0.08%였습니다.</li>
     </ol>
-    <p>연구 결과(현금 없음, IVV 포함): 2021-08-31~2023-12-29 CAGR 11.95%·MDD −27.84%, 2023-12-29~2026-10-09 CAGR 73.92%·MDD −37.90%. 현금이 없어 낙폭이 큽니다. GICS 분류는 게시 시점 S&amp;P 500 명단 기준입니다.</p>
+    <p>연구 결과(I2 대비, $21,000·편도 0.25%·2%p 밴드):</p>
+    <ul>
+      <li>2021-08-31~2023-12-29: CAGR 8.54%(I2 7.44%), MDD −11.33%(−11.59%)</li>
+      <li>2023-12-29~2026-10-09: CAGR 32.38%(30.17%), MDD −15.20%(−15.65%), 샤프 1.52(1.42)</li>
+      <li>신호 후 1~3거래일 늦게 체결해도 CAGR·칼마·샤프·소르티노는 I2보다 높았습니다. MDD·하방 편차·베타는 I2와 사실상 같았습니다(차이 ±0.5%p).</li>
+      <li>개선은 국채 이자에서 나오므로 금리가 내려가면 줄어듭니다.</li>
+    </ul>
   </details>;
   return null;
 }
@@ -66,7 +71,7 @@ export default function PortfolioDecisionReport({ days, releaseId, strategy = "i
     {!day.explanation && <p>이 날짜는 상세 판단 기록을 추가하기 전에 저장된 계좌입니다. 기존 체결은 재계산하지 않으며 아래 점수는 선정 보고서를 다시 조회한 참고 정보입니다.</p>}
     {sourceDate && <p>최근 기록된 선정 판단: {sourceDate} 보고서. 아래는 해당 판단의 목표 종목이며, 실제 보유 수량은 ‘보유 종목과 수익’에서 확인할 수 있습니다.</p>}
     {error && <p role="status">{error}</p>}
-    {!!rows.length && <div className="portfolio-report-table-wrap"><table><thead><tr><th>목표 종목</th><th>선정 순위</th><th>기본 / 테마 / 종합 점수</th><th>분산 분류</th><th>목표 비중</th><th>선정 이유</th></tr></thead><tbody>{rows.map(row => <tr key={row.ticker}><td><strong>{row.ticker}</strong></td><td>{row.rank}위</td><td>{isCore(row.ticker) ? "코어 우선순위 부여" : `${(row.baseScore * 100).toFixed(1)} / ${(row.themeScore * 100).toFixed(1)} / ${(row.score * 100).toFixed(1)}`}</td><td>{row.sector}<small>{row.theme}</small></td><td>{row.weight !== undefined ? `${(row.weight * 100).toFixed(1)}%` : `${(100 / rows.length).toFixed(1)}% (동일)`}</td><td>{row.reason}</td></tr>)}</tbody></table></div>}
+    {!!rows.length && <div className="portfolio-report-table-wrap"><table><thead><tr><th>목표 종목</th><th>선정 순위</th><th>기본 / 테마 / 종합 점수</th><th>분산 분류</th><th>목표 비중</th><th>선정 이유</th></tr></thead><tbody>{rows.map(row => <tr key={row.ticker}><td><strong>{row.ticker}</strong></td><td>{isCashEtf(row.ticker) ? "—" : `${row.rank}위`}</td><td>{isCashEtf(row.ticker) ? "현금 대체" : isCore(row.ticker) ? "코어 우선순위 부여" : `${(row.baseScore * 100).toFixed(1)} / ${(row.themeScore * 100).toFixed(1)} / ${(row.score * 100).toFixed(1)}`}</td><td>{row.sector}<small>{row.theme}</small></td><td>{row.weight !== undefined ? `${(row.weight * 100).toFixed(1)}%` : `${(100 / rows.length).toFixed(1)}% (동일)`}</td><td>{row.reason}</td></tr>)}</tbody></table></div>}
     <StrategyRules strategy={strategy} cashReserve={cashReserve} />
     <details><summary>{strategy === "i1" ? "i1은 어떤 규칙으로 종목을 고르고 매매하나요?" : "참고: I1 점수와 종목 선정 규칙"}</summary>
       <ol>

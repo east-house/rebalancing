@@ -1,6 +1,6 @@
-import type { PortfolioReportPayload as Report, PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
+import type { PortfolioStrategyInputs as Inputs } from "../../api/portfolioReport";
 
-export type StrategyId = "i1" | "i2" | "s1";
+export type StrategyId = "i1" | "i2" | "c1";
 export interface StrategyInfo { id: StrategyId; label: string; title: string; summary: string; }
 
 export const STRATEGIES: StrategyInfo[] = [
@@ -8,23 +8,23 @@ export const STRATEGIES: StrategyInfo[] = [
     summary: "S&P 500 ETF(SPYM, IVV 대체) 포함 최대 5종목 동일비중(각 20%). 현금을 거의 두지 않습니다." },
   { id: "i2", label: "I2", title: "I2 · I1 종목 + 하프 켈리 비중",
     summary: "I1과 같은 종목에 S&P 500 ETF(SPYM) 20% 고정, 개별 종목은 하프 켈리 비율로 합계 한도(80% − 현금 비중) 안에서 배분. 기본 현금 비중 40%(개별 종목 한도 40%)." },
-  { id: "s1", label: "S1", title: "S1 · 주도주 3종목 + 섹터 분산",
-    summary: "I1 점수 상위 20개 주도주를 12-1 모멘텀 순으로 정렬해 GICS 섹터당 1종목씩 3종목(각 26.7%) + S&P 500 ETF(SPYM) 20%. 현금 없음." },
+  { id: "c1", label: "C1", title: "C1 · I2 + 남는 현금은 단기국채(BIL)",
+    summary: "I2와 같은 종목·하프 켈리 비중에 S&P 500 ETF(SPYM) 20%. I2가 현금으로 두는 몫(기본 40%)을 1~3개월 미국 국채 ETF(BIL)로 보유합니다." },
 ];
 
 /**
- * Default cash share per strategy. For I2 the chosen cash share replaces the original
- * planned cash (40%): the individual-stock ceiling becomes 1 - 20% core - cash.
- * For I1 and S1 the chosen share scales every target weight down.
+ * Default cash share per strategy. For I2 and C1 the chosen cash share replaces the original
+ * planned cash (40%): the individual-stock ceiling becomes 1 - 20% core - cash. C1 holds that
+ * cash share in BIL instead of cash. For I1 the chosen share scales every target weight down.
  */
-export const DEFAULT_CASH: Record<StrategyId, number> = { i1: 0, i2: 0.4, s1: 0 };
-export const MAX_CASH: Record<StrategyId, number> = { i1: 0.9, i2: 0.8, s1: 0.9 };
+export const DEFAULT_CASH: Record<StrategyId, number> = { i1: 0, i2: 0.4, c1: 0.4 };
+export const MAX_CASH: Record<StrategyId, number> = { i1: 0.9, i2: 0.8, c1: 0.8 };
+/** Strategies sized by the I2 half-Kelly rule (C1 = I2 with the cash share held in BIL). */
+export const usesKelly = (strategy: StrategyId) => strategy === "i2" || strategy === "c1";
 
 export class MissingStrategyInputs extends Error {
-  constructor(public day: string) { super(`${day}: I2·S1 계산 자료가 아직 게시되지 않았습니다.`); }
+  constructor(public day: string) { super(`${day}: I2·C1 계산 자료가 아직 게시되지 않았습니다.`); }
 }
-
-export interface WeightedName { ticker: string; name: string; weight: number; note?: string; }
 
 /** Euclidean projection onto {0 <= w <= cap, sum(w) <= budget}. */
 function project(v: number[], cap: number, budget: number): number[] {
@@ -89,33 +89,4 @@ export function i2Weights(inputs: Inputs, stocks: string[]): { weights: Record<s
   const weights: Record<string, number> = { IVV: p.ivv_weight };
   stocks.forEach((ticker, k) => { weights[ticker] = Math.max(0, full[k]) * p.kelly_fraction; });
   return { weights, fallback, observations: rows.length };
-}
-
-/** S1: I1 leader pool (top 20 by I1 score) ordered by 12-1 momentum, one name per GICS sector, 3 names. */
-export function s1Names(report: Report, inputs: Inputs, existing: string[], equity: number): { names: WeightedName[]; order: string[] } {
-  const p = inputs.s1, weight = p.stock_budget / p.positions;
-  const pool = report.candidates.filter(item => item.ticker !== "IVV")
-    .sort((a, b) => a.rank - b.rank)
-    .filter(item => item.close <= p.price_margin * equity * p.pool_price_weight)
-    .slice(0, p.pool_size);
-  const order = pool.map(item => item.ticker)
-    .filter(ticker => typeof inputs.tickers[ticker]?.mom_12_1 === "number")
-    .sort((a, b) => inputs.tickers[b].mom_12_1! - inputs.tickers[a].mom_12_1! || a.localeCompare(b))
-    .filter(ticker => report.quotes[ticker]?.close <= p.price_margin * equity * weight);
-  const keep = existing.filter(ticker => ticker !== "IVV" && order.slice(0, p.hold_order_rank).includes(ticker))
-    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  const chosen: string[] = [], sectors: Record<string, number> = {};
-  for (const ticker of [...keep, ...order.filter(item => !keep.includes(item))]) {
-    const sector = inputs.tickers[ticker]?.gics_sector ?? `own::${ticker}`;
-    if ((sectors[sector] ?? 0) >= p.max_names_per_gics_sector) continue;
-    chosen.push(ticker); sectors[sector] = (sectors[sector] ?? 0) + 1;
-    if (chosen.length === p.positions) break;
-  }
-  const name = (ticker: string) => report.quotes[ticker]?.name ?? ticker;
-  return {
-    order,
-    names: [{ ticker: "IVV", name: name("IVV"), weight: p.ivv_weight, note: "시장 코어: S&P 500 ETF 20% 고정 (SPYM, IVV 대체)" },
-      ...chosen.map(ticker => ({ ticker, name: name(ticker), weight,
-        note: `${keep.includes(ticker) ? `유지(모멘텀 순위 ${p.hold_order_rank}위 이내)` : "신규"} · 모멘텀 순위 ${order.indexOf(ticker) + 1}위 · ${inputs.tickers[ticker]?.gics_sector ?? "섹터 미확인"}` }))],
-  };
 }
