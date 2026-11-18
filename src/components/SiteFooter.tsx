@@ -9,6 +9,7 @@ const FOOTER_LINKS = [
   { href: "/", label: "시장 리포트" },
   { href: "/rebalancing", label: "포트폴리오 관리" },
   { href: "/portfolio-report", label: "포트폴리오 보고서" },
+  { href: "/vr", label: "VR 적립식" },
   { href: "/etf-research", label: "ETF비교" },
   { href: "/about", label: "사이트 소개" },
   { href: "/privacy", label: "개인정보처리방침" },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import App from "./App";
 import EtfResearchLab from "./features/etf-research/EtfResearchLab";
@@ -6,13 +6,15 @@ import MarketReportPage from "./features/market-report/MarketReportPage";
 import PortfolioReportPage from "./features/portfolio-report/PortfolioReportPage";
 import TradingTestReportPage from "./features/trading-test-report/TradingTestReportPage";
 import SiteInfoPage, { type SiteInfoKind } from "./features/site-info/SiteInfoPage";
+const VrPage = lazy(() => import("./features/vr/VrPage"));
 
-type Screen = "portfolio" | "portfolioReport" | "tradingTestReport" | "research" | "report" | SiteInfoKind;
+type Screen = "portfolio" | "portfolioReport" | "tradingTestReport" | "vr" | "research" | "report" | SiteInfoKind;
 
 const SCREEN_PATHS: Record<Screen, string> = {
   portfolio: "/rebalancing",
   portfolioReport: "/portfolio-report",
   tradingTestReport: "/trading-test-report",
+  vr: "/vr",
   research: "/etf-research",
   report: "/",
   about: "/about",
@@ -22,6 +24,10 @@ const SCREEN_PATHS: Record<Screen, string> = {
 };
 
 const SCREEN_META: Record<Screen, { title: string; description: string }> = {
+  vr: {
+    title: "TM Reports — 라오어 VR 적립식",
+    description: "VR 5.0 적립식의 2주 사이클 V·밴드와 예약 주문표를 계산하고 브라우저에 원장을 이어서 기록합니다.",
+  },
   report: {
     title: "TM Reports — 미국 시장 리포트",
     description: "미국 시장의 흐름, 위험자산, 섹터·테마 리더십과 경제 일정을 한눈에 확인합니다.",
@@ -66,6 +72,7 @@ function screenFromPath(pathname: string): Screen {
   if (normalizedPath === SCREEN_PATHS.portfolio) return "portfolio";
   if (normalizedPath === SCREEN_PATHS.portfolioReport) return "portfolioReport";
   if (normalizedPath === SCREEN_PATHS.tradingTestReport) return "tradingTestReport";
+  if (normalizedPath === SCREEN_PATHS.vr) return "vr";
   if (normalizedPath === SCREEN_PATHS.research) return "research";
   if (normalizedPath === SCREEN_PATHS.about) return "about";
   if (normalizedPath === SCREEN_PATHS.privacy) return "privacy";
@@ -132,10 +139,12 @@ export default function RootApp() {
     onOpenPortfolio: () => navigate("portfolio"),
     onOpenPortfolioReport: () => navigate("portfolioReport"),
     onOpenTradingTestReport: () => navigate("tradingTestReport"),
+    onOpenVr: () => navigate("vr"),
     onOpenEtfCompare: () => navigate("research"),
   };
 
   if (screen === "research") return <EtfResearchLab {...productNavigation} />;
+  if (screen === "vr") return <Suspense fallback={<main aria-busy="true">VR 화면을 불러오는 중…</main>}><VrPage {...productNavigation} /></Suspense>;
   if (screen === "portfolioReport") return <PortfolioReportPage {...productNavigation} />;
   if (screen === "tradingTestReport") return <TradingTestReportPage {...productNavigation} />;
   if (screen === "about" || screen === "privacy" || screen === "terms" || screen === "contact") {

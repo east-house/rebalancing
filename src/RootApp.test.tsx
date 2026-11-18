@@ -67,6 +67,13 @@ vi.mock("./features/site-info/SiteInfoPage", () => ({
 }));
 
 describe("RootApp routes", () => {
+  it("opens the VR installment page at /vr", async () => {
+    window.localStorage.removeItem("tm.vr-installment");
+    window.history.replaceState({}, "", "/vr");
+    render(<RootApp />);
+    expect(await screen.findByRole("heading", { name: "라오어 VR 적립식" })).toBeTruthy();
+    expect(document.title).toBe("TM Reports — 라오어 VR 적립식");
+  });
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
   });

@@ -1,8 +1,8 @@
-import { BarChart3, BriefcaseBusiness, FlaskConical, GitCompareArrows, Newspaper } from "lucide-react";
+import { BarChart3, Scale, BriefcaseBusiness, FlaskConical, GitCompareArrows, Newspaper } from "lucide-react";
 
 import "./productTabs.css";
 
-export type ProductTab = "report" | "trading-test-report" | "portfolio" | "portfolio-report" | "etf-compare";
+export type ProductTab = "report" | "trading-test-report" | "portfolio" | "portfolio-report" | "etf-compare" | "vr";
 
 interface ProductTabsProps {
   current?: ProductTab;
@@ -10,12 +10,14 @@ interface ProductTabsProps {
   onOpenPortfolio: () => void;
   onOpenPortfolioReport: () => void;
   onOpenTradingTestReport?: () => void;
+  onOpenVr?: () => void;
   onOpenEtfCompare: () => void;
 }
 
 const TABS = [
   { key: "report", label: "리포트", icon: Newspaper },
   { key: "trading-test-report", label: "매매테스트 보고서", icon: FlaskConical },
+  { key: "vr", label: "VR 적립식", icon: Scale },
   { key: "portfolio", label: "포트폴리오 관리", icon: BriefcaseBusiness },
   { key: "portfolio-report", label: "포트폴리오 보고서", icon: BarChart3 },
   { key: "etf-compare", label: "ETF비교", icon: GitCompareArrows },
@@ -27,11 +29,13 @@ export default function ProductTabs({
   onOpenPortfolio,
   onOpenPortfolioReport,
   onOpenTradingTestReport,
+  onOpenVr,
   onOpenEtfCompare,
 }: ProductTabsProps) {
   const handlers: Record<ProductTab, () => void> = {
     report: onOpenReport,
     "trading-test-report": onOpenTradingTestReport ?? (() => undefined),
+    vr: onOpenVr ?? (() => window.location.assign("/vr")),
     portfolio: onOpenPortfolio,
     "portfolio-report": onOpenPortfolioReport,
     "etf-compare": onOpenEtfCompare,
