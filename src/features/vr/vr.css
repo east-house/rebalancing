@@ -13,7 +13,7 @@
 .vr-backup { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #53677b; }
 .vr-backup > div { display: flex; gap: 8px; flex-wrap: wrap; }
 .vr-panel { min-width: 0; padding: 28px; border: 1px solid #e0e7ee; border-radius: 16px; background: white; }
-.vr-panel h2 { font-size: 13px; color: #7a929f; margin: 0 0 16px; }
+.vr-panel h2 { font-size: 18px; color: #213449; margin: 0 0 16px; letter-spacing: -.01em; }
 .vr-panel h2 span { margin-left: 10px; font-size: 18px; color: #213449; }
 .vr-panel h3 { font-size: 14px; margin: 24px 0 6px; }
 .vr-hint { color: #68788b; font-size: 12px; line-height: 1.8; }
@@ -118,3 +118,76 @@
 .vr-fill-sum { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #f3f6f9; font-size: 13px; font-variant-numeric: tabular-nums; }
 .vr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 760px) { .vr-fields--fill { grid-template-columns: 1fr 1fr; } }
+/* 현재 상황 */
+.vr-now { display: grid; gap: 18px; border-color: #cfe0dc; }
+.vr-now-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.vr-now-head .vr-eyebrow { margin: 0 0 6px; }
+.vr-now-head h2 { margin: 0; font-size: 22px; }
+.vr-dday { padding: 7px 12px; border-radius: 20px; background: #edf8f3; color: #276d62; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.vr-dday.is-due { background: #fff1e2; color: #9a4b1f; }
+.vr-now-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.vr-now-v, .vr-now-state { min-width: 0; padding: 18px; border-radius: 12px; background: #f6f9fb; }
+.vr-now-label { margin: 0; font-size: 12px; color: #627489; }
+.vr-now-value { margin: 6px 0 10px; font-size: 28px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: #213449; }
+.vr-now-why { margin: 0; font-size: 13px; line-height: 1.75; color: #42576d; }
+.vr-now-state .vr-zone { line-height: 1.75; }
+.vr-zone-text--below { color: #1f6d58; }
+.vr-zone-text--above { color: #9a4b1f; }
+.vr-now-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; margin: 0; }
+.vr-now-stats dt { font-size: 11px; color: #7a899a; }
+.vr-now-stats dd { margin: 4px 0 0; font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.vr-now-stats small { font-size: 11px; color: #7a899a; font-weight: 500; }
+.vr-inline-fold summary { cursor: pointer; font-size: 12px; color: #3b6378; }
+.vr-inline-fold[open] summary { margin-bottom: 8px; }
+.vr-due-action { margin-left: auto; padding: 8px 14px; border: none; border-radius: 6px; background: #176f70; color: white; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+/* 밴드 막대 */
+.vr-gauge { padding: 26px 0 0; }
+.vr-gauge-track { position: relative; height: 30px; border-radius: 8px; background: #f3f6f9; }
+.vr-gauge-zone, .vr-gauge-band { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 11px; white-space: nowrap; }
+.vr-gauge-zone--buy { background: #c9ebdb; color: #1f6d58; border-radius: 8px 0 0 8px; }
+.vr-gauge-zone--sell { background: #f8d9bf; color: #9a4b1f; border-radius: 0 8px 8px 0; }
+.vr-gauge-band { background: #e3e9ef; color: #53677b; }
+.vr-gauge-v { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #33475b; }
+.vr-gauge-now { position: absolute; top: -8px; bottom: -8px; width: 4px; margin-left: -2px; border-radius: 2px; background: #2a78d6; box-shadow: 0 0 0 2px white; }
+.vr-gauge-now b { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 10px; background: #2a78d6; color: white; font-size: 11px; white-space: nowrap; }
+.vr-gauge-scale { position: relative; height: 0; }
+.vr-gauge-scale span { position: absolute; top: 8px; transform: translateX(-50%); font-size: 11px; line-height: 1.4; color: #627489; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 사용 순서 */
+.vr-flow { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 4px; padding: 0; }
+.vr-flow-step { position: relative; display: grid; gap: 6px; align-content: start; padding: 16px 14px; border: 1px solid #e0e7ee; border-radius: 12px; background: white; font-size: 12px; color: #627489; }
+.vr-flow-step + .vr-flow-step::before { content: ""; position: absolute; left: -13px; top: 30px; width: 12px; border-top: 2px solid #c9d6df; }
+.vr-flow-step strong { font-size: 14px; color: #213449; }
+.vr-flow-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: #eef2f6; color: #53677b; }
+.vr-flow-step.is-done .vr-flow-icon { background: #e3f4ec; color: #1f6d58; }
+.vr-flow-step.is-now { border-color: #176f70; box-shadow: 0 0 0 2px rgba(23, 111, 112, .15); }
+.vr-flow-step.is-now .vr-flow-icon { background: #176f70; color: white; }
+.vr-flow-step.is-later { opacity: .75; }
+.vr-flow-text { line-height: 1.6; }
+.vr-flow-badge { position: absolute; top: 14px; right: 14px; padding: 2px 8px; border-radius: 10px; background: #176f70; color: white; font-size: 11px; font-style: normal; font-weight: 650; }
+.vr-flow-action { justify-self: start; margin-top: 4px; padding: 6px 10px; border: 1px solid #c4d3dc; border-radius: 6px; background: white; color: #2a4a5a; font: inherit; font-size: 12px; cursor: pointer; }
+.vr-flow-step.is-now .vr-flow-action { border-color: #176f70; background: #176f70; color: white; }
+/* 접는 항목 */
+.vr-fold { border: 1px solid #e0e7ee; border-radius: 16px; background: white; }
+.vr-fold > summary { display: flex; align-items: center; gap: 12px; padding: 18px 24px; cursor: pointer; list-style: none; }
+.vr-fold > summary::-webkit-details-marker { display: none; }
+.vr-fold > summary:focus-visible { outline: 2px solid #197c82; outline-offset: 2px; border-radius: 16px; }
+.vr-fold-title { font-size: 16px; font-weight: 700; color: #213449; white-space: nowrap; }
+.vr-fold-summary { flex: 1; min-width: 0; font-size: 12px; color: #627489; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vr-fold-icon { flex-shrink: 0; color: #7a899a; transition: transform .15s; }
+.vr-fold[open] > summary .vr-fold-icon { transform: rotate(180deg); }
+.vr-fold-body { padding: 0 24px 24px; }
+.vr-fold-body > h3:first-child, .vr-fold-body > p:first-child { margin-top: 0; }
+@media (max-width: 900px) { .vr-flow { grid-template-columns: 1fr 1fr; } .vr-flow-step:nth-child(3)::before { display: none; } .vr-now-stats { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .vr-now-grid { grid-template-columns: 1fr; } .vr-fold > summary { flex-wrap: wrap; padding: 16px 18px; } .vr-fold-summary { flex-basis: 100%; order: 3; white-space: normal; } .vr-fold-body { padding: 0 18px 20px; } }
+@media (max-width: 420px) { .vr-flow { grid-template-columns: 1fr; } .vr-flow-step::before { display: none; } }
+.vr-gauge-now b[data-align="start"] { left: -2px; transform: none; }
+.vr-gauge-now b[data-align="end"] { left: auto; right: -2px; transform: none; }
+.vr-gauge-scale { height: 40px; }
+.vr-gauge-scale span:first-child { transform: translateX(-60%); }
+.vr-gauge-scale span:last-child { transform: translateX(-40%); }
+.vr-gauge-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: #627489; }
+.vr-gauge-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.vr-gauge-key { display: inline-block; width: 12px; height: 10px; border-radius: 3px; }
+.vr-gauge-key--buy { background: #c9ebdb; }
+.vr-gauge-key--band { background: #e3e9ef; border: 1px solid #c9d4de; box-sizing: border-box; }
+.vr-gauge-key--sell { background: #f8d9bf; }

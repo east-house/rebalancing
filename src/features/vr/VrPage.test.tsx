@@ -48,12 +48,26 @@ describe("VR installment page", () => {
     expect(screen.getByText("$61.79")).toBeTruthy();
     expect(screen.getByText("$83.62")).toBeTruthy();
     // 최근 종가 50 × 75주 = 3,750 < V 최소 → 매수 12줄 모두 체결되는 가격
-    expect(await screen.findByText(/2026-11-17 종가 \$50\.00 × 75주 = 평가금 \$3,750\.00 · V 최소 아래: 주문표 매수 12줄까지 체결되는 가격/)).toBeTruthy();
-    expect(screen.getByRole("img", { name: /V 밴드와 평가금 추이, 20주차부터 20주차까지/ })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "20주차 주문 지정가와 최근 종가" })).toBeTruthy();
+    // 현재 상황 카드: 최근 종가 50 × 75주 = 3,750 < V 최소 → 매수 구간, 12줄 모두 체결되는 가격
+    const now = () => document.querySelector(".vr-now")!.textContent!;
+    await waitFor(() => expect(now()).toContain("2026-11-17 종가 $50.00 × 75주"));
+    expect(now()).toContain("평가금 $3,750");
+    expect(now()).toContain("매수 구간");
+    expect(now()).toContain("주문표 매수 12줄까지 체결");
+    expect(now()).toContain("V · 이번 2주 목표 평가금");
+    expect(now()).toContain("목표값");
     fill("다른 가격으로 확인 (선택, USD)", "90");
-    expect(screen.getByText(/입력한 가격 \$90\.00 × 75주 = 평가금 \$6,750\.00 · V 최대 위: 주문표 매도/)).toBeTruthy();
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent?.slice(0, 2))).toEqual(["01", "02", "03", "04", "05", "06", "07", "08"]);
+    expect(now()).toContain("입력한 가격 $90.00 × 75주");
+    expect(now()).toContain("매도 구간");
+    // 그래프는 접혀 있다가 열면 그린다
+    expect(screen.queryByRole("img", { name: /V 밴드와 평가금 추이/ })).toBeNull();
+    fireEvent.click(screen.getByText("그래프"));
+    expect(await screen.findByRole("img", { name: /V 밴드와 평가금 추이, 20주차부터 20주차까지/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "20주차 주문 지정가와 최근 종가" })).toBeTruthy();
+    // 섹션 제목에 번호가 없고 현재 상황이 가장 먼저 나온다
+    const h2 = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent ?? "");
+    expect(h2[0]).toMatch(/^20주차 · /);
+    expect(h2.some((t) => /^\d{2} /.test(t))).toBe(false);
 
     fill("마감 Pool, 적립 전 (USD)", "862.91"); fill("마감 종가 (USD)", "51.81");
     fireEvent.click(screen.getByRole("button", { name: "사이클 마감" }));
