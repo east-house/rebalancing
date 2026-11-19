@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  VR_DEFAULT_SETTINGS, addDays, buildOrders, closeCycle, createExistingAccount, createNewAccount, gForWeek,
+  VR_DEFAULT_SETTINGS, addDays, buildOrders, closeCycle, createExistingAccount, createNewAccount, createQuickResumeAccount, gForWeek,
   nextV, openCycle, poolLimitForWeek, reopenLastCycle, suggestInitialBuy, valuationStatus, type VrAccount,
 } from "./vrModel";
 import { exportVrAccount, parseVrAccount } from "./vrStorage";
@@ -111,6 +111,19 @@ describe("account lifecycle", () => {
     }, "t");
     expect(account.cycles[0]).toMatchObject({ index: 10, week: 20, v: 5452.905, lower: 4634.96, upper: 6270.84 });
     expect(() => createExistingAccount(basic, { cycleStartDate: "2026-11-15", week: 3, previousV: 1, shares: 1, poolBeforeDeposit: 0, previousClose: 1 })).toThrow("짝수");
+  });
+
+  it("resumes from shares and average cost when the previous V is unknown", () => {
+    const input = { cycleStartDate: "2026-11-15", week: 20, shares: 75, averageCost: 51.81, referenceClose: 57.68, poolBeforeDeposit: 0 };
+    const cost = createQuickResumeAccount({ ...basic, deposit: 65 }, { ...input, basis: "cost" }, "t");
+    expect(cost.start).toMatchObject({ kind: "quick", v0: 3885.75, averageCost: 51.81, basis: "cost" });
+    expect(cost.cycles[0]).toMatchObject({ index: 10, week: 20, previousV: 3885.75, v: 3950.75, pool: 65, poolCap: 48.75 });
+    const market = createQuickResumeAccount({ ...basic, deposit: 65 }, { ...input, basis: "market" }, "t");
+    expect(market.cycles[0]).toMatchObject({ previousV: 4326, v: 4391 });
+    // 홀수 주차는 다음 짝수 주차 사이클
+    expect(createQuickResumeAccount(basic, { ...input, week: 19, basis: "cost" }, "t").cycles[0].week).toBe(20);
+    expect(() => createQuickResumeAccount(basic, { ...input, averageCost: 0, basis: "cost" })).toThrow("평단가");
+    expect(parseVrAccount(exportVrAccount(cost))).toEqual(cost);
   });
 
   it("applies settings changes from the next cycle only", () => {

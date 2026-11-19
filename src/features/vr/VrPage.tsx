@@ -4,9 +4,11 @@ import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import {
   DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, buildOrders, closeCycle, createExistingAccount,
-  createNewAccount, currentCycle, formatOrdersText, gForWeek, poolLimitForWeek, reopenLastCycle, suggestInitialBuy,
-  totalDeposits, validateSettings, valuationStatus, type OrderRow, type VFormula, type VrAccount, type VrCycle, type VrSettings,
+  createNewAccount, createQuickResumeAccount, currentCycle, formatOrdersText, gForWeek, poolLimitForWeek, reopenLastCycle,
+  suggestInitialBuy, totalDeposits, validateSettings, valuationStatus,
+  type OrderRow, type VBasis, type VFormula, type VrAccount, type VrCycle, type VrSettings,
 } from "./vrModel";
+import { fetchCloseBefore, todayLocal } from "./vrPrices";
 import { deleteVrAccount, exportVrAccount, loadVrAccount, parseVrAccount, saveVrAccount } from "./vrStorage";
 import "./vr.css";
 
@@ -41,23 +43,63 @@ function SettingsFields({ form, onChange }: { form: SettingsForm; onChange: (pat
   </>;
 }
 
+type SetupMode = "new" | "quick" | "existing";
+const SETUP_TABS: Array<[SetupMode, string]> = [["quick", "이어가기 (평단가로)"], ["existing", "이어가기 (V를 알 때)"], ["new", "새로 시작"]];
+
 function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
-  const [mode, setMode] = useState<"new" | "existing">("new");
+  const [mode, setMode] = useState<SetupMode>("quick");
   const [settings, setSettings] = useState<SettingsForm>(toForm(VR_DEFAULT_SETTINGS));
   const [plan, setPlan] = useState({ principal: "", refPrice: "", ratio: String(DEFAULT_INITIAL_POOL_RATIO) });
   const [fill, setFill] = useState({ date: "", shares: "", close: "", pool: "" });
   const [existing, setExisting] = useState({ cycleStartDate: "", week: "2", previousV: "", shares: "", poolBeforeDeposit: "", previousClose: "" });
+  const [quick, setQuick] = useState({ cycleStartDate: todayLocal(), week: "", shares: "", averageCost: "", referenceClose: "", pool: "0", basis: "cost" as VBasis });
+  const [closeInfo, setCloseInfo] = useState<{ status: "idle" | "loading" | "ok" | "error" | "manual"; text: string }>({ status: "idle", text: "" });
   const [error, setError] = useState("");
 
   const suggestion = useMemo(() => {
     try { return suggestInitialBuy(num(plan.principal), num(plan.refPrice), num(plan.ratio)); } catch { return null; }
   }, [plan]);
 
+  // 간단 이어가기: 사이클 시작일 이전 마지막 종가를 사이트 가격 API에서 채운다. 직접 고친 값은 덮어쓰지 않는다.
+  const ticker = settings.ticker.trim().toUpperCase();
+  const manualClose = closeInfo.status === "manual";
+  useEffect(() => {
+    if (mode !== "quick" || manualClose || !ticker || !/^\d{4}-\d{2}-\d{2}$/.test(quick.cycleStartDate)) return;
+    let cancelled = false;
+    setCloseInfo({ status: "loading", text: `${ticker} 종가를 불러오는 중…` });
+    fetchCloseBefore(ticker, quick.cycleStartDate)
+      .then((point) => {
+        if (cancelled) return;
+        setQuick((prev) => ({ ...prev, referenceClose: String(point.close) }));
+        setCloseInfo({ status: "ok", text: `${point.date} 종가 자동 입력 (수정 가능)` });
+      })
+      .catch((cause) => { if (!cancelled) setCloseInfo({ status: "error", text: `${errorText(cause, "종가를 불러오지 못했습니다.")} 직접 입력하세요.` }); });
+    return () => { cancelled = true; };
+  }, [mode, ticker, quick.cycleStartDate, manualClose]);
+
+  const quickPreview = useMemo(() => {
+    if (mode !== "quick") return null;
+    try {
+      const account = createQuickResumeAccount(fromForm(settings), {
+        cycleStartDate: quick.cycleStartDate, week: num(quick.week), shares: num(quick.shares), averageCost: num(quick.averageCost),
+        referenceClose: num(quick.referenceClose), poolBeforeDeposit: num(quick.pool || "0"), basis: quick.basis,
+      }, "preview");
+      const cycle = account.cycles[0];
+      return { cycle, status: valuationStatus(cycle, cycle.referenceClose) };
+    } catch { return null; }
+  }, [mode, settings, quick]);
+
   function submit(event: FormEvent) {
     event.preventDefault(); setError("");
     try {
       const s = fromForm(settings);
-      if (mode === "new") {
+      if (mode === "quick") {
+        if (!quick.cycleStartDate) throw new Error("이번 사이클 시작일을 입력하세요.");
+        onCreate(createQuickResumeAccount(s, {
+          cycleStartDate: quick.cycleStartDate, week: num(quick.week), shares: num(quick.shares), averageCost: num(quick.averageCost),
+          referenceClose: num(quick.referenceClose), poolBeforeDeposit: num(quick.pool || "0"), basis: quick.basis,
+        }));
+      } else if (mode === "new") {
         if (!fill.date) throw new Error("0일차 날짜를 입력하세요.");
         onCreate(createNewAccount(s, { date: fill.date, shares: num(fill.shares), close: num(fill.close), pool: num(fill.pool) }));
       } else {
@@ -73,14 +115,35 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
   return <section className="vr-panel" aria-labelledby="vr-setup-title">
     <h2 id="vr-setup-title">01 <span>적립식 계좌 시작</span></h2>
     <div className="vr-segment" role="tablist" aria-label="시작 방식">
-      <button type="button" role="tab" aria-selected={mode === "new"} className={mode === "new" ? "is-active" : ""} onClick={() => setMode("new")}>새로 시작</button>
-      <button type="button" role="tab" aria-selected={mode === "existing"} className={mode === "existing" ? "is-active" : ""} onClick={() => setMode("existing")}>운용 중인 계좌 이어가기</button>
+      {SETUP_TABS.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={mode === key} className={mode === key ? "is-active" : ""} onClick={() => { setMode(key); setError(""); }}>{label}</button>)}
     </div>
     <form onSubmit={submit}>
       <h3>운용 설정</h3>
       <p className="vr-hint">기본값: 기준 G 10, 밴드 ±15%, 시작 Pool 사용 한도 75%. G는 52주마다 1씩 오르고, Pool 한도는 26주차부터 26주마다 5%p 내려 최저 10%가 됩니다(시트 v5.0.4 규칙). 설정은 나중에 바꿀 수 있고 다음 사이클부터 적용됩니다.</p>
       <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
-      {mode === "new" ? <>
+      {mode === "quick" ? <>
+        <h3>현재 계좌 (아는 값만)</h3>
+        <p className="vr-hint">현재 주차, 보유 수량, 평단가와 위의 2주 적립금만 있으면 이어서 시작합니다. 직전 V는 모르므로 아래 기준으로 대신 정합니다. 직전 마감 종가는 사이트 가격 자료에서 자동으로 채웁니다.</p>
+        <div className="vr-fields">
+          <label>현재 주차<input type="number" min="1" step="1" value={quick.week} onChange={(e) => setQuick({ ...quick, week: e.target.value })} /></label>
+          <label>보유 수량 (주)<input type="number" min="1" step="1" value={quick.shares} onChange={(e) => setQuick({ ...quick, shares: e.target.value })} /></label>
+          <label>평단가 (USD)<input type="number" min="0" step="any" value={quick.averageCost} onChange={(e) => setQuick({ ...quick, averageCost: e.target.value })} /></label>
+          <label>이번 사이클 시작일<input type="date" value={quick.cycleStartDate} onChange={(e) => setQuick({ ...quick, cycleStartDate: e.target.value })} /></label>
+          <label>직전 마감 종가 (USD)<input type="number" min="0" step="any" value={quick.referenceClose} onChange={(e) => { setQuick({ ...quick, referenceClose: e.target.value }); setCloseInfo({ status: "manual", text: "직접 입력한 종가를 사용합니다." }); }} /></label>
+          <label>현재 현금 Pool (모르면 0)<input type="number" min="0" step="any" value={quick.pool} onChange={(e) => setQuick({ ...quick, pool: e.target.value })} /></label>
+        </div>
+        {closeInfo.text && <p className={closeInfo.status === "error" ? "vr-error" : "vr-hint"} aria-live="polite">{closeInfo.text}</p>}
+        <fieldset className="vr-radio">
+          <legend>직전 V 대신 쓸 값</legend>
+          <label><input type="radio" name="vr-basis" checked={quick.basis === "cost"} onChange={() => setQuick({ ...quick, basis: "cost" })} />평단가 기준: 보유 수량 × 평단가 (매수 원금)</label>
+          <label><input type="radio" name="vr-basis" checked={quick.basis === "market"} onChange={() => setQuick({ ...quick, basis: "market" })} />평가금 기준: 보유 수량 × 직전 마감 종가 (밴드 한가운데서 다시 시작)</label>
+        </fieldset>
+        <p className="vr-hint">이 대체값은 원 방법론이나 시트에 있는 규칙이 아니라 직전 V를 모를 때 쓰는 근사입니다. 평단가 기준은 평가손실 중이면 바로 매수 구간, 평가이익 중이면 매도 구간에서 시작할 수 있습니다. 주차가 홀수면 다음 짝수 주차 사이클로 시작합니다. Pool을 0으로 두면 이번 사이클에는 적립금만큼만 매수할 수 있습니다.</p>
+        {quickPreview && <p className="vr-suggest" aria-live="polite">
+          {quickPreview.cycle.week}주차 시작 미리보기: 직전 V {money(quickPreview.cycle.previousV)} → V {money(quickPreview.cycle.v, 3)} (최소 {money(quickPreview.cycle.lower)} ~ 최대 {money(quickPreview.cycle.upper)}), G {quickPreview.cycle.g}, Pool 한도 {quickPreview.cycle.poolLimitPct}%.
+          {" "}직전 종가 평가금 {money(quickPreview.status.value)} · {quickPreview.status.zone === "below" ? "V 최소 아래: 매수 구간" : quickPreview.status.zone === "above" ? "V 최대 위: 매도 구간" : "밴드 안"}
+        </p>}
+      </> : mode === "new" ? <>
         <h3>0일차 매수 계획 (참고)</h3>
         <p className="vr-hint">매수액 = 원금 ÷ (1 + P/V). P/V 0.15는 quantstack이 G 10에 제시한 값이며, 적립식 초기 비율은 원 방법론과 시트 모두에 정해져 있지 않습니다.</p>
         <div className="vr-fields">
@@ -222,7 +285,7 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
 
     <section className="vr-panel" aria-labelledby="vr-ledger-title">
       <h2 id="vr-ledger-title">05 <span>사이클 원장</span></h2>
-      <p className="vr-hint">시작 {account.start.date} · {account.start.kind === "new" ? `0일차 ${account.start.shares}주 × 종가 ${money(account.start.price)} = V0 ${money(account.start.v0)}, Pool ${money(account.start.pool)}` : `이어받은 직전 V ${money(account.start.v0, 3)}`} · 누적 적립금 {money(totalDeposits(account))}</p>
+      <p className="vr-hint">시작 {account.start.date} · {account.start.kind === "new" ? `0일차 ${account.start.shares}주 × 종가 ${money(account.start.price)} = V0 ${money(account.start.v0)}, Pool ${money(account.start.pool)}` : account.start.kind === "quick" ? `${account.start.shares}주 · 평단가 ${money(account.start.averageCost)} · 직전 종가 ${money(account.start.price)}로 이어받음, 직전 V 대체값 ${money(account.start.v0)}(${account.start.basis === "market" ? "평가금" : "평단가"} 기준)` : `이어받은 직전 V ${money(account.start.v0, 3)}`} · 누적 적립금 {money(totalDeposits(account))}</p>
       <div className="vr-table-wrap"><table className="vr-ledger">
         <thead><tr><th>주차</th><th>시작일</th><th>공식</th><th>G</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>Pool(적립 후)</th><th>마감 수량</th><th>마감 Pool</th><th>마감 종가</th><th>마감 평가금</th><th>총자산</th></tr></thead>
         <tbody>{[...account.cycles].reverse().map((c) => {

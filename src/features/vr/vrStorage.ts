@@ -27,7 +27,7 @@ export function parseVrAccount(raw: string): VrAccount | null {
   try { value = JSON.parse(raw); } catch { return null; }
   if (!isObject(value) || value.version !== 2 || !isSettings(value.settings) || !Array.isArray(value.cycles)) return null;
   const start = value.start;
-  if (!isObject(start) || (start.kind !== "new" && start.kind !== "existing") || !isDate(start.date)
+  if (!isObject(start) || (start.kind !== "new" && start.kind !== "existing" && start.kind !== "quick") || !isDate(start.date)
     || !isNumber(start.shares) || !isNumber(start.pool) || !isNumber(start.price) || !isNumber(start.v0)) return null;
   if (value.cycles.length === 0 || !value.cycles.every(isCycle)) return null;
   // 마감되지 않은 사이클은 마지막 하나뿐이어야 한다.

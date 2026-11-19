@@ -73,13 +73,18 @@ export interface VrCycle {
   close?: VrCycleClose;
 }
 
+export type VBasis = "cost" | "market";
+
 export interface VrStart {
-  kind: "new" | "existing";
+  kind: "new" | "existing" | "quick";
   date: string;
   shares: number;
   pool: number;
   price: number;
   v0: number;
+  /** 간단 이어가기: 평단가와 직전 V 기준 */
+  averageCost?: number;
+  basis?: VBasis;
 }
 
 export interface VrAccount {
@@ -274,6 +279,54 @@ export function createExistingAccount(settingsInput: VrSettings, input: Existing
     settings,
     start,
     cycles: [openCycle(input.week / WEEKS_PER_CYCLE, input.cycleStartDate, input.previousV, input.shares, input.poolBeforeDeposit, input.previousClose, settings)],
+  };
+}
+
+export interface QuickResumeInput {
+  cycleStartDate: string;
+  /** 현재 주차. 홀수면 다음 짝수 주차 사이클로 본다. */
+  week: number;
+  shares: number;
+  averageCost: number;
+  /** 직전 마감 종가 */
+  referenceClose: number;
+  /** 모르면 0 */
+  poolBeforeDeposit: number;
+  basis: VBasis;
+}
+
+/** 사이클이 시작되는 짝수 주차. 시트 Week는 2씩 증가한다. */
+export function cycleWeek(week: number): number {
+  return Math.ceil(week / WEEKS_PER_CYCLE) * WEEKS_PER_CYCLE;
+}
+
+/**
+ * 직전 V를 모를 때 이어가기. 직전 V를 대신하는 값:
+ *  cost   = 보유 수량 × 평단가 (매수 원금 기준)
+ *  market = 보유 수량 × 직전 마감 종가 (시트 0주차 V0와 같은 평가금 기준)
+ * 원 방법론이나 시트에 있는 규칙이 아니라 이 화면의 근사이다.
+ */
+export function createQuickResumeAccount(settingsInput: VrSettings, input: QuickResumeInput, createdAt = new Date().toISOString()): VrAccount {
+  const settings = validateSettings(settingsInput);
+  requireFinite(input.week, "현재 주차", { integer: true, positive: true });
+  requireFinite(input.shares, "보유 수량", { integer: true, positive: true });
+  requireFinite(input.averageCost, "평단가", { positive: true });
+  requireFinite(input.referenceClose, "직전 마감 종가", { positive: true });
+  requireFinite(input.poolBeforeDeposit, "현재 현금(Pool)");
+  if (input.basis !== "cost" && input.basis !== "market") throw new Error("V 시작 기준을 선택하세요.");
+  addDays(input.cycleStartDate, 0);
+  const previousV = roundCent(input.shares * (input.basis === "cost" ? input.averageCost : input.referenceClose));
+  const week = cycleWeek(input.week);
+  const start: VrStart = {
+    kind: "quick", date: input.cycleStartDate, shares: input.shares, pool: roundCent(input.poolBeforeDeposit),
+    price: input.referenceClose, v0: previousV, averageCost: input.averageCost, basis: input.basis,
+  };
+  return {
+    version: 2,
+    createdAt,
+    settings,
+    start,
+    cycles: [openCycle(week / WEEKS_PER_CYCLE, input.cycleStartDate, previousV, input.shares, input.poolBeforeDeposit, input.referenceClose, settings)],
   };
 }
 
