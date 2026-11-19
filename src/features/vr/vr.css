@@ -191,3 +191,42 @@
 .vr-gauge-key--buy { background: #c9ebdb; }
 .vr-gauge-key--band { background: #e3e9ef; border: 1px solid #c9d4de; box-sizing: border-box; }
 .vr-gauge-key--sell { background: #f8d9bf; }
+.vr-chart-v--dash { stroke-dasharray: 6 3; }
+.vr-chart-cycle-line { stroke: #e3e9ef; stroke-width: 1; }
+.vr-chart-sim .vr-chart-band { fill: #eef1f4; }
+.vr-chart-sim .vr-chart-v { stroke: #7a899a; }
+.vr-chart-fill.is-sim { opacity: .7; }
+.vr-swatch--buy-pt, .vr-swatch--sell-pt { width: 0; height: 0; border-radius: 0; background: none; border-left: 6px solid transparent; border-right: 6px solid transparent; }
+.vr-swatch--buy-pt { border-bottom: 10px solid #0f8a5f; }
+.vr-swatch--sell-pt { border-top: 10px solid #c4501f; }
+.vr-swatch--sim { height: 10px; background: #eef1f4; border: 1px dashed #9aa9b7; box-sizing: border-box; }
+.vr-swatch--buy { background: #0f8a5f; }
+.vr-swatch--sell { background: #c4501f; }
+.vr-invest { display: grid; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e3e9ef; font-size: 12px; color: #627489; }
+.vr-invest b { font-size: 18px; color: #213449; font-variant-numeric: tabular-nums; }
+.vr-invest small { font-size: 12px; font-weight: 500; color: #627489; }
+.vr-invest .vr-muted { font-size: 13px; font-weight: 500; color: #8a6a3a; }
+.vr-pnl { margin: -4px 0 10px; font-size: 14px; color: #42576d; }
+.vr-pnl b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.vr-gain { color: #1f6d58; }
+.vr-loss { color: #b0402a; }
+.vr-fill-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.vr-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12px; color: #42576d; cursor: pointer; }
+.vr-toggle input { accent-color: #167b79; }
+.vr-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 14px; }
+.vr-compare div { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; background: #f3f6f9; font-size: 12px; color: #627489; }
+.vr-compare div:last-child { background: #edf8f3; }
+.vr-compare b { font-size: 14px; color: #213449; font-variant-numeric: tabular-nums; }
+.vr-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(24, 38, 56, .45); }
+.vr-modal { width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 24px; border-radius: 16px; background: white; box-shadow: 0 18px 50px rgba(24, 38, 56, .25); }
+.vr-modal h2 { margin: 0 0 8px; font-size: 20px; color: #213449; }
+.vr-modal p { font-size: 13px; line-height: 1.7; color: #42576d; }
+.vr-modal-values { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 14px 0; padding: 14px; border-radius: 10px; background: #f3f6f9; }
+.vr-modal-values dt { font-size: 11px; color: #7a899a; }
+.vr-modal-values dd { margin: 3px 0 0; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.vr-modal-field { display: grid; gap: 6px; margin-bottom: 8px; font-size: 12px; font-weight: 650; color: #42576d; }
+.vr-modal-field input { border: 1px solid #dce4eb; border-radius: 8px; padding: 10px; font: inherit; }
+.vr-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.vr-modal-actions .vr-link { margin: 0 auto 0 0; }
+.vr-modal-ok { width: auto; margin: 0; padding: 10px 22px; }
+@media (max-width: 640px) { .vr-compare { grid-template-columns: 1fr; } }

@@ -23,8 +23,10 @@ function isCycle(value: unknown): value is VrCycle {
   if (!numbers.every((key) => isNumber(value[key])) || !isDate(value.startDate) || !isDate(value.endDate)) return false;
   if (value.formula !== "basic" && value.formula !== "skill") return false;
   if (value.fills !== undefined && !(Array.isArray(value.fills) && value.fills.every(isFill))) return false;
+  if (value.averageCost !== undefined && !(isNumber(value.averageCost) && value.averageCost > 0)) return false;
   if (value.close === undefined) return true;
-  return isObject(value.close) && isNumber(value.close.shares) && isNumber(value.close.pool) && isNumber(value.close.price);
+  return isObject(value.close) && isNumber(value.close.shares) && isNumber(value.close.pool) && isNumber(value.close.price)
+    && (value.close.averageCost === undefined || (isNumber(value.close.averageCost) && value.close.averageCost > 0));
 }
 
 /** 저장본·백업 파일을 검증한다. 형식이 맞지 않으면 null. */

@@ -98,121 +98,104 @@ function Axes({ W, yTicks, y, xTicks, x, long }: { W: number; yTicks: number[]; 
 
 const Swatch = ({ kind }: { kind: string }) => <i className={`vr-swatch vr-swatch--${kind}`} aria-hidden="true" />;
 
-interface ValuePoint { t: number; date: string; close: number; shares: number; value: number; cycle: VrCycle }
+interface BandPoint { t: number; date: string; close: number | null; shares: number; target: number; min: number; max: number; cycle: VrCycle }
 
-/** 사이클별 V 밴드와 평가금(사이클 시작 수량 × 일별 종가) */
-export function VrBandChart({ cycles, prices }: { cycles: VrCycle[]; prices: ReferenceClose[] }) {
-  const shown = cycles.slice(-26);
+const triangle = (x: number, y: number, up: boolean, r = 6) => up
+  ? `M${x},${y - r} L${x + r},${y + r * 0.8} L${x - r},${y + r * 0.8} Z`
+  : `M${x},${y + r} L${x + r},${y - r * 0.8} L${x - r},${y - r * 0.8} Z`;
+
+/**
+ * 종가 위에 목표가(V ÷ 보유 수량)와 최소가·최대가(V 최소·최대 ÷ 보유 수량)를 겹치고, 체결을 매수 ▲·매도 ▼ 지점으로 표시한다.
+ * 종가가 최소가 아래로 내려가면 평가금이 V 최소 아래(매수 구간), 최대가 위로 올라가면 V 최대 위(매도 구간)이다.
+ */
+export function VrPriceBandChart({ cycles, prices, simulatedBeforeWeek }: { cycles: VrCycle[]; prices: ReferenceClose[]; simulatedBeforeWeek?: number }) {
   const [plotRef, W] = useWidth();
   const [hover, setHover] = useState<Hover | null>(null);
+  const isSim = (c: VrCycle) => simulatedBeforeWeek != null && c.week < simulatedBeforeWeek;
+
   const model = useMemo(() => {
-    const t0 = time(shown[0].startDate);
-    const t1 = time(shown[shown.length - 1].endDate) + DAY;
-    const points: ValuePoint[] = [];
-    for (const c of shown) {
-      for (const p of prices) {
-        if (p.date >= c.startDate && p.date <= c.endDate) { const shares = fillTotals(c, p.date).shares; points.push({ t: time(p.date), date: p.date, close: p.close, shares, value: shares * p.close, cycle: c }); }
-      }
-    }
-    const closes = shown.filter((c) => c.close).map((c) => ({ t: time(c.endDate), value: c.close!.shares * c.close!.price, cycle: c }));
-    const [y0, y1] = domain([...shown.flatMap((c) => [c.lower, c.upper]), ...points.map((p) => p.value), ...closes.map((p) => p.value)]);
-    return { t0, t1, points, closes, x: linear(t0, t1, M.l, W - M.r), y: linear(y0, y1, H - M.b, M.t), y0, y1 };
-  }, [shown, prices, W]);
-  const { x, y, points, closes } = model;
-  const vPath = shown.map((c, i) => `${i ? "L" : "M"}${x(time(c.startDate))},${y(c.v)} H${x(time(c.endDate) + DAY)}`).join(" ");
-  const edge = (key: "lower" | "upper") => shown.map((c, i) => `${i ? "L" : "M"}${x(time(c.startDate))},${y(c[key])} H${x(time(c.endDate) + DAY)}`).join(" ");
-  const last = shown[shown.length - 1];
-  const lastPoint = points.filter((p) => p.cycle === last).at(-1);
+    const byCycle = cycles.map((c) => {
+      const pts: BandPoint[] = [];
+      const make = (date: string, close: number | null): BandPoint | null => {
+        const shares = fillTotals(c, date).shares;
+        if (shares <= 0) return null;
+        return { t: time(date), date, close, shares, target: c.v / shares, min: c.lower / shares, max: c.upper / shares, cycle: c };
+      };
+      for (const p of prices) if (p.date >= c.startDate && p.date <= c.endDate) { const pt = make(p.date, p.close); if (pt) pts.push(pt); }
+      if (pts.length === 0 || pts[pts.length - 1].date < c.endDate) { const pt = make(pts.length ? c.endDate : c.startDate, null); if (pt) pts.push(pt); }
+      return { cycle: c, pts };
+    }).filter((g) => g.pts.length > 0);
+    if (byCycle.length === 0) return null;
+    const t0 = time(byCycle[0].cycle.startDate);
+    const t1 = time(byCycle[byCycle.length - 1].cycle.endDate) + DAY;
+    const closes = prices.filter((p) => time(p.date) >= t0 && time(p.date) < t1);
+    const fills = byCycle.flatMap((g) => (g.cycle.fills ?? []).map((f) => ({ ...f, sim: isSim(g.cycle) })));
+    const values = [...closes.map((p) => p.close), ...byCycle.flatMap((g) => g.pts.flatMap((p) => [p.min, p.max])), ...fills.map((f) => f.price)];
+    const [y0, y1] = domain(values);
+    return { byCycle, t0, t1, closes, fills, y0, y1 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycles, prices, simulatedBeforeWeek]);
+
+  if (!model) return <p className="vr-hint">표시할 데이터가 없습니다.</p>;
+  const { byCycle, t0, t1, closes, fills, y0, y1 } = model;
+  const x = linear(t0, t1, M.l, W - M.r);
+  const y = linear(y0, y1, H - M.b, M.t);
+  const xEnd = (g: { cycle: VrCycle; pts: BandPoint[] }, i: number) => i + 1 < g.pts.length ? x(g.pts[i + 1].t) : x(time(g.cycle.endDate) + DAY);
+  const step = (g: { cycle: VrCycle; pts: BandPoint[] }, key: "target" | "min" | "max") =>
+    g.pts.map((p, i) => `${i ? "L" : "M"}${x(p.t)},${y(p[key])} H${xEnd(g, i)}`).join(" ");
+  const area = (g: { cycle: VrCycle; pts: BandPoint[] }) => {
+    const top = g.pts.flatMap((p, i) => [`${x(p.t)},${y(p.max)}`, `${xEnd(g, i)},${y(p.max)}`]);
+    const bottom = g.pts.flatMap((p, i) => [`${x(p.t)},${y(p.min)}`, `${xEnd(g, i)},${y(p.min)}`]).reverse();
+    return `M${[...top, ...bottom].join(" L")} Z`;
+  };
+  const allPts = byCycle.flatMap((g) => g.pts);
+  const lastPt = allPts[allPts.length - 1];
+  const lastClose = closes[closes.length - 1];
   const labels = placeLabels([
-    { key: "upper", y: y(last.upper), text: `V 최대 ${usd(last.upper, 0)}` },
-    { key: "v", y: y(last.v), text: `V ${usd(last.v, 0)}` },
-    { key: "lower", y: y(last.lower), text: `V 최소 ${usd(last.lower, 0)}` },
-    ...(lastPoint ? [{ key: "value", y: y(lastPoint.value), text: `평가금 ${usd(lastPoint.value, 0)}` }] : []),
+    { key: "max", y: y(lastPt.max), text: `최대가 ${usd(lastPt.max)}` },
+    { key: "target", y: y(lastPt.target), text: `목표가 ${usd(lastPt.target)}` },
+    { key: "min", y: y(lastPt.min), text: `최소가 ${usd(lastPt.min)}` },
+    ...(lastClose ? [{ key: "close", y: y(lastClose.close), text: `종가 ${usd(lastClose.close)}` }] : []),
   ]);
+  const realStart = simulatedBeforeWeek != null ? byCycle.find((g) => !isSim(g.cycle)) : undefined;
+  const hasSim = byCycle.some((g) => isSim(g.cycle));
 
   function move(svgX: number) {
-    if (points.length === 0) return;
-    const nearest = points.reduce((best, p) => Math.abs(x(p.t) - svgX) < Math.abs(x(best.t) - svgX) ? p : best);
-    const c = nearest.cycle;
-    const zone = nearest.value < c.lower ? "V 최소 아래 · 매수 구간" : nearest.value > c.upper ? "V 최대 위 · 매도 구간" : "밴드 안";
+    const candidates = allPts.filter((p) => p.close != null);
+    if (candidates.length === 0) return;
+    const nearest = candidates.reduce((best, p) => Math.abs(x(p.t) - svgX) < Math.abs(x(best.t) - svgX) ? p : best);
+    const dayFills = fills.filter((f) => f.date === nearest.date);
+    const close = nearest.close!;
+    const zone = close < nearest.min ? "최소가 아래 · 매수 구간" : close > nearest.max ? "최대가 위 · 매도 구간" : "밴드 안";
     setHover({ x: x(nearest.t), content: <>
-      <strong>{nearest.date} · {c.week}주차</strong>
-      <span>종가 {usd(nearest.close)} × {nearest.shares}주</span>
-      <span><Swatch kind="value" />평가금 {usd(nearest.value)}</span>
-      <span><Swatch kind="v" />V {usd(c.v)}</span>
-      <span><Swatch kind="band" />최소~최대 {usd(c.lower)} ~ {usd(c.upper)}</span>
+      <strong>{nearest.date} · {nearest.cycle.week}주차{isSim(nearest.cycle) ? " (백테스트)" : ""}</strong>
+      <span><Swatch kind="price" />종가 {usd(close)}</span>
+      <span><Swatch kind="v" />목표가 {usd(nearest.target)}</span>
+      <span><Swatch kind="band" />최소~최대가 {usd(nearest.min)} ~ {usd(nearest.max)}</span>
+      <span>보유 {nearest.shares}주 기준</span>
+      {dayFills.map((f) => <span key={f.id}><Swatch kind={f.side} />{f.side === "buy" ? "매수" : "매도"} {f.quantity}주 × {usd(f.price)}</span>)}
       <em>{zone}</em>
     </> });
   }
 
-  const long = model.t1 - model.t0 > 200 * DAY;
+  const long = t1 - t0 > 200 * DAY;
   return <ChartFrame plotRef={plotRef} W={W}
-    label={`V 밴드와 평가금 추이, ${shown[0].week}주차부터 ${last.week}주차까지`}
-    legend={<><span><Swatch kind="v" />V (목표 평가금)</span><span><Swatch kind="band" />V 최소~최대 밴드</span><span><Swatch kind="value" />평가금 = 보유 수량 × 종가</span>{closes.length > 0 && <span><Swatch kind="dot" />사이클 마감 평가금</span>}</>}
+    label={`종가와 목표가·최소가·최대가, ${byCycle[0].cycle.week}주차부터 ${byCycle[byCycle.length - 1].cycle.week}주차까지`}
+    legend={<><span><Swatch kind="price" />종가</span><span><Swatch kind="v" />목표가 (V ÷ 보유 수량)</span><span><Swatch kind="band" />최소가~최대가</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />백테스트 구간</span>}</>}
     hover={hover} onMove={move} onLeave={() => setHover(null)}>
-    <Axes W={W} yTicks={niceTicks(model.y0, model.y1)} y={y} xTicks={dateTicks(model.t0, model.t1, W < 560 ? 3 : long ? 6 : 4)} x={x} long={long} />
-    {shown.map((c) => <rect key={c.index} className="vr-chart-band" x={x(time(c.startDate))} width={Math.max(1, x(time(c.endDate) + DAY) - x(time(c.startDate)) - 2)} y={y(c.upper)} height={Math.max(1, y(c.lower) - y(c.upper))} />)}
-    <path className="vr-chart-edge" d={edge("upper")} />
-    <path className="vr-chart-edge" d={edge("lower")} />
-    <path className="vr-chart-v" d={vPath} />
-    {shown.map((c) => {
-      const ps = points.filter((p) => p.cycle === c);
-      return ps.length > 0 && <path key={c.index} className="vr-chart-value" d={ps.map((p, i) => `${i ? "L" : "M"}${x(p.t)},${y(p.value)}`).join(" ")} />;
-    })}
-    {points.length === 1 && <circle className="vr-chart-dot" cx={x(points[0].t)} cy={y(points[0].value)} r={4} />}
-    {closes.map((p) => <circle key={p.cycle.index} className="vr-chart-dot" cx={x(p.t)} cy={y(p.value)} r={4} />)}
-    {labels.map((l) => <text key={l.key} className="vr-chart-label" x={W - M.r + 8} y={l.ly} dy="0.32em">{l.text}</text>)}
-  </ChartFrame>;
-}
-
-/** 최근 종가와 이번 사이클 매수·매도 지정가 */
-export function VrPriceChart({ cycle, orders, prices }: { cycle: VrCycle; orders: VrOrders; prices: ReferenceClose[] }) {
-  const [plotRef, W] = useWidth();
-  const [hover, setHover] = useState<Hover | null>(null);
-  const from = time(cycle.startDate) - 90 * DAY;
-  const data = prices.filter((p) => time(p.date) >= from);
-  if (data.length === 0) return <p className="vr-hint">표시할 종가 데이터가 없습니다.</p>;
-  const t0 = time(data[0].date);
-  const t1 = Math.max(time(data[data.length - 1].date), time(cycle.startDate), ...(cycle.fills ?? []).map((fl) => time(fl.date))) + DAY;
-  const x = linear(t0, t1, M.l, W - M.r);
-  const firstSell = orders.sells[0]?.price;
-  const [y0, y1] = domain([...data.map((p) => p.close), ...orders.buys.map((r) => r.price), ...(firstSell ? [firstSell] : []), ...(cycle.fills ?? []).map((fl) => fl.price)]);
-  const y = linear(y0, y1, H - M.b, M.t);
-  const sells = orders.sells.filter((r) => r.price <= y1);
-  const last = data[data.length - 1];
-  const buyFirst = orders.buys[0];
-  const buyLast = orders.buys[orders.buys.length - 1];
-  const labels = placeLabels([
-    ...(buyFirst ? [{ key: "b1", y: y(buyFirst.price), text: `매수 1번 ${usd(buyFirst.price)}` }] : []),
-    ...(buyLast && buyLast !== buyFirst ? [{ key: "bn", y: y(buyLast.price), text: `매수 ${orders.buys.length}번 ${usd(buyLast.price)}` }] : []),
-    ...(sells[0] ? [{ key: "s1", y: y(sells[0].price), text: `매도 1번 ${usd(sells[0].price)}` }] : []),
-    { key: "now", y: y(last.close), text: `종가 ${usd(last.close)}` },
-  ]);
-  const startX = x(time(cycle.startDate));
-
-  function move(svgX: number) {
-    const nearest = data.reduce((best, p) => Math.abs(x(time(p.date)) - svgX) < Math.abs(x(time(best.date)) - svgX) ? p : best);
-    const fills = countFills(orders, nearest.close);
-    setHover({ x: x(time(nearest.date)), content: <>
-      <strong>{nearest.date}</strong>
-      <span><Swatch kind="price" />종가 {usd(nearest.close)}</span>
-      <em>{fills.buys > 0 ? `이 가격이면 매수 ${fills.buys}줄 체결` : fills.sells > 0 ? `이 가격이면 매도 ${fills.sells}줄 체결` : "이 가격이면 체결 없음"}</em>
-    </> });
-  }
-
-  return <ChartFrame plotRef={plotRef} W={W}
-    label={`${cycle.week}주차 주문 지정가와 최근 종가`}
-    legend={<><span><Swatch kind="price" />종가</span><span><Swatch kind="buy" />매수 지정가 {orders.buys.length}줄</span><span><Swatch kind="sell" />매도 지정가 (화면 범위 {sells.length}줄)</span>{(cycle.fills ?? []).length > 0 && <span><Swatch kind="fill" />기록한 체결</span>}</>}
-    hover={hover} onMove={move} onLeave={() => setHover(null)}>
-    <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={dateTicks(t0, t1, W < 560 ? 3 : 4)} x={x} long={false} />
-    <rect className="vr-chart-cycle" x={startX} width={Math.max(0, W - M.r - startX)} y={M.t} height={H - M.t - M.b} />
-    <line className="vr-chart-cross" x1={startX} x2={startX} y1={M.t} y2={H - M.b} />
-    <text className="vr-chart-note" x={startX - 6} y={H - M.b - 8} textAnchor="end">{cycle.week}주차 시작 →</text>
-    {orders.buys.map((r) => <line key={`b${r.holdings}`} className="vr-chart-buy" x1={M.l} x2={W - M.r} y1={y(r.price)} y2={y(r.price)} />)}
-    {sells.map((r) => <line key={`s${r.holdings}`} className="vr-chart-sell" x1={M.l} x2={W - M.r} y1={y(r.price)} y2={y(r.price)} />)}
-    <path className="vr-chart-price" d={data.map((p, i) => `${i ? "L" : "M"}${x(time(p.date))},${y(p.close)}`).join(" ")} />
-    <circle className="vr-chart-dot vr-chart-dot--price" cx={x(time(last.date))} cy={y(last.close)} r={4} />
-    {(cycle.fills ?? []).filter((fl) => time(fl.date) >= t0).map((fl) => <circle key={fl.id} className={`vr-chart-fill vr-chart-fill--${fl.side}`} cx={x(time(fl.date))} cy={y(fl.price)} r={5}><title>{`${fl.date} ${fl.side === "buy" ? "매수" : "매도"} ${fl.quantity}주 × ${usd(fl.price)}`}</title></circle>)}
+    <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={dateTicks(t0, t1, W < 560 ? 3 : long ? 6 : 4)} x={x} long={long} />
+    {byCycle.map((g) => <g key={g.cycle.index} className={isSim(g.cycle) ? "vr-chart-sim" : undefined}>
+      <path className="vr-chart-band" d={area(g)} />
+      <path className="vr-chart-edge" d={step(g, "max")} />
+      <path className="vr-chart-edge" d={step(g, "min")} />
+      <path className="vr-chart-v vr-chart-v--dash" d={step(g, "target")} />
+      <line className="vr-chart-cycle-line" x1={x(time(g.cycle.startDate))} x2={x(time(g.cycle.startDate))} y1={M.t} y2={H - M.b} />
+    </g>)}
+    {realStart && hasSim && <text className="vr-chart-note" x={x(time(realStart.cycle.startDate)) + 4} y={M.t + 10}>실제 기록 →</text>}
+    {closes.length > 0 && <path className="vr-chart-price" d={closes.map((p, i) => `${i ? "L" : "M"}${x(time(p.date))},${y(p.close)}`).join(" ")} />}
+    {fills.map((f) => <path key={f.id} className={`vr-chart-fill vr-chart-fill--${f.side}${f.sim ? " is-sim" : ""}`} d={triangle(x(time(f.date)), y(f.price), f.side === "buy")}>
+      <title>{`${f.date} ${f.side === "buy" ? "매수" : "매도"} ${f.quantity}주 × ${usd(f.price)}${f.sim ? " (백테스트)" : ""}`}</title>
+    </path>)}
     {labels.map((l) => <text key={l.key} className="vr-chart-label" x={W - M.r + 8} y={l.ly} dy="0.32em">{l.text}</text>)}
   </ChartFrame>;
 }

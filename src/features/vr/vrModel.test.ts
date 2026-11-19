@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  VR_DEFAULT_SETTINGS, addDays, addFill, fillTotals, overdueCycles, removeFill, buildOrders, closeCycle, createExistingAccount, createNewAccount, createQuickResumeAccount, gForWeek,
+  VR_DEFAULT_SETTINGS, addDays, addFill, costBasis, fillTotals, overdueCycles, removeFill, rescheduleCurrentCycle, setCurrentAverageCost, startingCapital, buildOrders, closeCycle, createExistingAccount, createNewAccount, createQuickResumeAccount, gForWeek,
   nextV, openCycle, poolLimitForWeek, reopenLastCycle, suggestInitialBuy, valuationStatus, type VrAccount,
 } from "./vrModel";
 import { exportVrAccount, parseVrAccount } from "./vrStorage";
+import { estimatePrincipal, runBacktest, week0DateFor } from "./vrBacktest";
 
 const basic = { ...VR_DEFAULT_SETTINGS };
 
@@ -180,5 +181,58 @@ describe("account lifecycle", () => {
     expect(overdueCycles(cycle, cycle.endDate)).toBe(0);
     expect(overdueCycles(cycle, addDays(cycle.endDate, 1))).toBe(1);
     expect(overdueCycles(cycle, addDays(cycle.startDate, 28))).toBe(2);
+  });
+
+  it("tracks the average cost and invested amount through fills, closes and corrections", () => {
+    let account = createQuickResumeAccount(basic, { cycleStartDate: "2026-11-15", week: 20, shares: 75, averageCost: 51.81, referenceClose: 51.64, poolBeforeDeposit: 0, basis: "cost" });
+    expect(costBasis(account)).toEqual({ averageCost: 51.81, shares: 75, cost: 3885.75, estimated: false });
+    expect(startingCapital(account)).toBe(3885.75);
+    account = addFill(account, { date: "2026-11-16", side: "buy", price: 50, quantity: 1 });
+    account = addFill(account, { date: "2026-11-17", side: "sell", price: 60, quantity: 1 });
+    // 매수: (3,885.75 + 50) / 76 = 51.786 → 매도는 평단가를 바꾸지 않는다
+    expect(costBasis(account, 0, "2026-11-16")).toMatchObject({ averageCost: 51.79, shares: 76 });
+    expect(costBasis(account)).toMatchObject({ averageCost: 51.79, shares: 75, cost: 3884.25 });
+    // 기록 없이 2주 늘었으면 종료 종가로 샀다고 추정한다: (3,883.96 + 2 × 55) / 77 = 51.87
+    const closed = closeCycle(account, { shares: 77, pool: 0, price: 55 });
+    expect(costBasis(closed)).toMatchObject({ averageCost: 51.87, shares: 77, estimated: true });
+    // 증권사 평단가를 넣으면 그 값을 쓴다
+    expect(costBasis(closeCycle(account, { shares: 77, pool: 0, price: 55, averageCost: 52 }))).toMatchObject({ averageCost: 52, cost: 4004, estimated: false });
+    expect(costBasis(setCurrentAverageCost(closed, 53))).toMatchObject({ averageCost: 53, estimated: false });
+    expect(costBasis(createExistingAccount(basic, { cycleStartDate: "2026-11-15", week: 20, previousV: 4000, shares: 75, poolBeforeDeposit: 0, previousClose: 50 })).averageCost).toBeNull();
+  });
+
+  it("moves the current cycle start date and keeps fills inside the period", () => {
+    let account = createQuickResumeAccount(basic, { cycleStartDate: "2026-11-17", week: 20, shares: 75, averageCost: 51.81, referenceClose: 51.64, poolBeforeDeposit: 0, basis: "cost" });
+    const moved = rescheduleCurrentCycle(account, "2026-11-15");
+    expect(moved.cycles[0]).toMatchObject({ startDate: "2026-11-15", endDate: "2026-11-28" });
+    expect(moved.start.date).toBe("2026-11-15");
+    account = addFill(account, { date: "2026-11-29", side: "buy", price: 50, quantity: 1 });
+    expect(() => rescheduleCurrentCycle(account, "2026-11-15")).toThrow(/체결 기록/);
+  });
+
+  it("replays weeks 0 to N from daily closes with the sheet ladder", () => {
+    // 2026-01-04(일)부터 매일 종가: 50에서 30일 동안 내려 35까지, 그 뒤 올라 60까지
+    const prices = Array.from({ length: 120 }, (_, i) => ({ date: addDays("2026-01-04", i), close: Math.round((i < 30 ? 50 - i * 0.5 : 35 + (i - 30) * 0.3) * 100) / 100 }));
+    expect(week0DateFor("2026-03-01", 8)).toBe("2026-01-04");
+    const { account, reached } = runBacktest({ settings: basic, week0Date: "2026-01-04", principal: 10000, poolRatio: 0.15, untilWeek: 16, prices });
+    expect(reached).toBe(true);
+    expect(account.start).toMatchObject({ shares: 173, price: 50, pool: 1350 });
+    expect(account.cycles.map((c) => c.week)).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
+    expect(account.cycles.at(-1)!.close).toBeUndefined();
+    for (let i = 0; i < account.cycles.length - 1; i += 1) {
+      const c = account.cycles[i];
+      const t = fillTotals(c);
+      expect(c.close).toMatchObject({ shares: t.shares, pool: Math.max(0, t.pool) });
+      expect(account.cycles[i + 1].shares).toBe(t.shares);
+      for (const f of c.fills ?? []) expect(f.date >= c.startDate && f.date <= c.endDate).toBe(true);
+    }
+    // 내려가는 구간에는 매수, 올라가는 구간에는 매도가 생긴다
+    expect(account.cycles.some((c) => fillTotals(c).buyQuantity > 0)).toBe(true);
+    expect(account.cycles.some((c) => fillTotals(c).sellQuantity > 0)).toBe(true);
+    // 가격 자료가 모자라면 멈춘다
+    expect(runBacktest({ settings: basic, week0Date: "2026-01-04", principal: 10000, poolRatio: 0.15, untilWeek: 40, prices }).reached).toBe(false);
+    expect(() => runBacktest({ settings: basic, week0Date: "2025-01-01", principal: 10000, poolRatio: 0.15, untilWeek: 8, prices })).toThrow(/이전 종가가 없습니다/);
+    // 원금 어림: 매입금액 3,885.75 + 현금 100 − 적립금 250 × 9
+    expect(estimatePrincipal(3885.75, 100, 250, 20)).toBe(1735.75);
   });
 });

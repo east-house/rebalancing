@@ -3,13 +3,15 @@ import { Check, ChevronDown, ClipboardCheck, Download, Flag, ListChecks, RotateC
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import {
-  DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, addFill, buildOrders, closeCycle, createExistingAccount, fillTotals, overdueCycles, removeFill,
+  DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, addFill, buildOrders, closeCycle, costBasis, createExistingAccount, fillTotals, overdueCycles, removeFill,
+  rescheduleCurrentCycle, setCurrentAverageCost, startingCapital,
   createNewAccount, createQuickResumeAccount, currentCycle, formatOrdersText, gForWeek, poolLimitForWeek, reopenLastCycle,
   suggestInitialBuy, totalDeposits, validateSettings, valuationStatus,
   type FillSide, type OrderRow, type VBasis, type VFormula, type VrAccount, type VrCycle, type VrSettings,
 } from "./vrModel";
 import { fetchCloseBefore, fetchPriceHistory, todayLocal, type ReferenceClose } from "./vrPrices";
-import { VrBandChart, VrPriceChart, countFills } from "./VrCharts";
+import { VrPriceBandChart, countFills } from "./VrCharts";
+import { estimatePrincipal, runBacktest, week0DateFor, type BacktestResult } from "./vrBacktest";
 import { deleteVrAccount, exportVrAccount, loadVrAccount, parseVrAccount, saveVrAccount } from "./vrStorage";
 import "./vr.css";
 
@@ -54,7 +56,7 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
   const [settings, setSettings] = useState<SettingsForm>(toForm(VR_DEFAULT_SETTINGS));
   const [plan, setPlan] = useState({ principal: "", refPrice: "", ratio: String(DEFAULT_INITIAL_POOL_RATIO) });
   const [fill, setFill] = useState({ date: "", shares: "", close: "", pool: "" });
-  const [existing, setExisting] = useState({ cycleStartDate: "", week: "2", previousV: "", shares: "", poolBeforeDeposit: "", previousClose: "" });
+  const [existing, setExisting] = useState({ cycleStartDate: "", week: "2", previousV: "", shares: "", poolBeforeDeposit: "", previousClose: "", averageCost: "" });
   const [quick, setQuick] = useState({ cycleStartDate: todayLocal(), week: "", shares: "", averageCost: "", referenceClose: "", pool: "0", basis: "cost" as VBasis });
   const [closeInfo, setCloseInfo] = useState<{ status: "idle" | "loading" | "ok" | "error" | "manual"; text: string }>({ status: "idle", text: "" });
   const [error, setError] = useState("");
@@ -110,6 +112,7 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
         onCreate(createExistingAccount(s, {
           cycleStartDate: existing.cycleStartDate, week: num(existing.week), previousV: num(existing.previousV),
           shares: num(existing.shares), poolBeforeDeposit: num(existing.poolBeforeDeposit), previousClose: num(existing.previousClose),
+          ...(existing.averageCost.trim() ? { averageCost: num(existing.averageCost) } : {}),
         }));
       }
     } catch (cause) { setError(errorText(cause, "계좌를 시작할 수 없습니다.")); }
@@ -126,12 +129,12 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
       <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
       {mode === "quick" ? <>
         <h3>현재 계좌 (아는 값만)</h3>
-        <p className="vr-hint">현재 주차, 보유 수량, 평단가와 위의 2주 적립금만 있으면 이어서 시작합니다. 직전 V는 모르므로 아래 기준으로 대신 정합니다. 직전 마감 종가는 사이트 가격 자료에서 자동으로 채웁니다.</p>
+        <p className="vr-hint">현재 주차, 보유 수량, 평단가와 위의 2주 적립금만 있으면 이어서 시작합니다. 이번 주차 시작일은 오늘이 아니라 이번 2주가 시작된 날(예: 시트의 주차 시작 일요일)을 넣으세요. 직전 V는 모르므로 아래 기준으로 대신 정합니다. 직전 마감 종가는 사이트 가격 자료에서 자동으로 채웁니다.</p>
         <div className="vr-fields">
           <label>현재 주차<input type="number" min="1" step="1" value={quick.week} onChange={(e) => setQuick({ ...quick, week: e.target.value })} /></label>
           <label>보유 수량 (주)<input type="number" min="1" step="1" value={quick.shares} onChange={(e) => setQuick({ ...quick, shares: e.target.value })} /></label>
           <label>평단가 (USD)<input type="number" min="0" step="any" value={quick.averageCost} onChange={(e) => setQuick({ ...quick, averageCost: e.target.value })} /></label>
-          <label>이번 사이클 시작일<input type="date" value={quick.cycleStartDate} onChange={(e) => setQuick({ ...quick, cycleStartDate: e.target.value })} /></label>
+          <label>이번 주차 시작일<input type="date" value={quick.cycleStartDate} onChange={(e) => setQuick({ ...quick, cycleStartDate: e.target.value })} /></label>
           <label>직전 마감 종가 (USD)<input type="number" min="0" step="any" value={quick.referenceClose} onChange={(e) => { setQuick({ ...quick, referenceClose: e.target.value }); setCloseInfo({ status: "manual", text: "직접 입력한 종가를 사용합니다." }); }} /></label>
           <label>현재 현금 Pool (모르면 0)<input type="number" min="0" step="any" value={quick.pool} onChange={(e) => setQuick({ ...quick, pool: e.target.value })} /></label>
         </div>
@@ -173,6 +176,7 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
           <label>직전 사이클 마감 종가 (USD)<input type="number" min="0" step="any" value={existing.previousClose} onChange={(e) => setExisting({ ...existing, previousClose: e.target.value })} /></label>
           <label>현재 보유 수량 (주)<input type="number" min="0" step="1" value={existing.shares} onChange={(e) => setExisting({ ...existing, shares: e.target.value })} /></label>
           <label>현재 Pool, 적립 전 (USD)<input type="number" min="0" step="any" value={existing.poolBeforeDeposit} onChange={(e) => setExisting({ ...existing, poolBeforeDeposit: e.target.value })} /></label>
+          <label>현재 평단가 (선택, USD)<input type="number" min="0" step="any" value={existing.averageCost} onChange={(e) => setExisting({ ...existing, averageCost: e.target.value })} /></label>
         </div>
       </>}
       <button className="vr-primary" type="submit">계좌 시작</button>
@@ -204,7 +208,7 @@ function formulaExplain(cycle: VrCycle): string {
   return `V = ${base} + (직전 마감 평가금 ${money(cycle.previousValuation)} − 직전 V) ÷ 2√${cycle.g} + 적립금 ${money(cycle.deposit)} (실력공식)`;
 }
 
-type FoldKey = "orders" | "fills" | "close" | "charts" | "ledger" | "settings";
+type FoldKey = "flow" | "orders" | "fills" | "close" | "charts" | "backtest" | "ledger" | "settings";
 
 function Fold({ id, title, summary, open, onToggle, children }: {
   id: string; title: string; summary: ReactNode; open: boolean; onToggle: (open: boolean) => void; children: ReactNode;
@@ -216,6 +220,9 @@ function Fold({ id, title, summary, open, onToggle, children }: {
 }
 
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+const signedMoney = (value: number, digits = 2) => `${value >= 0 ? "+" : "−"}${money(Math.abs(value), digits)}`;
+const signedPct = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}%`;
+const tone = (value: number) => value > 0 ? "vr-gain" : value < 0 ? "vr-loss" : "";
 
 /** V 최소~최대 밴드 위에 지금 평가금 위치를 보여 주는 막대 */
 function BandGauge({ cycle, value }: { cycle: VrCycle; value: number | null }) {
@@ -241,14 +248,84 @@ function BandGauge({ cycle, value }: { cycle: VrCycle; value: number | null }) {
   </div>;
 }
 
+/** 종료일이 지난 주차를 확인 한 번으로 넘기는 안내창 */
+function OverdueDialog({ cycle, overdue, shares, pool, averageCost, endClose, onConfirm, onEdit, onLater }: {
+  cycle: VrCycle; overdue: number; shares: number; pool: number; averageCost: number | null; endClose: ReferenceClose | undefined;
+  onConfirm: (price: number) => void; onEdit: () => void; onLater: () => void;
+}) {
+  const [price, setPrice] = useState("");
+  return <div className="vr-modal-backdrop">
+    <div className="vr-modal" role="alertdialog" aria-modal="true" aria-labelledby="vr-overdue-title" aria-describedby="vr-overdue-desc">
+      <h2 id="vr-overdue-title">{cycle.week}주차가 끝났습니다</h2>
+      <p id="vr-overdue-desc">{cycle.startDate} ~ {cycle.endDate} 주차의 종료일이 지났습니다. 확인을 누르면 아래 값으로 {cycle.week}주차를 종료하고 {cycle.week + 2}주차를 엽니다.{overdue > 1 ? ` 지난 주차가 ${overdue}개라 확인할 때마다 하나씩 넘어갑니다.` : ""}</p>
+      <dl className="vr-modal-values">
+        <div><dt>보유 수량</dt><dd>{shares}주</dd></div>
+        <div><dt>Pool (적립 전)</dt><dd>{money(pool)}</dd></div>
+        <div><dt>평단가</dt><dd>{averageCost == null ? "—" : money(averageCost)}</dd></div>
+        <div><dt>종료 종가</dt><dd>{endClose ? `${money(endClose.close)} (${endClose.date})` : "아래에 입력"}</dd></div>
+      </dl>
+      {!endClose && <label className="vr-modal-field">종료 종가 (USD)<input type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} /></label>}
+      <p className="vr-hint">보유 수량·Pool은 체결 기록 기준입니다. 증권사 잔고와 다르면 "값 고치기"를 눌러 주차 종료 칸에서 고친 뒤 종료하세요.</p>
+      <div className="vr-modal-actions">
+        <button type="button" className="vr-link" onClick={onLater}>나중에</button>
+        <button type="button" className="vr-secondary" onClick={onEdit}>값 고치기</button>
+        <button type="button" className="vr-primary vr-modal-ok" onClick={() => onConfirm(endClose ? endClose.close : num(price))}>확인</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function BacktestPanel({ result, error, form, onForm, actual, week }: {
+  result: BacktestResult | null; error: string; form: { week0Date: string; principal: string; poolRatio: string };
+  onForm: (patch: Partial<{ week0Date: string; principal: string; poolRatio: string }>) => void;
+  actual: { shares: number; pool: number; v: number }; week: number;
+}) {
+  const sim = result ? result.account.cycles : [];
+  const reachedCycle = result?.reached ? sim[sim.length - 1] : null;
+  return <>
+    <p className="vr-hint">0주차부터 {week}주차까지 이 계좌가 시트 규칙대로 운용됐다면 어땠을지 일별 종가로 재생합니다. 사이클 시작 때 걸어 둔 1주씩 지정가 주문이 그날 종가가 매수가 이하(매도가 이상)이면 지정가로 체결됐다고 봅니다. 장중 고가·저가는 없어서 실제 체결과 다를 수 있고, 수수료·세금은 빠져 있습니다. 실제 계좌 기록은 바꾸지 않습니다.</p>
+    <div className="vr-fields">
+      <label>0주차 날짜<input type="date" value={form.week0Date} onChange={(e) => onForm({ week0Date: e.target.value })} /></label>
+      <label>0주차 원금 (USD)<input type="number" min="0" step="any" value={form.principal} onChange={(e) => onForm({ principal: e.target.value })} /></label>
+      <label>0주차 Pool 비율 P/V<input type="number" min="0" step="any" value={form.poolRatio} onChange={(e) => onForm({ poolRatio: e.target.value })} /></label>
+    </div>
+    <p className="vr-hint">0주차 날짜는 이번 주차 시작일에서 {week}주를 뺀 날, 원금은 지금 매입금액 + 적립 전 현금 − 그동안의 적립금으로 어림한 값입니다. 알고 있는 값으로 고치세요.</p>
+    {error && <p className="vr-error">{error}</p>}
+    {result && <>
+      {reachedCycle
+        ? <div className="vr-compare">
+          <div><span>백테스트 {week}주차 시작</span><b>{reachedCycle.shares}주 · Pool {money(reachedCycle.pool)} · V {money(reachedCycle.v, 0)}</b></div>
+          <div><span>실제 {week}주차 시작</span><b>{actual.shares}주 · Pool {money(actual.pool)} · V {money(actual.v, 0)}</b></div>
+        </div>
+        : <p className="vr-hint">가격 자료가 {week}주차까지 닿지 않아 {sim[sim.length - 1]?.week}주차에서 멈췄습니다.</p>}
+      <div className="vr-table-wrap"><table className="vr-ledger">
+        <thead><tr><th>주차</th><th>기간</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>매수</th><th>매도</th><th>종료 수량</th><th>종료 Pool</th><th>종료 종가</th><th>평가금</th><th>총자산</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>{result.account.start.date}</td><td>{money(result.account.start.v0, 0)}</td><td>—</td><td>—</td><td>{result.account.start.shares}주 × {money(result.account.start.price)}</td><td>—</td><td>{result.account.start.shares}</td><td>{money(result.account.start.pool)}</td><td>{money(result.account.start.price)}</td><td>{money(result.account.start.v0)}</td><td>{money(result.account.start.v0 + result.account.start.pool)}</td></tr>
+          {sim.map((c) => {
+            const t = fillTotals(c);
+            const value = c.close ? c.close.shares * c.close.price : null;
+            return <tr key={c.index}>
+              <td>{c.week}{c.close ? "" : " (도달)"}</td><td>{c.startDate} ~ {c.endDate.slice(5)}</td><td>{money(c.v, 0)}</td><td>{money(c.lower, 0)}~{money(c.upper, 0)}</td><td>{c.shares}</td>
+              <td>{t.buyQuantity ? `${t.buyQuantity}주` : "—"}</td><td>{t.sellQuantity ? `${t.sellQuantity}주` : "—"}</td>
+              <td>{c.close?.shares ?? "—"}</td><td>{money(c.close?.pool)}</td><td>{money(c.close?.price)}</td><td>{money(value)}</td><td>{money(value == null ? null : value + c.close!.pool)}</td>
+            </tr>;
+          })}
+        </tbody>
+      </table></div>
+    </>}
+  </>;
+}
+
 type StepState = "done" | "now" | "later";
 
 function AccountView({ account, onChange, onReset }: { account: VrAccount; onChange: (next: VrAccount) => void; onReset: () => void }) {
   const cycle = currentCycle(account);
   const orders = useMemo(() => buildOrders(cycle), [cycle]);
   const [refPrice, setRefPrice] = useState("");
-  const [closeForm, setCloseForm] = useState({ shares: String(cycle.shares), pool: "", price: "" });
+  const [closeForm, setCloseForm] = useState({ shares: String(cycle.shares), pool: "", price: "", averageCost: "" });
   const [settings, setSettings] = useState<SettingsForm>(toForm(account.settings));
+  const [fix, setFix] = useState({ startDate: cycle.startDate, averageCost: "" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [history, setHistory] = useState<{ status: "loading" | "ready" | "error"; prices: ReferenceClose[] }>({ status: "loading", prices: [] });
@@ -262,24 +339,43 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   const latest = history.prices.at(-1);
   const today = todayLocal();
   const totals = useMemo(() => fillTotals(cycle), [cycle]);
+  const basis = useMemo(() => costBasis(account), [account]);
   const overdue = overdueCycles(cycle, today);
-  const [open, setOpen] = useState<Record<FoldKey, boolean>>({ orders: false, fills: false, close: overdue > 0, charts: false, ledger: false, settings: false });
+  const [open, setOpen] = useState<Record<FoldKey, boolean>>({ flow: false, orders: true, fills: true, close: true, charts: true, backtest: true, ledger: true, settings: true });
   const setFold = (key: FoldKey, value: boolean) => setOpen((prev) => ({ ...prev, [key]: value }));
+  const [laterFor, setLaterFor] = useState<number | null>(null);
   function openFold(key: FoldKey) {
     setFold(key, true);
     window.setTimeout(() => document.getElementById(`vr-fold-${key}`)?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 0);
   }
-  // 사이클이 끝났으면 종료일 이전 마지막 종가를 마감 종가로 제안한다.
+  // 주차가 끝났으면 종료일 이전 마지막 종가를 종료 종가로 제안한다.
   const endClose = useMemo(() => overdue > 0 ? [...history.prices].reverse().find((p) => p.date >= cycle.startDate && p.date <= cycle.endDate) : undefined, [overdue, history.prices, cycle.startDate, cycle.endDate]);
   const [fillForm, setFillForm] = useState({ date: clampDate(today, cycle.startDate, cycle.endDate), side: "buy" as FillSide, price: "", quantity: "1" });
   useEffect(() => {
     setRefPrice(""); setFillForm((f) => ({ ...f, date: clampDate(todayLocal(), cycle.startDate, cycle.endDate), price: "", quantity: "1" }));
-    setOpen((prev) => ({ ...prev, close: overdueCycles(cycle, todayLocal()) > 0 }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setFix((f) => ({ ...f, startDate: cycle.startDate }));
   }, [cycle.index, cycle.startDate, cycle.endDate]);
   useEffect(() => {
-    setCloseForm({ shares: String(totals.shares), pool: String(totals.pool), price: endClose ? String(endClose.close) : "" });
-  }, [cycle.index, totals.shares, totals.pool, endClose]);
+    setCloseForm({ shares: String(totals.shares), pool: String(totals.pool), price: endClose ? String(endClose.close) : "", averageCost: basis.averageCost == null ? "" : String(basis.averageCost) });
+  }, [cycle.index, totals.shares, totals.pool, endClose, basis.averageCost]);
+
+  // 백테스트(0주차 ~ 이번 주차 직전)
+  const [btForm, setBtForm] = useState(() => ({ week0Date: week0DateFor(account.cycles[0].startDate, account.cycles[0].week), principal: "", poolRatio: String(DEFAULT_INITIAL_POOL_RATIO) }));
+  const firstBasis = useMemo(() => costBasis(account, 0, ""), [account]);
+  const principalGuess = estimatePrincipal(firstBasis.cost, account.cycles[0].poolBeforeDeposit, account.settings.deposit, account.cycles[0].week);
+  const principalText = btForm.principal || (principalGuess == null ? "" : String(principalGuess));
+  const backtest = useMemo(() => {
+    if (history.status !== "ready") return { result: null, error: history.status === "error" ? "가격 자료를 불러오지 못해 백테스트를 할 수 없습니다." : "" };
+    if (account.cycles[0].week <= 2) return { result: null, error: "이 계좌는 처음부터 기록되어 있어 백테스트할 지난 주차가 없습니다." };
+    try {
+      return { result: runBacktest({ settings: { ...account.settings, deposit: account.cycles[0].deposit }, week0Date: btForm.week0Date, principal: num(principalText), poolRatio: num(btForm.poolRatio), untilWeek: account.cycles[0].week, prices: history.prices }), error: "" };
+    } catch (cause) { return { result: null, error: errorText(cause, "백테스트를 할 수 없습니다.") }; }
+  }, [history, account.cycles, account.settings, btForm.week0Date, btForm.poolRatio, principalText]);
+  const [showSim, setShowSim] = useState(true);
+  const chartCycles = useMemo(() => {
+    const sim = showSim && backtest.result ? backtest.result.account.cycles.filter((c) => c.close && c.week < account.cycles[0].week) : [];
+    return [...sim, ...account.cycles];
+  }, [showSim, backtest.result, account.cycles]);
 
   const check = useMemo(() => {
     const manual = num(refPrice);
@@ -293,12 +389,24 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   const daysLeft = daysBetween(today, cycle.endDate);
   const started = today === cycle.startDate;
 
-  function close(event: FormEvent) {
-    event.preventDefault(); setError(""); setMessage("");
+  const pnl = check && basis.cost != null && basis.cost > 0 ? { value: check.value - basis.cost, pct: (check.value / basis.cost - 1) * 100 } : null;
+  const capital = startingCapital(account);
+  const invested = capital == null ? null : capital + totalDeposits(account);
+  const totalAsset = check ? check.value + totals.pool : null;
+  const totalPnl = invested != null && totalAsset != null && invested > 0 ? { value: totalAsset - invested, pct: (totalAsset / invested - 1) * 100 } : null;
+
+  function endWeek(values: { shares: number; pool: number; price: number; averageCost?: number }) {
+    setError(""); setMessage("");
     try {
-      onChange(closeCycle(account, { shares: num(closeForm.shares), pool: num(closeForm.pool), price: num(closeForm.price) }));
-      setMessage(`${cycle.week}주차 사이클을 마감하고 ${nextWeek}주차 사이클을 열었습니다.`);
-    } catch (cause) { setError(errorText(cause, "사이클을 마감할 수 없습니다.")); }
+      onChange(closeCycle(account, values));
+      setMessage(`${cycle.week}주차를 종료하고 ${nextWeek}주차를 열었습니다.`);
+    } catch (cause) { setError(errorText(cause, "주차를 종료할 수 없습니다.")); }
+  }
+  function close(event: FormEvent) {
+    event.preventDefault();
+    if (overdue === 0 && !window.confirm(`아직 ${cycle.endDate} 종료일 전입니다. 지금 ${cycle.week}주차를 종료할까요?`)) return;
+    const avg = num(closeForm.averageCost);
+    endWeek({ shares: num(closeForm.shares), pool: num(closeForm.pool), price: num(closeForm.price), ...(Number.isFinite(avg) && avg > 0 ? { averageCost: avg } : {}) });
   }
   function recordFill(event: FormEvent) {
     event.preventDefault(); setError(""); setMessage("");
@@ -317,12 +425,23 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   }
   function saveSettings(event: FormEvent) {
     event.preventDefault(); setError(""); setMessage("");
-    try { onChange({ ...account, settings: fromForm(settings) }); setMessage("설정을 저장했습니다. 다음 사이클부터 적용됩니다."); }
+    try { onChange({ ...account, settings: fromForm(settings) }); setMessage("설정을 저장했습니다. 다음 주차부터 적용됩니다."); }
     catch (cause) { setError(errorText(cause, "설정을 저장할 수 없습니다.")); }
   }
+  function saveFix(event: FormEvent) {
+    event.preventDefault(); setError(""); setMessage("");
+    try {
+      let next = rescheduleCurrentCycle(account, fix.startDate);
+      const avg = num(fix.averageCost);
+      if (fix.averageCost.trim() !== "") next = setCurrentAverageCost(next, avg);
+      onChange(next);
+      setFix((f) => ({ ...f, averageCost: "" }));
+      setMessage("계좌 정보를 고쳤습니다.");
+    } catch (cause) { setError(errorText(cause, "계좌 정보를 고칠 수 없습니다.")); }
+  }
   function undo() {
-    if (!window.confirm("직전 마감을 취소하고 그 사이클을 다시 열까요? 현재 열린 사이클은 지워집니다.")) return;
-    try { onChange(reopenLastCycle(account)); setMessage("직전 마감을 취소했습니다."); } catch (cause) { setError(errorText(cause, "되돌릴 수 없습니다.")); }
+    if (!window.confirm("직전 주차 종료를 취소하고 그 주차를 다시 열까요? 현재 열린 주차는 지워집니다.")) return;
+    try { onChange(reopenLastCycle(account)); setMessage("직전 주차 종료를 취소했습니다."); } catch (cause) { setError(errorText(cause, "되돌릴 수 없습니다.")); }
   }
   async function copy() {
     try { await navigator.clipboard.writeText(formatOrdersText(account.settings.ticker, cycle, orders)); setMessage("주문표를 복사했습니다."); }
@@ -338,23 +457,27 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   const steps: Array<{ key: string; icon: ReactNode; title: string; text: string; state: StepState; action?: [string, () => void] }> = [
     { key: "deposit", icon: <Wallet size={18} />, title: "적립금 입금", text: `${cycle.startDate}에 ${money(cycle.deposit)} 입금`, state: overdue > 0 ? "done" : started ? "now" : "done" },
     { key: "order", icon: <ListChecks size={18} />, title: "지정가 주문 걸기", text: `매수 ${orders.buys.length}줄 · 매도 ${orders.sells.length}줄, 1주씩`, state: overdue > 0 ? "done" : started ? "now" : "done", action: ["주문표 보기", () => openFold("orders")] },
-    { key: "fill", icon: <ClipboardCheck size={18} />, title: "체결되면 기록", text: totals.count > 0 ? `${totals.count}건 기록 · 보유 ${totals.shares}주` : "체결 시 가격·수량 기록 (선택)", state: overdue > 0 ? "done" : started ? "later" : "now", action: ["체결 기록", () => openFold("fills")] },
-    { key: "close", icon: <Flag size={18} />, title: "2주 뒤 마감", text: overdue > 0 ? "지금 마감할 차례입니다" : `${cycle.endDate} 장 마감 후 버튼으로 마감`, state: overdue > 0 ? "now" : "later", action: ["마감하기", () => openFold("close")] },
+    { key: "fill", icon: <ClipboardCheck size={18} />, title: "매일 체결 기록", text: totals.count > 0 ? `${totals.count}건 기록 · 보유 ${totals.shares}주` : "체결되면 체결가·수량 입력", state: overdue > 0 ? "done" : started ? "later" : "now", action: ["체결 기록", () => openFold("fills")] },
+    { key: "close", icon: <Flag size={18} />, title: "주차 종료", text: overdue > 0 ? "지금 종료할 차례입니다" : `${cycle.endDate} 장 마감 후 "주차 종료" 누르기`, state: overdue > 0 ? "now" : "later", action: ["종료 칸 열기", () => openFold("close")] },
   ];
 
   return <>
+    {overdue > 0 && laterFor !== cycle.index && <OverdueDialog cycle={cycle} overdue={overdue} shares={totals.shares} pool={totals.pool} averageCost={basis.averageCost} endClose={endClose}
+      onConfirm={(price) => endWeek({ shares: totals.shares, pool: totals.pool, price, ...(basis.averageCost != null ? { averageCost: basis.averageCost } : {}) })}
+      onEdit={() => { setLaterFor(cycle.index); openFold("close"); }} onLater={() => setLaterFor(cycle.index)} />}
+
     <section className="vr-panel vr-now" aria-labelledby="vr-now-title">
       <div className="vr-now-head">
         <div>
           <p className="vr-eyebrow">현재 상황</p>
           <h2 id="vr-now-title">{cycle.week}주차 · {cycle.startDate} ~ {cycle.endDate}</h2>
         </div>
-        <span className={`vr-dday${overdue > 0 ? " is-due" : ""}`}>{overdue > 0 ? "마감일 지남" : daysLeft === 0 ? "오늘 마감" : `마감까지 ${daysLeft}일`}</span>
+        <span className={`vr-dday${overdue > 0 ? " is-due" : ""}`}>{overdue > 0 ? "종료일 지남" : daysLeft === 0 ? "오늘 종료" : `종료까지 ${daysLeft}일`}</span>
       </div>
       {overdue > 0 && <div className="vr-due" role="status">
         <strong>{cycle.week}주차 사이클이 {cycle.endDate}에 끝났습니다.</strong>
-        <span>{overdue > 1 ? `오늘까지 ${overdue}개 사이클이 지났습니다. 마감할 때마다 다음 사이클이 하나씩 열리니 차례로 마감하세요. ` : ""}잔고를 확인하고 마감하면 {nextWeek}주차 V와 주문표가 만들어집니다.</span>
-        <button type="button" className="vr-due-action" onClick={() => openFold("close")}>마감하러 가기</button>
+        <span>{overdue > 1 ? `오늘까지 ${overdue}개 주차가 지났습니다. 종료할 때마다 다음 주차가 하나씩 열립니다. ` : ""}잔고를 확인하고 "주차 종료"를 누르면 {nextWeek}주차 V와 주문표가 만들어집니다.</span>
+        <button type="button" className="vr-due-action" onClick={() => { setLaterFor(null); openFold("close"); }}>주차 종료하러 가기</button>
       </div>}
 
       <div className="vr-now-grid">
@@ -362,12 +485,19 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
           <p className="vr-now-label">V · 이번 2주 목표 평가금</p>
           <p className="vr-now-value">{money(cycle.v, 0)}</p>
           <p className="vr-now-why">V는 이번 2주 동안 {ticker} 보유분의 평가금(보유 수량 × 가격)이 있어야 할 <b>목표값</b>입니다. 2주마다 적립금과 Pool 일부만큼 올라가며, 평가금이 V에서 ±{cycle.bandPct}% 넘게 벗어날 때만 사고팔아 다시 V 근처로 맞춥니다. 그래서 쌀 때 사고 비쌀 때 파는 기준이 됩니다.</p>
+          <div className="vr-invest">
+            <span>매입금액 (보유분을 사는 데 쓴 돈)</span>
+            {basis.cost != null
+              ? <b>{money(basis.cost)} <small>= 평단가 {money(basis.averageCost)} × {basis.shares}주{basis.estimated ? " (추정)" : ""}</small></b>
+              : <b className="vr-muted">평단가를 몰라 표시할 수 없습니다 · 아래 "계좌 정보 고치기"에서 입력</b>}
+          </div>
         </div>
         <div className="vr-now-state">
           {check
             ? <>
               <p className="vr-now-label">{check.source} {money(check.price)} × {totals.shares}주</p>
               <p className={`vr-now-value vr-zone-text--${check.zone}`}>평가금 {money(check.value, 0)}</p>
+              {pnl && <p className="vr-pnl">매입금액 대비 <b className={tone(pnl.value)}>{signedMoney(pnl.value)} ({signedPct(pnl.pct)})</b></p>}
               <p className={`vr-zone vr-zone--${check.zone}`}>{situation}</p>
             </>
             : <p className="vr-zone">{history.status === "loading" ? "최근 종가를 불러오는 중입니다." : "최근 종가를 불러오지 못했습니다. 아래에 가격을 넣어 확인하세요."}</p>}
@@ -379,19 +509,21 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
         <div><dt>현금 Pool</dt><dd>{money(totals.pool)}{totals.count > 0 && <small> (시작 {money(cycle.pool)})</small>}</dd></div>
         <div><dt>이번 매수에 쓸 수 있는 Pool</dt><dd>{money(cycle.poolCap)} <small>({cycle.poolLimitPct}%)</small></dd></div>
         <div><dt>G · 2주 적립금</dt><dd>{cycle.g} · {money(cycle.deposit)}</dd></div>
+        <div><dt>총 투입금 (시작 자본 + 적립금)</dt><dd>{invested == null ? "—" : money(invested)}</dd></div>
+        <div><dt>총자산 (평가금 + Pool)</dt><dd>{totalAsset == null ? "—" : money(totalAsset)}</dd></div>
+        <div><dt>총손익</dt><dd className={totalPnl ? tone(totalPnl.value) : ""}>{totalPnl ? `${signedMoney(totalPnl.value)} (${signedPct(totalPnl.pct)})` : "—"}</dd></div>
       </dl>
       <details className="vr-inline-fold">
         <summary>V 계산 내역 · 다른 가격으로 확인</summary>
         <p className="vr-hint">{formulaExplain(cycle)}.</p>
-        <p className="vr-hint">다음 {nextWeek}주차: G {nextG}, Pool 사용 한도 {nextLimit}%{nextG !== cycle.g || nextLimit !== cycle.poolLimitPct ? " (변경됨)" : ""}.</p>
+        <p className="vr-hint">다음 {nextWeek}주차: G {nextG}, Pool 사용 한도 {nextLimit}%{nextG !== cycle.g || nextLimit !== cycle.poolLimitPct ? " (변경됨)" : ""}. 총 투입금은 이 화면에서 시작한 시점의 매입금액과 현금에 그 뒤 적립금을 더한 값입니다.</p>
         <div className="vr-check">
           <label>다른 가격으로 확인 (선택, USD)<input type="number" min="0" step="any" value={refPrice} placeholder={latest ? String(latest.close) : ""} onChange={(e) => setRefPrice(e.target.value)} /></label>
         </div>
       </details>
     </section>
 
-    <section className="vr-panel" aria-labelledby="vr-flow-title">
-      <h2 id="vr-flow-title">사용 순서 · 2주마다 반복</h2>
+    <Fold id="vr-fold-flow" title="사용 순서" open={open.flow} onToggle={(v) => setFold("flow", v)} summary="입금 → 주문 → 매일 체결 기록 → 주차 종료 (2주마다 반복)">
       <ol className="vr-flow">
         {steps.map((step) => <li key={step.key} className={`vr-flow-step is-${step.state}`} aria-current={step.state === "now" ? "step" : undefined}>
           <span className="vr-flow-icon">{step.state === "done" ? <Check size={18} /> : step.icon}</span>
@@ -401,16 +533,23 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
           {step.action && <button type="button" className="vr-flow-action" onClick={step.action[1]}>{step.action[0]}</button>}
         </li>)}
       </ol>
-      <p className="vr-hint">2주는 자동으로 넘어가지 않습니다. 마감 버튼을 눌러야 다음 사이클의 V와 주문표가 만들어집니다. 아래 항목은 눌러서 열어 볼 수 있습니다.</p>
-    </section>
+      <p className="vr-hint">주차는 자동으로 넘어가지 않습니다. 종료일이 지나면 안내창이 뜨고, 확인을 누르거나 "주차 종료"를 눌러야 다음 주차의 V와 주문표가 만들어집니다.</p>
+    </Fold>
 
     {(message || error) && <p className={error ? "vr-error" : "vr-message"} role={error ? "alert" : "status"}>{error || message}</p>}
+
+    <Fold id="vr-fold-charts" title="가격과 목표가" open={open.charts} onToggle={(v) => setFold("charts", v)} summary="종가 위에 목표가·최소가·최대가, 매수 ▲ · 매도 ▼">
+      <p className="vr-hint">목표가는 V ÷ 보유 수량, 최소가·최대가는 V 최소·최대 ÷ 보유 수량입니다. 종가가 최소가 아래로 내려가면 매수 주문이, 최대가 위로 올라가면 매도 주문이 체결되는 구간입니다. 체결은 매수 ▲, 매도 ▼ 지점으로 표시합니다. 가격 자료는 최근 약 1년치입니다.</p>
+      {backtest.result && <label className="vr-toggle"><input type="checkbox" checked={showSim} onChange={(e) => setShowSim(e.target.checked)} />백테스트 구간(0 ~ {account.cycles[0].week - 2}주차) 함께 보기</label>}
+      {history.status === "loading" ? <p className="vr-hint">종가를 불러오는 중입니다.</p>
+        : open.charts && <VrPriceBandChart cycles={chartCycles} prices={history.prices} simulatedBeforeWeek={showSim && backtest.result ? account.cycles[0].week : undefined} />}
+    </Fold>
 
     <Fold id="vr-fold-orders" title={`${cycle.week}주차 주문표`} open={open.orders} onToggle={(v) => setFold("orders", v)}
       summary={`매수 ${orders.buys.length}줄${orders.buys[0] ? ` ${money(orders.buys[0].price)}부터` : ""} · 매도 ${orders.sells.length}줄${orders.sells[0] ? ` ${money(orders.sells[0].price)}부터` : ""}`}>
       <p className="vr-hint">
-        시트 v5.0.4 규칙입니다. 매수 k번째는 V 최소 ÷ (보유 + k − 1), 매도 k번째는 V 최대 ÷ (보유 − k + 1)이며 1주씩 지정가 잔량 주문으로 사이클 끝까지 걸어 둡니다.
-        매수는 매수 후 Pool이 {money(cycle.poolReserve)}(시작일 Pool × {roundPct(100 - cycle.poolLimitPct)}%) 이상이고 단가가 {money(orders.buyPriceFloor)}(직전 마감 종가 × 60%) 이상인 줄까지 만든 뒤 1줄을 더합니다. 매도는 1주가 남을 때까지 제한 없이 만듭니다.
+        시트 v5.0.4 규칙입니다. 매수 k번째는 V 최소 ÷ (보유 + k − 1), 매도 k번째는 V 최대 ÷ (보유 − k + 1)이며 1주씩 지정가 잔량 주문으로 주차 끝까지 걸어 둡니다.
+        매수는 매수 후 Pool이 {money(cycle.poolReserve)}(시작일 Pool × {roundPct(100 - cycle.poolLimitPct)}%) 이상이고 단가가 {money(orders.buyPriceFloor)}(직전 종료 종가 × 60%) 이상인 줄까지 만든 뒤 1줄을 더합니다. 매도는 1주가 남을 때까지 제한 없이 만듭니다.
         시트는 단가를 반올림하지 않으므로, 여기서는 매수가를 센트 단위로 내리고 매도가를 올립니다. 체결되면 "체결" 버튼으로 기록하세요.
       </p>
       {cycle.shares === 0 && <p className="vr-error">보유 수량이 0주라 주문표를 만들 수 없습니다.</p>}
@@ -421,9 +560,9 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
       <button type="button" className="vr-secondary" onClick={() => void copy()}>주문표 복사</button>
     </Fold>
 
-    <Fold id="vr-fold-fills" title="체결 기록" open={open.fills} onToggle={(v) => setFold("fills", v)}
+    <Fold id="vr-fold-fills" title="매일 체결 기록" open={open.fills} onToggle={(v) => setFold("fills", v)}
       summary={totals.count > 0 ? `${totals.count}건 · 보유 ${totals.shares}주 · Pool ${money(totals.pool)}` : "기록 없음"}>
-      <p className="vr-hint">증권사에서 체결된 매수·매도를 기록합니다. 주문표의 "체결" 버튼을 누르면 가격이 채워집니다. 기록은 선택 사항이며, 기록하면 보유 수량·Pool이 자동 계산되어 마감 칸에 채워집니다. 수수료·세금은 반영하지 않습니다.</p>
+      <p className="vr-hint">체결된 날마다 체결가와 수량을 입력합니다. 주문표의 "체결" 버튼을 누르면 가격이 채워집니다. 입력한 기록으로 보유 수량·Pool·평단가가 계산되어 위 현재 상황과 주차 종료 칸에 반영됩니다. 수수료·세금은 반영하지 않습니다.</p>
       <form onSubmit={recordFill}>
         <div className="vr-fields vr-fields--fill">
           <label>체결일<input type="date" min={cycle.startDate} max={cycle.endDate} value={fillForm.date} onChange={(e) => setFillForm({ ...fillForm, date: e.target.value })} /></label>
@@ -431,9 +570,12 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
           <label>체결가 (USD)<input type="number" min="0" step="any" value={fillForm.price} onChange={(e) => setFillForm({ ...fillForm, price: e.target.value })} /></label>
           <label>체결 수량 (주)<input type="number" min="1" step="1" value={fillForm.quantity} onChange={(e) => setFillForm({ ...fillForm, quantity: e.target.value })} /></label>
         </div>
-        <button className="vr-secondary" type="submit">체결 추가</button>
+        <div className="vr-fill-actions">
+          <button className="vr-secondary" type="submit">체결 추가</button>
+          {Number.isFinite(num(fillForm.price) * num(fillForm.quantity)) && num(fillForm.price) > 0 && <span className="vr-hint">체결 금액 {money(num(fillForm.price) * num(fillForm.quantity))}</span>}
+        </div>
       </form>
-      {totals.count === 0 ? <p className="vr-hint">이번 사이클에 기록한 체결이 없습니다.</p> : <>
+      {totals.count === 0 ? <p className="vr-hint">이번 주차에 기록한 체결이 없습니다.</p> : <>
         <div className="vr-table-wrap"><table className="vr-ledger vr-fills">
           <thead><tr><th>체결일</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th><th><span className="vr-sr">삭제</span></th></tr></thead>
           <tbody>{(cycle.fills ?? []).map((f) => <tr key={f.id}>
@@ -445,36 +587,33 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
       </>}
     </Fold>
 
-    <Fold id="vr-fold-close" title="사이클 마감 · 다음 사이클 열기" open={open.close} onToggle={(v) => setFold("close", v)}
-      summary={overdue > 0 ? "지금 마감할 차례" : `${cycle.endDate} 장 마감 후`}>
-      <p className="vr-hint">2주가 지나도 자동으로 넘어가지 않습니다. {cycle.endDate} 이전 마지막 거래일 장 마감 후 증권사의 실제 잔고를 확인하고 이 버튼을 눌러야 다음 사이클이 열립니다. Pool은 다음 적립금을 넣기 전 현금입니다.</p>
-      <p className="vr-hint">미리 채운 값: 보유 수량·Pool은 {totals.count > 0 ? `체결 기록 ${totals.count}건 기준 계산값` : "체결 기록이 없어 사이클 시작 값 그대로"}, 마감 종가는 {endClose ? `${endClose.date} 종가` : "사이클이 끝나면 자동 입력"}입니다. 증권사 잔고와 다르면 고쳐서 마감하세요.</p>
+    <Fold id="vr-fold-close" title="주차 종료" open={open.close} onToggle={(v) => setFold("close", v)}
+      summary={overdue > 0 ? "지금 종료할 차례" : `${cycle.endDate} 장 마감 후 "주차 종료"`}>
+      <p className="vr-hint">주차는 자동으로 넘어가지 않습니다. {cycle.endDate} 이전 마지막 거래일 장 마감 후 증권사 잔고를 확인하고 "주차 종료"를 누르면 다음 주차가 열립니다. 잊고 지나가면 다음에 이 화면을 열 때 안내창이 뜹니다. Pool은 다음 적립금을 넣기 전 현금입니다.</p>
+      <p className="vr-hint">미리 채운 값: 보유 수량·Pool·평단가는 {totals.count > 0 ? `체결 기록 ${totals.count}건 기준 계산값` : "체결 기록이 없어 주차 시작 값 그대로"}, 종료 종가는 {endClose ? `${endClose.date} 종가` : "종료일이 지나면 자동 입력"}입니다. 증권사 잔고와 다르면 고쳐서 종료하세요.</p>
       <form onSubmit={close}>
-        <div className="vr-fields">
-          <label>마감 보유 수량 (주)<input type="number" min="0" step="1" value={closeForm.shares} onChange={(e) => setCloseForm({ ...closeForm, shares: e.target.value })} /></label>
-          <label>마감 Pool, 적립 전 (USD)<input type="number" min="0" step="any" value={closeForm.pool} onChange={(e) => setCloseForm({ ...closeForm, pool: e.target.value })} /></label>
-          <label>마감 종가 (USD)<input type="number" min="0" step="any" value={closeForm.price} onChange={(e) => setCloseForm({ ...closeForm, price: e.target.value })} /></label>
+        <div className="vr-fields vr-fields--fill">
+          <label>종료 보유 수량 (주)<input type="number" min="0" step="1" value={closeForm.shares} onChange={(e) => setCloseForm({ ...closeForm, shares: e.target.value })} /></label>
+          <label>종료 Pool, 적립 전 (USD)<input type="number" min="0" step="any" value={closeForm.pool} onChange={(e) => setCloseForm({ ...closeForm, pool: e.target.value })} /></label>
+          <label>종료 종가 (USD)<input type="number" min="0" step="any" value={closeForm.price} onChange={(e) => setCloseForm({ ...closeForm, price: e.target.value })} /></label>
+          <label>종료 평단가 (선택, USD)<input type="number" min="0" step="any" value={closeForm.averageCost} onChange={(e) => setCloseForm({ ...closeForm, averageCost: e.target.value })} /></label>
         </div>
-        <button className="vr-primary" type="submit">사이클 마감</button>
+        <button className="vr-primary" type="submit">주차 종료</button>
       </form>
-      {account.cycles.length > 1 && <button type="button" className="vr-link" onClick={undo}><RotateCcw size={14} /> 직전 마감 취소</button>}
+      {account.cycles.length > 1 && <button type="button" className="vr-link" onClick={undo}><RotateCcw size={14} /> 직전 주차 종료 취소</button>}
     </Fold>
 
-    <Fold id="vr-fold-charts" title="그래프" open={open.charts} onToggle={(v) => setFold("charts", v)} summary="V 밴드와 평가금 · 종가와 주문 가격">
-      {history.status === "error" && <p className="vr-hint">종가 데이터를 불러오지 못해 V 밴드만 표시합니다.</p>}
-      <h3>V 밴드와 평가금</h3>
-      <p className="vr-hint">회색 띠가 사이클별 V 최소~최대, 진한 선이 V입니다. 파란 선(평가금)이 띠 아래로 내려가면 매수, 위로 올라가면 매도가 체결됩니다. 평가금은 (사이클 시작 수량 + 그날까지 기록한 체결) × 종가입니다. 가격 데이터는 최근 약 1년치입니다.</p>
-      {open.charts && <VrBandChart cycles={account.cycles} prices={history.prices} />}
-      <h3>최근 종가와 이번 주문 가격</h3>
-      <p className="vr-hint">녹색 선이 매수 지정가, 주황 선이 매도 지정가이고, 기록한 체결은 점으로 표시합니다. 종가가 녹색 선 아래로 내려가면 그 줄의 매수가, 주황 선 위로 올라가면 매도가 체결됩니다.</p>
-      {!open.charts ? null : history.status === "ready" ? <VrPriceChart cycle={cycle} orders={orders} prices={history.prices} /> : <p className="vr-hint">{history.status === "loading" ? "종가를 불러오는 중입니다." : "종가 데이터가 없어 가격 그래프를 그릴 수 없습니다."}</p>}
+    <Fold id="vr-fold-backtest" title={`지난 주차 백테스트 (0 ~ ${Math.max(0, account.cycles[0].week - 2)}주차)`} open={open.backtest} onToggle={(v) => setFold("backtest", v)}
+      summary={backtest.result?.reached ? `백테스트 ${account.cycles[0].week}주차 시작 ${backtest.result.account.cycles.at(-1)!.shares}주 · 실제 ${account.cycles[0].shares}주` : "0주차부터 지금까지 재생"}>
+      <BacktestPanel result={backtest.result} error={backtest.error} form={{ ...btForm, principal: principalText }} onForm={(patch) => setBtForm((f) => ({ ...f, ...patch }))}
+        actual={{ shares: account.cycles[0].shares, pool: account.cycles[0].pool, v: account.cycles[0].v }} week={account.cycles[0].week} />
     </Fold>
 
-    <Fold id="vr-fold-ledger" title="지난 기록 (사이클 원장)" open={open.ledger} onToggle={(v) => setFold("ledger", v)}
-      summary={`${account.cycles.length}개 사이클 · 누적 적립 ${money(totalDeposits(account), 0)}`}>
+    <Fold id="vr-fold-ledger" title="지난 기록 (주차 원장)" open={open.ledger} onToggle={(v) => setFold("ledger", v)}
+      summary={`${account.cycles.length}개 주차 · 누적 적립 ${money(totalDeposits(account), 0)}`}>
       <p className="vr-hint">시작 {account.start.date} · {account.start.kind === "new" ? `0일차 ${account.start.shares}주 × 종가 ${money(account.start.price)} = V0 ${money(account.start.v0)}, Pool ${money(account.start.pool)}` : account.start.kind === "quick" ? `${account.start.shares}주 · 평단가 ${money(account.start.averageCost)} · 직전 종가 ${money(account.start.price)}로 이어받음, 직전 V 대체값 ${money(account.start.v0)}(${account.start.basis === "market" ? "평가금" : "평단가"} 기준)` : `이어받은 직전 V ${money(account.start.v0, 3)}`} · 누적 적립금 {money(totalDeposits(account))}</p>
       <div className="vr-table-wrap"><table className="vr-ledger">
-        <thead><tr><th>주차</th><th>시작일</th><th>공식</th><th>G</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>Pool(적립 후)</th><th>체결 기록</th><th>마감 수량</th><th>마감 Pool</th><th>마감 종가</th><th>마감 평가금</th><th>총자산</th></tr></thead>
+        <thead><tr><th>주차</th><th>시작일</th><th>공식</th><th>G</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>Pool(적립 후)</th><th>체결 기록</th><th>종료 수량</th><th>종료 Pool</th><th>종료 종가</th><th>종료 평가금</th><th>총자산</th></tr></thead>
         <tbody>{[...account.cycles].reverse().map((c) => {
           const value = c.close ? c.close.shares * c.close.price : null;
           return <tr key={c.index}>
@@ -486,8 +625,18 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
       </table></div>
     </Fold>
 
-    <Fold id="vr-fold-settings" title="설정 변경" open={open.settings} onToggle={(v) => setFold("settings", v)}
+    <Fold id="vr-fold-settings" title="설정 · 계좌 정보 고치기" open={open.settings} onToggle={(v) => setFold("settings", v)}
       summary={`G ${account.settings.g} · 밴드 ±${account.settings.bandPct}% · 적립금 ${money(account.settings.deposit, 0)} · ${account.settings.formula === "basic" ? "기본 공식" : "실력공식"}`}>
+      <h3>계좌 정보 고치기</h3>
+      <p className="vr-hint">이번 주차 시작일이 다르면 고치세요. 모든 주차 날짜가 같은 일수만큼 옮겨져 2주 간격이 유지됩니다. 평단가는 증권사 앱의 평단가를 넣으면 매입금액·손익 계산에 씁니다.</p>
+      <form onSubmit={saveFix}>
+        <div className="vr-fields">
+          <label>이번 주차 시작일<input type="date" value={fix.startDate} onChange={(e) => setFix({ ...fix, startDate: e.target.value })} /></label>
+          <label>이번 주차 시작 시점 평단가 (USD, 선택)<input type="number" min="0" step="any" value={fix.averageCost} placeholder={basis.averageCost == null ? "" : String(basis.averageCost)} onChange={(e) => setFix({ ...fix, averageCost: e.target.value })} /></label>
+        </div>
+        <button className="vr-secondary" type="submit">계좌 정보 저장</button>
+      </form>
+      <h3>운용 설정</h3>
       <form onSubmit={saveSettings}>
         <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
         <button className="vr-secondary" type="submit">설정 저장</button>
@@ -531,7 +680,7 @@ export default function VrPage(props: Props) {
       <div className="vr-intro"><div><p className="vr-eyebrow">VALUE REBALANCING · 적립식</p><h1>라오어 VR 적립식</h1></div><span className="vr-chip">브라우저에만 저장</span></div>
       {storageNote && <p className="vr-message" role="status">{storageNote}</p>}
       {account ? <AccountView account={account} onChange={update} onReset={reset} /> : <SetupPanel onCreate={update} />}
-      <details className="vr-fold">
+      <details className="vr-fold" open>
         <summary><span className="vr-fold-title">백업 · 불러오기</span><span className="vr-fold-summary">{account ? `저장된 계좌: ${account.settings.ticker} · ${currentCycle(account).week}주차 진행 중` : "저장된 계좌가 없습니다."}</span><ChevronDown className="vr-fold-icon" size={18} aria-hidden="true" /></summary>
         <div className="vr-fold-body vr-backup">
           <span>기록은 이 브라우저에만 저장됩니다. 다른 기기에서 쓰려면 JSON으로 내려받아 불러오세요.</span>
@@ -541,7 +690,7 @@ export default function VrPage(props: Props) {
           </div>
         </div>
       </details>
-      <details className="vr-fold">
+      <details className="vr-fold" open>
         <summary><span className="vr-fold-title">계산 기준과 한계</span><span className="vr-fold-summary">quantstack 해설 · 구글 시트 v5.0.4</span><ChevronDown className="vr-fold-icon" size={18} aria-hidden="true" /></summary>
         <div className="vr-fold-body"><p className="vr-hint">기본 V 공식은 비공식 해설(quantstack.app/vr), 실력공식·주문표·Pool 한도 감소·G 상향은 구글 시트 "VR 5.0.4 실력공식(글로벌커머스)"의 규칙을 따릅니다. 둘 다 라오어 카페 원문과 대조하지 않았습니다. 주문 전송·체결 확인 기능은 없으며, 계좌 기록은 이 브라우저에만 저장되고 서버로 전송되지 않습니다.</p></div>
       </details>

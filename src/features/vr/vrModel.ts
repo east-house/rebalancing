@@ -45,6 +45,8 @@ export interface VrCycleClose {
   shares: number;
   pool: number;
   price: number;
+  /** 증권사 기준 마감 평단가(선택). 없으면 체결 기록으로 추정한다. */
+  averageCost?: number;
 }
 
 export type FillSide = "buy" | "sell";
@@ -84,6 +86,8 @@ export interface VrCycle {
   close?: VrCycleClose;
   /** 사이클 중 체결 기록(선택). 없으면 마감 때 입력한 잔고만 쓴다. */
   fills?: VrFill[];
+  /** 사용자가 보정한 사이클 시작 평단가(선택) */
+  averageCost?: number;
 }
 
 export type VBasis = "cost" | "market";
@@ -270,6 +274,8 @@ export interface ExistingAccountInput {
   shares: number;
   poolBeforeDeposit: number;
   previousClose: number;
+  /** 현재 평단가(선택). 매입금액·손익 표시에 쓴다. */
+  averageCost?: number;
 }
 
 /** 운용 중인 계좌를 이어받는다. 직전 사이클 V·마감 종가와 현재 잔고로 이번 사이클을 연다. */
@@ -285,6 +291,7 @@ export function createExistingAccount(settingsInput: VrSettings, input: Existing
   const start: VrStart = {
     kind: "existing", date: input.cycleStartDate, shares: input.shares, pool: roundCent(input.poolBeforeDeposit),
     price: input.previousClose, v0: input.previousV,
+    ...(input.averageCost != null && Number.isFinite(input.averageCost) && input.averageCost > 0 ? { averageCost: input.averageCost } : {}),
   };
   return {
     version: 2,
@@ -355,8 +362,12 @@ export function closeCycle(account: VrAccount, close: VrCycleClose): VrAccount {
   requireFinite(close.shares, "마감 보유 수량", { integer: true });
   requireFinite(close.pool, "마감 Pool");
   requireFinite(close.price, "마감 종가", { positive: true });
+  if (close.averageCost != null) requireFinite(close.averageCost, "마감 평단가", { positive: true });
   const settings = validateSettings(account.settings);
-  const closed: VrCycle = { ...cycle, close: { shares: close.shares, pool: roundCent(close.pool), price: close.price } };
+  const closed: VrCycle = {
+    ...cycle,
+    close: { shares: close.shares, pool: roundCent(close.pool), price: close.price, ...(close.averageCost != null ? { averageCost: roundCent(close.averageCost) } : {}) },
+  };
   const next = openCycle(cycle.index + 1, addDays(cycle.startDate, CYCLE_DAYS), cycle.v, close.shares, close.pool, close.price, settings);
   return { ...account, cycles: [...account.cycles.slice(0, -1), closed, next] };
 }
@@ -410,6 +421,76 @@ export function overdueCycles(cycle: VrCycle, today: string): number {
   if (today <= cycle.endDate) return 0;
   const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${cycle.startDate}T00:00:00Z`)) / 86_400_000);
   return Math.floor(days / CYCLE_DAYS);
+}
+
+export interface CostBasis {
+  /** 평단가. 모르면 null */
+  averageCost: number | null;
+  shares: number;
+  /** 매입금액 = 평단가 × 보유 수량 */
+  cost: number | null;
+  /** 체결 기록 없이 늘어난 수량을 마감 종가로 샀다고 가정한 적이 있으면 true */
+  estimated: boolean;
+}
+
+function startAverageCost(account: VrAccount): number | null {
+  if (account.start.averageCost != null) return account.start.averageCost;
+  return account.start.kind === "new" ? account.start.price : null;
+}
+
+/** 사이클 index 시점(until까지의 체결 반영)의 평단가·매입금액. 매수는 평단가를 바꾸고 매도는 평단가를 유지한다. */
+export function costBasis(account: VrAccount, index = account.cycles.length - 1, until?: string): CostBasis {
+  let avg = startAverageCost(account);
+  let estimated = false;
+  let shares = account.cycles[0]?.shares ?? 0;
+  for (let k = 0; k <= index && k < account.cycles.length; k += 1) {
+    const cycle = account.cycles[k];
+    if (cycle.averageCost != null) { avg = cycle.averageCost; estimated = false; }
+    shares = cycle.shares;
+    let cost = avg == null ? null : avg * shares;
+    for (const fill of cycle.fills ?? []) {
+      if (k === index && until != null && fill.date > until) continue;
+      if (fill.side === "buy") { if (cost != null) cost += fill.price * fill.quantity; shares += fill.quantity; }
+      else { if (cost != null && avg != null) cost -= avg * fill.quantity; shares -= fill.quantity; }
+      avg = cost != null && shares > 0 ? cost / shares : avg;
+    }
+    if (k === index || !cycle.close) break;
+    if (cycle.close.averageCost != null) { avg = cycle.close.averageCost; estimated = false; }
+    else if (cost != null && cycle.close.shares > shares) {
+      cost += (cycle.close.shares - shares) * cycle.close.price;
+      avg = cost / cycle.close.shares;
+      estimated = true;
+    }
+    shares = cycle.close.shares;
+  }
+  const average = avg == null ? null : roundCent(avg);
+  return { averageCost: average, shares, cost: average == null ? null : roundCent(average * shares), estimated };
+}
+
+/** 계좌 시작 시점의 자본(보유분 매입금액 + 적립 전 현금). 평단가를 모르면 null */
+export function startingCapital(account: VrAccount): number | null {
+  const avg = startAverageCost(account);
+  return avg == null ? null : roundCent(account.start.shares * avg + account.start.pool);
+}
+
+/** 이번(열린) 사이클의 시작 평단가를 보정한다. */
+export function setCurrentAverageCost(account: VrAccount, averageCost: number): VrAccount {
+  requireFinite(averageCost, "평단가", { positive: true });
+  const cycle = currentCycle(account);
+  return { ...account, cycles: [...account.cycles.slice(0, -1), { ...cycle, averageCost: roundCent(averageCost) }] };
+}
+
+/** 이번 사이클 시작일을 바꾼다. 2주 간격을 유지하도록 모든 사이클 날짜를 같은 일수만큼 옮긴다. */
+export function rescheduleCurrentCycle(account: VrAccount, startDate: string): VrAccount {
+  if (!DATE_RE.test(startDate)) throw new Error("시작일을 입력하세요.");
+  const cycle = currentCycle(account);
+  const delta = Math.round((Date.parse(`${startDate}T00:00:00Z`) - Date.parse(`${cycle.startDate}T00:00:00Z`)) / 86_400_000);
+  if (delta === 0) return account;
+  const cycles = account.cycles.map((c) => ({ ...c, startDate: addDays(c.startDate, delta), endDate: addDays(c.endDate, delta) }));
+  for (const c of cycles) {
+    if ((c.fills ?? []).some((f) => f.date < c.startDate || f.date > c.endDate)) throw new Error("옮긴 기간 밖에 있는 체결 기록이 있습니다. 해당 기록을 먼저 지우세요.");
+  }
+  return { ...account, start: { ...account.start, date: addDays(account.start.date, delta) }, cycles };
 }
 
 /** 직전 마감을 취소하고 그 사이클을 다시 연다(입력 실수 정정용). */
