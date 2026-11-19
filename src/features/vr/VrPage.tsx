@@ -5,7 +5,7 @@ import SiteFooter from "../../components/SiteFooter";
 import {
   DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, addFill, buildOrders, closeCycle, costBasis, createExistingAccount, fillTotals, overdueCycles, removeFill,
   rescheduleCurrentCycle, setCurrentAverageCost, startingCapital, firstRealIndex, hasEstimatedHistory, removeEstimatedHistory,
-  createNewAccount, createQuickResumeAccount, currentCycle, formatOrdersText, gForWeek, poolLimitForWeek, reopenLastCycle,
+  createNewAccount, createQuickResumeAccount, currentCycle, filledRows, formatOrdersText, remainingOrders, gForWeek, poolLimitForWeek, reopenLastCycle,
   suggestInitialBuy, totalDeposits, validateSettings, valuationStatus,
   type FillSide, type OrderRow, type VBasis, type VFormula, type VrAccount, type VrCycle, type VrSettings,
 } from "./vrModel";
@@ -185,13 +185,20 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
   </section>;
 }
 
-function OrderTable({ title, rows, side, onPick }: { title: string; rows: OrderRow[]; side: FillSide; onPick: (row: OrderRow, side: FillSide) => void }) {
+function OrderTable({ title, rows, side, filled, onPick }: { title: string; rows: OrderRow[]; side: FillSide; filled: number; onPick: (row: OrderRow, side: FillSide) => void }) {
   return <div className={`vr-orders vr-orders--${side}`}>
-    <h3>{title} <small>{rows.length}줄</small></h3>
+    <h3>{title} <small>{rows.length}줄{filled > 0 ? ` 중 ${filled}줄 체결 · 남은 ${rows.length - filled}줄` : ""}</small></h3>
     {rows.length === 0 ? <p className="vr-hint">주문 없음</p> : <div className="vr-orders-scroll"><table>
-      <thead><tr><th>순번</th><th>지정가</th><th>수량</th><th>체결 후 보유</th><th>체결 후 Pool</th><th><span className="vr-sr">체결 기록</span></th></tr></thead>
-      <tbody>{rows.map((row, i) => <tr key={row.holdings}><td>{i + 1}</td><td>{money(row.price)}</td><td>1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td>
-        <td><button type="button" className="vr-mini" aria-label={`${title} ${i + 1}번 ${money(row.price)} 체결 기록`} onClick={() => onPick(row, side)}>체결</button></td></tr>)}</tbody>
+      <thead><tr><th>순번</th><th>지정가</th><th>수량</th><th>체결 후 보유</th><th>체결 후 Pool</th><th><span className="vr-sr">체결 상태</span></th></tr></thead>
+      <tbody>{rows.map((row, i) => {
+        const done = i < filled;
+        return <tr key={row.holdings} className={done ? "is-filled" : i === filled ? "is-next" : undefined}>
+          <td>{i + 1}</td><td>{money(row.price)}</td><td>1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td>
+          <td>{done
+            ? <span className="vr-filled-tag"><Check size={12} aria-hidden="true" />체결됨</span>
+            : <button type="button" className="vr-mini" aria-label={`${title} ${i + 1}번 ${money(row.price)} 체결 기록`} onClick={() => onPick(row, side)}>체결</button>}</td>
+        </tr>;
+      })}</tbody>
     </table></div>}
   </div>;
 }
@@ -320,6 +327,8 @@ type StepState = "done" | "now" | "later";
 function AccountView({ account, onChange, onReset }: { account: VrAccount; onChange: (next: VrAccount) => void; onReset: () => void }) {
   const cycle = currentCycle(account);
   const orders = useMemo(() => buildOrders(cycle), [cycle]);
+  const filled = useMemo(() => filledRows(orders, cycle), [orders, cycle]);
+  const remaining = useMemo(() => remainingOrders(orders, cycle), [orders, cycle]);
   const [refPrice, setRefPrice] = useState("");
   const [settings, setSettings] = useState<SettingsForm>(toForm(account.settings));
   const [fix, setFix] = useState({ startDate: cycle.startDate, averageCost: "" });
@@ -451,7 +460,7 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
     try { onChange(reopenLastCycle(account)); setMessage("직전 주차 종료를 취소했습니다."); } catch (cause) { setError(errorText(cause, "되돌릴 수 없습니다.")); }
   }
   async function copy() {
-    try { await navigator.clipboard.writeText(formatOrdersText(account.settings.ticker, cycle, orders)); setMessage("주문표를 복사했습니다."); }
+    try { await navigator.clipboard.writeText(formatOrdersText(account.settings.ticker, cycle, remaining)); setMessage(filled.buys + filled.sells > 0 ? "체결된 줄을 뺀 남은 주문을 복사했습니다." : "주문표를 복사했습니다."); }
     catch { setMessage("복사할 수 없습니다. 화면의 주문표를 직접 확인하세요."); }
   }
 
@@ -551,16 +560,16 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
     </Fold>
 
     <Fold id="vr-fold-orders" title={`${cycle.week}주차 주문표`} open={open.orders} onToggle={(v) => setFold("orders", v)}
-      summary={`매수 ${orders.buys.length}줄${orders.buys[0] ? ` ${money(orders.buys[0].price)}부터` : ""} · 매도 ${orders.sells.length}줄${orders.sells[0] ? ` ${money(orders.sells[0].price)}부터` : ""}`}>
+      summary={`남은 주문 매수 ${remaining.buys.length}줄${remaining.buys[0] ? ` ${money(remaining.buys[0].price)}부터` : ""} · 매도 ${remaining.sells.length}줄${remaining.sells[0] ? ` ${money(remaining.sells[0].price)}부터` : ""}`}>
       <p className="vr-hint">
         시트 v5.0.4 규칙입니다. 매수 k번째는 V 최소 ÷ (보유 + k − 1), 매도 k번째는 V 최대 ÷ (보유 − k + 1)이며 1주씩 지정가 잔량 주문으로 주차 끝까지 걸어 둡니다.
         매수는 매수 후 Pool이 {money(cycle.poolReserve)}(시작일 Pool × {roundPct(100 - cycle.poolLimitPct)}%) 이상이고 단가가 {money(orders.buyPriceFloor)}(직전 종료 종가 × 60%) 이상인 줄까지 만든 뒤 1줄을 더합니다. 매도는 1주가 남을 때까지 제한 없이 만듭니다.
-        시트는 단가를 반올림하지 않으므로, 여기서는 매수가를 센트 단위로 내리고 매도가를 올립니다. 체결되면 "체결" 버튼으로 기록하세요.
+        시트는 단가를 반올림하지 않으므로, 여기서는 매수가를 센트 단위로 내리고 매도가를 올립니다. 체결되면 "체결" 버튼으로 기록하세요. 주문표는 주차 동안 바뀌지 않고, 기록한 체결 수만큼 위에서부터 "체결됨"으로 표시됩니다. 남은 줄은 그대로 두며, 마지막 줄까지 체결되면 이번 주차에는 더 사거나 팔지 않습니다.
       </p>
       {cycle.shares === 0 && <p className="vr-error">보유 수량이 0주라 주문표를 만들 수 없습니다.</p>}
       <div className="vr-order-grid">
-        <OrderTable title="매수" rows={orders.buys} side="buy" onPick={pickOrder} />
-        <OrderTable title="매도" rows={orders.sells} side="sell" onPick={pickOrder} />
+        <OrderTable title="매수" rows={orders.buys} side="buy" filled={filled.buys} onPick={pickOrder} />
+        <OrderTable title="매도" rows={orders.sells} side="sell" filled={filled.sells} onPick={pickOrder} />
       </div>
       <button type="button" className="vr-secondary" onClick={() => void copy()}>주문표 복사</button>
     </Fold>
@@ -639,7 +648,7 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
         <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
         <button className="vr-secondary" type="submit">설정 저장</button>
       </form>
-      <button type="button" className="vr-link vr-danger" onClick={onReset}>이 브라우저의 VR 기록 삭제</button>
+      <button type="button" className="vr-link vr-danger" onClick={onReset}>지우고 새로 시작 (이 브라우저의 VR 기록 삭제)</button>
     </Fold>
   </>;
 }
@@ -653,8 +662,9 @@ export default function VrPage(props: Props) {
     setStorageNote(saveVrAccount(next) ? "" : "브라우저 저장소에 저장하지 못했습니다. JSON 백업을 내려받아 두세요.");
   }
   function reset() {
-    if (!window.confirm("이 브라우저에 저장된 VR 계좌 기록을 모두 삭제할까요? 먼저 JSON 백업을 권장합니다.")) return;
-    deleteVrAccount(); setAccount(null);
+    if (!window.confirm("지금 계좌 기록(주차·체결·지난 기록)을 모두 지우고 처음 설정 화면으로 돌아갈까요? 되돌릴 수 없으니 필요하면 먼저 아래 \"JSON 백업\"으로 내려받으세요.")) return;
+    deleteVrAccount(); setAccount(null); setStorageNote("기록을 지웠습니다. 새로 시작할 값을 입력하세요.");
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
   }
   function download() {
     if (!account) return;
@@ -675,7 +685,8 @@ export default function VrPage(props: Props) {
   return <div className="vr-page">
     <header className="vr-topbar"><a className="vr-brand" href="/"><Scale size={22} /><strong>TM Reports</strong></a><ProductTabs current="vr" {...props} /></header>
     <main className="vr-main">
-      <div className="vr-intro"><div><p className="vr-eyebrow">VALUE REBALANCING · 적립식</p><h1>라오어 VR 적립식</h1></div><span className="vr-chip">브라우저에만 저장</span></div>
+      <div className="vr-intro"><div><p className="vr-eyebrow">VALUE REBALANCING · 적립식</p><h1>라오어 VR 적립식</h1></div><div className="vr-intro-actions"><span className="vr-chip">브라우저에만 저장</span>
+        {account && <button type="button" className="vr-secondary vr-restart" onClick={reset}><RotateCcw size={14} /> 지우고 새로 시작</button>}</div></div>
       {storageNote && <p className="vr-message" role="status">{storageNote}</p>}
       {account ? <AccountView account={account} onChange={update} onReset={reset} /> : <SetupPanel onCreate={update} />}
       <details className="vr-fold" open>

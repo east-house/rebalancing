@@ -5,7 +5,7 @@ import {
 } from "./vrModel";
 import { exportVrAccount, parseVrAccount } from "./vrStorage";
 import { calibrateBacktest, estimatePrincipal, mergeHistory, runBacktest, week0DateFor } from "./vrBacktest";
-import { firstRealIndex, hasEstimatedHistory, removeEstimatedHistory } from "./vrModel";
+import { filledRows, firstRealIndex, hasEstimatedHistory, remainingOrders, removeEstimatedHistory } from "./vrModel";
 
 const basic = { ...VR_DEFAULT_SETTINGS };
 
@@ -268,5 +268,21 @@ describe("account lifecycle", () => {
     expect(cleared.cycles).toEqual([{ ...real, averageCost: 45 }]);
     // 원금을 직접 주면 그 값으로 한 번만 재생한다
     expect(calibrateBacktest(input, { shares: 230, poolBeforeDeposit: 300 }, 10000, 9000)).toMatchObject({ principal: 9000, calibrated: false });
+  });
+  it("keeps the ladder fixed for the cycle and consumes rows from the top as fills are recorded", () => {
+    let account = createQuickResumeAccount(basic, { cycleStartDate: "2026-11-15", week: 20, shares: 80, averageCost: 59, referenceClose: 62.5, poolBeforeDeposit: 300, basis: "market" });
+    const cycle0 = account.cycles[0];
+    const orders = buildOrders(cycle0);
+    for (let k = 0; k < 4; k += 1) account = addFill(account, { date: "2026-11-16", side: "buy", price: orders.buys[k].price, quantity: 1 });
+    account = addFill(account, { date: "2026-11-17", side: "sell", price: orders.sells[0].price, quantity: 1 });
+    const cycle = account.cycles[0];
+    expect(buildOrders(cycle)).toEqual(orders);
+    expect(filledRows(orders, cycle)).toEqual({ buys: 4, sells: 1 });
+    const rest = remainingOrders(orders, cycle);
+    expect(rest.buys).toEqual(orders.buys.slice(4));
+    expect(rest.sells[0]).toEqual(orders.sells[1]);
+    // 체결 수가 줄 수보다 많아도 넘치지 않는다
+    for (let k = 0; k < orders.buys.length + 3; k += 1) account = addFill(account, { date: "2026-11-18", side: "buy", price: 40, quantity: 1 });
+    expect(remainingOrders(orders, account.cycles[0]).buys).toEqual([]);
   });
 });

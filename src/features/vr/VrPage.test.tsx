@@ -144,6 +144,11 @@ describe("VR installment page", () => {
       fireEvent.click(screen.getByRole("button", { name: "체결 추가" }));
       // 75주 · Pool 862.91 → 매수 1주 61.79 후 76주 · 801.12
       expect(screen.getByText(/매수 1주 \$61\.79 · 매도 0주 \$0\.00 → 보유 76주 · Pool \$801\.12/)).toBeTruthy();
+      // 주문표는 그대로, 매수 1번 줄만 체결됨으로 표시된다
+      expect(screen.getByRole("heading", { name: /매수 12줄 중 1줄 체결 · 남은 11줄/ })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "매수 1번 $61.79 체결 기록" })).toBeNull();
+      expect(screen.getByRole("button", { name: /매수 2번 .* 체결 기록/ })).toBeTruthy();
+      expect(document.querySelectorAll(".vr-orders--buy tr.is-filled")).toHaveLength(1);
       await waitFor(() => expect(document.querySelector(".vr-close-values")!.textContent).toContain("$50.00 (2026-11-17)"));
       expect(document.querySelector(".vr-close-values")!.textContent).toContain("76주");
       fireEvent.click(screen.getByRole("button", { name: "주차 종료" }));
@@ -169,5 +174,20 @@ describe("VR installment page", () => {
       const saved = JSON.parse(window.localStorage.getItem(VR_STORAGE_KEY)!);
       expect(saved.cycles[0].close).toEqual({ shares: 75, pool: 862.91, price: 50 });
     } finally { vi.useRealTimers(); }
+  });
+  it("clears the account from the top button and returns to setup", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    render(<VrPage {...props} />);
+    startExistingSkill();
+    expect(window.localStorage.getItem(VR_STORAGE_KEY)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "지우고 새로 시작" }));
+    expect(screen.getByRole("heading", { name: /20주차 · / })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "지우고 새로 시작" }));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(window.localStorage.getItem(VR_STORAGE_KEY)).toBeNull();
+    expect(screen.getByRole("heading", { name: "적립식 계좌 시작" })).toBeTruthy();
+    expect(screen.getByText("기록을 지웠습니다. 새로 시작할 값을 입력하세요.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "지우고 새로 시작" })).toBeNull();
   });
 });

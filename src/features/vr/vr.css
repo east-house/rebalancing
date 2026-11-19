@@ -239,3 +239,9 @@
 .vr-close-values dt { font-size: 12px; color: #627489; }
 .vr-close-values dd { margin: 2px 0 0; font-size: 15px; font-weight: 700; color: #213449; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .vr-close-values { grid-template-columns: 1fr; } }
+.vr-orders tr.is-filled td { color: #9aa8b6; text-decoration: line-through; text-decoration-color: #c3cdd7; }
+.vr-orders tr.is-filled td:last-child { text-decoration: none; }
+.vr-orders tr.is-next td { font-weight: 700; color: #213449; }
+.vr-filled-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px; background: #e3f3ec; color: #1f7a57; font-size: 11px; font-weight: 600; }
+.vr-intro-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.vr-restart { display: inline-flex; align-items: center; gap: 5px; }

@@ -574,6 +574,18 @@ export function totalDeposits(account: VrAccount): number {
   return roundCent(account.cycles.reduce((sum, cycle) => sum + cycle.deposit, 0));
 }
 
+/** 주문표는 주차 동안 고정이고, 체결은 각 쪽 줄을 위에서부터 1줄(1주)씩 써 버린다. 체결된 줄 수를 센다. */
+export function filledRows(orders: VrOrders, cycle: VrCycle): { buys: number; sells: number } {
+  const t = fillTotals(cycle);
+  return { buys: Math.min(t.buyQuantity, orders.buys.length), sells: Math.min(t.sellQuantity, orders.sells.length) };
+}
+
+/** 아직 체결되지 않은 줄만 남긴 주문표 */
+export function remainingOrders(orders: VrOrders, cycle: VrCycle): VrOrders {
+  const filled = filledRows(orders, cycle);
+  return { ...orders, buys: orders.buys.slice(filled.buys), sells: orders.sells.slice(filled.sells) };
+}
+
 export function formatOrdersText(ticker: string, cycle: VrCycle, orders: VrOrders): string {
   const lines = [`${ticker} VR ${cycle.week}주차 ${cycle.startDate}~${cycle.endDate} · V $${cycle.v.toFixed(3)} · 지정가 1주씩`];
   lines.push("[매수]");
