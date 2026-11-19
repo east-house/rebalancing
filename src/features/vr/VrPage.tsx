@@ -3,12 +3,13 @@ import { Download, RotateCcw, Scale, Upload } from "lucide-react";
 import ProductTabs from "../../components/ProductTabs";
 import SiteFooter from "../../components/SiteFooter";
 import {
-  DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, buildOrders, closeCycle, createExistingAccount,
+  DEFAULT_INITIAL_POOL_RATIO, VR_DEFAULT_SETTINGS, V_FORMULA_LABELS, addFill, buildOrders, closeCycle, createExistingAccount, fillTotals, overdueCycles, removeFill,
   createNewAccount, createQuickResumeAccount, currentCycle, formatOrdersText, gForWeek, poolLimitForWeek, reopenLastCycle,
   suggestInitialBuy, totalDeposits, validateSettings, valuationStatus,
-  type OrderRow, type VBasis, type VFormula, type VrAccount, type VrCycle, type VrSettings,
+  type FillSide, type OrderRow, type VBasis, type VFormula, type VrAccount, type VrCycle, type VrSettings,
 } from "./vrModel";
-import { fetchCloseBefore, todayLocal } from "./vrPrices";
+import { fetchCloseBefore, fetchPriceHistory, todayLocal, type ReferenceClose } from "./vrPrices";
+import { VrBandChart, VrPriceChart, countFills } from "./VrCharts";
 import { deleteVrAccount, exportVrAccount, loadVrAccount, parseVrAccount, saveVrAccount } from "./vrStorage";
 import "./vr.css";
 
@@ -20,6 +21,8 @@ interface Props {
 const money = (value: number | null | undefined, digits = 2) => value == null ? "—" : `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 const num = (value: string) => value.trim() === "" ? Number.NaN : Number(value);
 const errorText = (cause: unknown, fallback: string) => cause instanceof Error ? cause.message : fallback;
+const roundPct = (value: number) => Math.round(value * 100) / 100;
+const clampDate = (date: string, min: string, max: string) => date < min ? min : date > max ? max : date;
 
 type SettingsForm = Record<"ticker" | "g" | "bandPct" | "poolLimitPct" | "deposit", string> & { formula: VFormula };
 const toForm = (s: VrSettings): SettingsForm => ({ ticker: s.ticker, g: String(s.g), bandPct: String(s.bandPct), poolLimitPct: String(s.poolLimitPct), deposit: String(s.deposit), formula: s.formula });
@@ -178,14 +181,21 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
   </section>;
 }
 
-function OrderTable({ title, rows, side }: { title: string; rows: OrderRow[]; side: "buy" | "sell" }) {
+function OrderTable({ title, rows, side, onPick }: { title: string; rows: OrderRow[]; side: FillSide; onPick: (row: OrderRow, side: FillSide) => void }) {
   return <div className={`vr-orders vr-orders--${side}`}>
     <h3>{title} <small>{rows.length}줄</small></h3>
     {rows.length === 0 ? <p className="vr-hint">주문 없음</p> : <div className="vr-orders-scroll"><table>
-      <thead><tr><th>순번</th><th>지정가</th><th>수량</th><th>체결 후 보유</th><th>체결 후 Pool</th></tr></thead>
-      <tbody>{rows.map((row, i) => <tr key={row.holdings}><td>{i + 1}</td><td>{money(row.price)}</td><td>1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td></tr>)}</tbody>
+      <thead><tr><th>순번</th><th>지정가</th><th>수량</th><th>체결 후 보유</th><th>체결 후 Pool</th><th><span className="vr-sr">체결 기록</span></th></tr></thead>
+      <tbody>{rows.map((row, i) => <tr key={row.holdings}><td>{i + 1}</td><td>{money(row.price)}</td><td>1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td>
+        <td><button type="button" className="vr-mini" aria-label={`${title} ${i + 1}번 ${money(row.price)} 체결 기록`} onClick={() => onPick(row, side)}>체결</button></td></tr>)}</tbody>
     </table></div>}
   </div>;
+}
+
+function fillSummary(cycle: VrCycle): string {
+  const t = fillTotals(cycle);
+  if (t.count === 0) return "—";
+  return [t.buyQuantity ? `매수 ${t.buyQuantity}` : "", t.sellQuantity ? `매도 ${t.sellQuantity}` : ""].filter(Boolean).join(" · ");
 }
 
 function formulaExplain(cycle: VrCycle): string {
@@ -202,12 +212,32 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   const [settings, setSettings] = useState<SettingsForm>(toForm(account.settings));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => { setCloseForm({ shares: String(cycle.shares), pool: "", price: "" }); setRefPrice(""); }, [cycle.index, cycle.shares]);
+  const [history, setHistory] = useState<{ status: "loading" | "ready" | "error"; prices: ReferenceClose[] }>({ status: "loading", prices: [] });
+  const ticker = account.settings.ticker;
+  useEffect(() => {
+    let alive = true;
+    setHistory({ status: "loading", prices: [] });
+    fetchPriceHistory(ticker).then((prices) => { if (alive) setHistory({ status: "ready", prices }); }).catch(() => { if (alive) setHistory({ status: "error", prices: [] }); });
+    return () => { alive = false; };
+  }, [ticker]);
+  const latest = history.prices.at(-1);
+  const today = todayLocal();
+  const totals = useMemo(() => fillTotals(cycle), [cycle]);
+  const overdue = overdueCycles(cycle, today);
+  // 사이클이 끝났으면 종료일 이전 마지막 종가를 마감 종가로 제안한다.
+  const endClose = useMemo(() => overdue > 0 ? [...history.prices].reverse().find((p) => p.date >= cycle.startDate && p.date <= cycle.endDate) : undefined, [overdue, history.prices, cycle.startDate, cycle.endDate]);
+  const [fillForm, setFillForm] = useState({ date: clampDate(today, cycle.startDate, cycle.endDate), side: "buy" as FillSide, price: "", quantity: "1" });
+  useEffect(() => { setRefPrice(""); setFillForm((f) => ({ ...f, date: clampDate(todayLocal(), cycle.startDate, cycle.endDate), price: "", quantity: "1" })); }, [cycle.index, cycle.startDate, cycle.endDate]);
+  useEffect(() => {
+    setCloseForm({ shares: String(totals.shares), pool: String(totals.pool), price: endClose ? String(endClose.close) : "" });
+  }, [cycle.index, totals.shares, totals.pool, endClose]);
 
-  const status = useMemo(() => {
-    const price = num(refPrice);
-    return Number.isFinite(price) && price > 0 ? valuationStatus(cycle, price) : null;
-  }, [cycle, refPrice]);
+  const check = useMemo(() => {
+    const manual = num(refPrice);
+    const price = Number.isFinite(manual) && manual > 0 ? manual : latest?.close;
+    if (price == null || totals.shares === 0) return null;
+    return { price, source: Number.isFinite(manual) && manual > 0 ? "입력한 가격" : `${latest!.date} 종가`, ...valuationStatus({ ...cycle, shares: totals.shares }, price), fills: countFills(orders, price) };
+  }, [cycle, orders, refPrice, latest, totals.shares]);
   const nextWeek = cycle.week + 2;
   const nextG = gForWeek(account.settings.g, nextWeek);
   const nextLimit = poolLimitForWeek(account.settings.poolLimitPct, nextWeek);
@@ -218,6 +248,21 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
       onChange(closeCycle(account, { shares: num(closeForm.shares), pool: num(closeForm.pool), price: num(closeForm.price) }));
       setMessage(`${cycle.week}주차 사이클을 마감하고 ${nextWeek}주차 사이클을 열었습니다.`);
     } catch (cause) { setError(errorText(cause, "사이클을 마감할 수 없습니다.")); }
+  }
+  function recordFill(event: FormEvent) {
+    event.preventDefault(); setError(""); setMessage("");
+    try {
+      onChange(addFill(account, { date: fillForm.date, side: fillForm.side, price: num(fillForm.price), quantity: num(fillForm.quantity) }));
+      setMessage(`${fillForm.date} ${fillForm.side === "buy" ? "매수" : "매도"} ${fillForm.quantity}주 × ${money(num(fillForm.price))} 체결을 기록했습니다.`);
+      setFillForm((f) => ({ ...f, price: "", quantity: "1" }));
+    } catch (cause) { setError(errorText(cause, "체결을 기록할 수 없습니다.")); }
+  }
+  function deleteFill(id: string) {
+    setError(""); onChange(removeFill(account, id)); setMessage("체결 기록을 삭제했습니다.");
+  }
+  function pickOrder(row: OrderRow, side: FillSide) {
+    setFillForm((f) => ({ ...f, side, price: String(row.price), quantity: "1" }));
+    document.getElementById("vr-fills-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
   function saveSettings(event: FormEvent) {
     event.preventDefault(); setError(""); setMessage("");
@@ -234,26 +279,56 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   }
 
   return <>
+    {overdue > 0 && <div className="vr-due" role="status">
+      <strong>{cycle.week}주차 사이클이 {cycle.endDate}에 끝났습니다.</strong>
+      <span>{overdue > 1 ? `오늘까지 ${overdue}개 사이클이 지났습니다. 마감할 때마다 다음 사이클이 하나씩 열리니 차례로 마감하세요. ` : ""}06에서 마감 값을 확인하고 "사이클 마감"을 누르면 {nextWeek}주차 V와 주문표가 만들어집니다.</span>
+      <a href="#vr-close-title">마감하러 가기</a>
+    </div>}
+    <section className="vr-panel" aria-labelledby="vr-guide-title">
+      <h2 id="vr-guide-title">01 <span>2주 사용 순서</span></h2>
+      <ol className="vr-steps">
+        <li><strong>시작일 {cycle.startDate}</strong><span>적립금 {money(cycle.deposit)}을 입금합니다. 02의 V와 Pool은 이 입금을 포함한 값입니다.</span></li>
+        <li><strong>주문 걸기</strong><span>04 주문표의 매수·매도 가격을 증권사에 1주씩 지정가로 걸어 둡니다(주문표 복사 버튼). 증권사 주문이 당일만 유효하면 거래일마다 다시 겁니다.</span></li>
+        <li><strong>2주 동안</strong><span>체결되면 05에 체결가·수량을 기록합니다(주문표의 "체결" 버튼으로 가격 입력). 보유 수량과 Pool이 자동 계산되어 02·03에 반영됩니다.</span></li>
+        <li><strong>{cycle.endDate} 장 마감 후</strong><span>2주는 자동으로 넘어가지 않습니다. 06에 미리 채워진 값을 증권사 잔고와 맞춰 보고 "사이클 마감"을 누르면 다음 사이클이 열립니다.</span></li>
+      </ol>
+    </section>
+
     <section className="vr-panel" aria-labelledby="vr-cycle-title">
       <h2 id="vr-cycle-title">02 <span>{cycle.week}주차 · {cycle.startDate} ~ {cycle.endDate}</span></h2>
       <dl className="vr-stats">
         <div><dt>V (목표 평가금)</dt><dd>{money(cycle.v, 3)}</dd></div>
         <div><dt>V 최소 / 최대</dt><dd>{money(cycle.lower)} / {money(cycle.upper)}</dd></div>
-        <div><dt>보유 수량</dt><dd>{cycle.shares}주</dd></div>
-        <div><dt>시작일 Pool (적립 후)</dt><dd>{money(cycle.pool)}</dd></div>
+        <div><dt>보유 수량{totals.count > 0 ? " (체결 반영)" : ""}</dt><dd>{totals.shares}주{totals.count > 0 && <small> (시작 {cycle.shares}주)</small>}</dd></div>
+        <div><dt>{totals.count > 0 ? "현재 Pool (체결 반영)" : "시작일 Pool (적립 후)"}</dt><dd>{money(totals.pool)}{totals.count > 0 && <small> (시작 {money(cycle.pool)})</small>}</dd></div>
         <div><dt>Pool 사용 한도</dt><dd>{money(cycle.poolCap)} <small>({cycle.poolLimitPct}%)</small></dd></div>
         <div><dt>G · 적립금</dt><dd>{cycle.g} · {money(cycle.deposit)}</dd></div>
       </dl>
-      <p className="vr-hint">{formulaExplain(cycle)}. 적립금 {money(cycle.deposit)}을 계좌에 입금해야 시작일 Pool이 맞습니다.</p>
+      <p className="vr-hint">{formulaExplain(cycle)}.</p>
       <p className="vr-hint">다음 {nextWeek}주차: G {nextG}, Pool 사용 한도 {nextLimit}%{nextG !== cycle.g || nextLimit !== cycle.poolLimitPct ? " (변경됨)" : ""}.</p>
+      <h3>지금 밴드 위치</h3>
+      <p className="vr-hint">평가금(보유 {totals.shares}주 × 가격)이 V 최소보다 낮으면 매수 주문이, V 최대보다 높으면 매도 주문이 체결되는 가격입니다. 주문을 걸어 두었다면 따로 할 일은 없습니다.</p>
       <div className="vr-check">
-        <label>현재가로 밴드 위치 확인 (USD)<input type="number" min="0" step="any" value={refPrice} onChange={(e) => setRefPrice(e.target.value)} /></label>
-        {status && <p className={`vr-zone vr-zone--${status.zone}`}>평가금 {money(status.value)} · {status.zone === "below" ? "V 최소 아래: 매수 구간" : status.zone === "above" ? "V 최대 위: 매도 구간" : "밴드 안: 거래 없음"}</p>}
+        {check
+          ? <p className={`vr-zone vr-zone--${check.zone}`}>{check.source} {money(check.price)} × {totals.shares}주 = 평가금 {money(check.value)} · {check.zone === "below" ? `V 최소 아래: 주문표 매수 ${check.fills.buys}줄까지 체결되는 가격` : check.zone === "above" ? `V 최대 위: 주문표 매도 ${check.fills.sells}줄까지 체결되는 가격` : "밴드 안: 체결 없음"}</p>
+          : <p className="vr-zone">{history.status === "loading" ? "최근 종가를 불러오는 중입니다." : "최근 종가를 불러오지 못했습니다. 오른쪽에 가격을 넣어 확인하세요."}</p>}
+        <label>다른 가격으로 확인 (선택, USD)<input type="number" min="0" step="any" value={refPrice} placeholder={latest ? String(latest.close) : ""} onChange={(e) => setRefPrice(e.target.value)} /></label>
       </div>
     </section>
 
+    <section className="vr-panel" aria-labelledby="vr-chart-title">
+      <h2 id="vr-chart-title">03 <span>그래프</span></h2>
+      {history.status === "error" && <p className="vr-hint">종가 데이터를 불러오지 못해 V 밴드만 표시합니다.</p>}
+      <h3>V 밴드와 평가금</h3>
+      <p className="vr-hint">회색 띠가 사이클별 V 최소~최대, 진한 선이 V입니다. 파란 선(평가금)이 띠 아래로 내려가면 매수, 위로 올라가면 매도가 체결됩니다. 평가금은 (사이클 시작 수량 + 그날까지 기록한 체결) × 종가입니다. 체결을 기록하지 않은 사이클은 시작 수량으로 그립니다. 가격 데이터는 최근 약 1년치입니다.</p>
+      <VrBandChart cycles={account.cycles} prices={history.prices} />
+      <h3>최근 종가와 이번 주문 가격</h3>
+      <p className="vr-hint">녹색 선이 매수 지정가, 주황 선이 매도 지정가이고, 기록한 체결은 점으로 표시합니다. 종가가 녹색 선 아래로 내려가면 그 줄의 매수가, 주황 선 위로 올라가면 매도가 체결됩니다.</p>
+      {history.status === "ready" ? <VrPriceChart cycle={cycle} orders={orders} prices={history.prices} /> : <p className="vr-hint">{history.status === "loading" ? "종가를 불러오는 중입니다." : "종가 데이터가 없어 가격 그래프를 그릴 수 없습니다."}</p>}
+    </section>
+
     <section className="vr-panel" aria-labelledby="vr-orders-title">
-      <h2 id="vr-orders-title">03 <span>{cycle.week}주차 예약 주문표 · 지정가 1주씩</span></h2>
+      <h2 id="vr-orders-title">04 <span>{cycle.week}주차 예약 주문표 · 지정가 1주씩</span></h2>
       <p className="vr-hint">
         시트 v5.0.4 규칙입니다. 매수 k번째는 V 최소 ÷ (보유 + k − 1), 매도 k번째는 V 최대 ÷ (보유 − k + 1)이며 1주씩 지정가 잔량 주문으로 사이클 끝까지 걸어 둡니다.
         매수는 매수 후 Pool이 {money(cycle.poolReserve)}(시작일 Pool × {roundPct(100 - cycle.poolLimitPct)}%) 이상이고 단가가 {money(orders.buyPriceFloor)}(직전 마감 종가 × 60%) 이상인 줄까지 만든 뒤 1줄을 더합니다. 매도는 1주가 남을 때까지 제한 없이 만듭니다.
@@ -261,15 +336,40 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
       </p>
       {cycle.shares === 0 && <p className="vr-error">보유 수량이 0주라 주문표를 만들 수 없습니다.</p>}
       <div className="vr-order-grid">
-        <OrderTable title="매수" rows={orders.buys} side="buy" />
-        <OrderTable title="매도" rows={orders.sells} side="sell" />
+        <OrderTable title="매수" rows={orders.buys} side="buy" onPick={pickOrder} />
+        <OrderTable title="매도" rows={orders.sells} side="sell" onPick={pickOrder} />
       </div>
       <button type="button" className="vr-secondary" onClick={() => void copy()}>주문표 복사</button>
     </section>
 
+    <section className="vr-panel" aria-labelledby="vr-fills-title">
+      <h2 id="vr-fills-title">05 <span>체결 기록 · {cycle.week}주차</span></h2>
+      <p className="vr-hint">증권사에서 체결된 매수·매도를 기록합니다. 04 주문표의 "체결" 버튼을 누르면 가격이 채워집니다. 기록은 선택 사항이며, 기록하면 보유 수량·Pool이 자동 계산되어 06 마감 칸에 채워집니다. 수수료·세금은 반영하지 않습니다.</p>
+      <form onSubmit={recordFill}>
+        <div className="vr-fields vr-fields--fill">
+          <label>체결일<input type="date" min={cycle.startDate} max={cycle.endDate} value={fillForm.date} onChange={(e) => setFillForm({ ...fillForm, date: e.target.value })} /></label>
+          <label>구분<select value={fillForm.side} onChange={(e) => setFillForm({ ...fillForm, side: e.target.value as FillSide })}><option value="buy">매수</option><option value="sell">매도</option></select></label>
+          <label>체결가 (USD)<input type="number" min="0" step="any" value={fillForm.price} onChange={(e) => setFillForm({ ...fillForm, price: e.target.value })} /></label>
+          <label>체결 수량 (주)<input type="number" min="1" step="1" value={fillForm.quantity} onChange={(e) => setFillForm({ ...fillForm, quantity: e.target.value })} /></label>
+        </div>
+        <button className="vr-secondary" type="submit">체결 추가</button>
+      </form>
+      {totals.count === 0 ? <p className="vr-hint">이번 사이클에 기록한 체결이 없습니다.</p> : <>
+        <div className="vr-table-wrap"><table className="vr-ledger vr-fills">
+          <thead><tr><th>체결일</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th><th><span className="vr-sr">삭제</span></th></tr></thead>
+          <tbody>{(cycle.fills ?? []).map((f) => <tr key={f.id}>
+            <td>{f.date}</td><td className={`vr-side vr-side--${f.side}`}>{f.side === "buy" ? "매수" : "매도"}</td><td>{money(f.price)}</td><td>{f.quantity}주</td><td>{money(f.price * f.quantity)}</td>
+            <td><button type="button" className="vr-mini" aria-label={`${f.date} ${f.side === "buy" ? "매수" : "매도"} ${money(f.price)} 기록 삭제`} onClick={() => deleteFill(f.id)}>삭제</button></td>
+          </tr>)}</tbody>
+        </table></div>
+        <p className="vr-fill-sum">매수 {totals.buyQuantity}주 {money(totals.buyAmount)} · 매도 {totals.sellQuantity}주 {money(totals.sellAmount)} → 보유 {totals.shares}주 · Pool {money(totals.pool)}</p>
+      </>}
+    </section>
+
     <section className="vr-panel" aria-labelledby="vr-close-title">
-      <h2 id="vr-close-title">04 <span>사이클 마감 · 다음 사이클 열기</span></h2>
-      <p className="vr-hint">{cycle.endDate} 이전 마지막 거래일 장 마감 후 증권사의 실제 잔고를 입력합니다. Pool은 다음 적립금을 넣기 전 현금입니다.</p>
+      <h2 id="vr-close-title">06 <span>사이클 마감 · 다음 사이클 열기</span></h2>
+      <p className="vr-hint">2주가 지나도 자동으로 넘어가지 않습니다. {cycle.endDate} 이전 마지막 거래일 장 마감 후 증권사의 실제 잔고를 확인하고 이 버튼을 눌러야 다음 사이클이 열립니다. Pool은 다음 적립금을 넣기 전 현금입니다.</p>
+      <p className="vr-hint">미리 채운 값: 보유 수량·Pool은 {totals.count > 0 ? `05 체결 기록 ${totals.count}건 기준 계산값` : "체결 기록이 없어 사이클 시작 값 그대로"}, 마감 종가는 {endClose ? `${endClose.date} 종가` : "사이클이 끝나면 자동 입력"}입니다. 증권사 잔고와 다르면 고쳐서 마감하세요.</p>
       <form onSubmit={close}>
         <div className="vr-fields">
           <label>마감 보유 수량 (주)<input type="number" min="0" step="1" value={closeForm.shares} onChange={(e) => setCloseForm({ ...closeForm, shares: e.target.value })} /></label>
@@ -284,15 +384,15 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
     {(message || error) && <p className={error ? "vr-error" : "vr-message"} role={error ? "alert" : "status"}>{error || message}</p>}
 
     <section className="vr-panel" aria-labelledby="vr-ledger-title">
-      <h2 id="vr-ledger-title">05 <span>사이클 원장</span></h2>
+      <h2 id="vr-ledger-title">07 <span>사이클 원장</span></h2>
       <p className="vr-hint">시작 {account.start.date} · {account.start.kind === "new" ? `0일차 ${account.start.shares}주 × 종가 ${money(account.start.price)} = V0 ${money(account.start.v0)}, Pool ${money(account.start.pool)}` : account.start.kind === "quick" ? `${account.start.shares}주 · 평단가 ${money(account.start.averageCost)} · 직전 종가 ${money(account.start.price)}로 이어받음, 직전 V 대체값 ${money(account.start.v0)}(${account.start.basis === "market" ? "평가금" : "평단가"} 기준)` : `이어받은 직전 V ${money(account.start.v0, 3)}`} · 누적 적립금 {money(totalDeposits(account))}</p>
       <div className="vr-table-wrap"><table className="vr-ledger">
-        <thead><tr><th>주차</th><th>시작일</th><th>공식</th><th>G</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>Pool(적립 후)</th><th>마감 수량</th><th>마감 Pool</th><th>마감 종가</th><th>마감 평가금</th><th>총자산</th></tr></thead>
+        <thead><tr><th>주차</th><th>시작일</th><th>공식</th><th>G</th><th>V</th><th>V 최소~최대</th><th>시작 수량</th><th>Pool(적립 후)</th><th>체결 기록</th><th>마감 수량</th><th>마감 Pool</th><th>마감 종가</th><th>마감 평가금</th><th>총자산</th></tr></thead>
         <tbody>{[...account.cycles].reverse().map((c) => {
           const value = c.close ? c.close.shares * c.close.price : null;
           return <tr key={c.index}>
             <td>{c.week}{c.close ? "" : " (진행)"}</td><td>{c.startDate}</td><td>{c.formula === "basic" ? "기본" : "실력"}</td><td>{c.g}</td><td>{money(c.v, 3)}</td>
-            <td>{money(c.lower)}~{money(c.upper)}</td><td>{c.shares}</td><td>{money(c.pool)}</td><td>{c.close?.shares ?? "—"}</td>
+            <td>{money(c.lower)}~{money(c.upper)}</td><td>{c.shares}</td><td>{money(c.pool)}</td><td>{fillSummary(c)}</td><td>{c.close?.shares ?? "—"}</td>
             <td>{money(c.close?.pool)}</td><td>{money(c.close?.price)}</td><td>{money(value)}</td><td>{money(value == null ? null : value + c.close!.pool)}</td>
           </tr>;
         })}</tbody>
@@ -300,7 +400,7 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
     </section>
 
     <section className="vr-panel" aria-labelledby="vr-settings-title">
-      <h2 id="vr-settings-title">06 <span>설정 변경</span></h2>
+      <h2 id="vr-settings-title">08 <span>설정 변경</span></h2>
       <form onSubmit={saveSettings}>
         <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
         <button className="vr-secondary" type="submit">설정 저장</button>
@@ -310,7 +410,6 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
   </>;
 }
 
-const roundPct = (value: number) => Math.round(value * 100) / 100;
 
 export default function VrPage(props: Props) {
   const [account, setAccount] = useState<VrAccount | null>(() => loadVrAccount());

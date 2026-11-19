@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  VR_DEFAULT_SETTINGS, addDays, buildOrders, closeCycle, createExistingAccount, createNewAccount, createQuickResumeAccount, gForWeek,
+  VR_DEFAULT_SETTINGS, addDays, addFill, fillTotals, overdueCycles, removeFill, buildOrders, closeCycle, createExistingAccount, createNewAccount, createQuickResumeAccount, gForWeek,
   nextV, openCycle, poolLimitForWeek, reopenLastCycle, suggestInitialBuy, valuationStatus, type VrAccount,
 } from "./vrModel";
 import { exportVrAccount, parseVrAccount } from "./vrStorage";
@@ -148,5 +148,37 @@ describe("account lifecycle", () => {
     expect(parseVrAccount(JSON.stringify({ ...account, version: 1 }))).toBeNull();
     const openTwice = { ...account, cycles: account.cycles.map(({ close: _c, ...cycle }) => cycle) };
     expect(parseVrAccount(JSON.stringify(openTwice))).toBeNull();
+  });
+
+  it("records fills, derives the close balance and keeps fills through close, undo and backup", () => {
+    let account = sheetAccount();
+    const cycle = account.cycles.at(-1)!;
+    const day = (n: number) => addDays(cycle.startDate, n);
+    account = addFill(account, { date: day(1), side: "buy", price: 61.79, quantity: 1 });
+    account = addFill(account, { date: day(2), side: "buy", price: 61.01, quantity: 2 });
+    account = addFill(account, { date: day(3), side: "sell", price: 70, quantity: 1 });
+    // 시작 75주 · Pool 862.91 → 매수 3주 183.81, 매도 1주 70
+    expect(fillTotals(account.cycles.at(-1)!)).toEqual({ count: 3, buyQuantity: 3, buyAmount: 183.81, sellQuantity: 1, sellAmount: 70, shares: 77, pool: 749.1 });
+    expect(fillTotals(account.cycles.at(-1)!, day(1)).shares).toBe(76);
+    expect(() => addFill(account, { date: day(-1), side: "buy", price: 60, quantity: 1 })).toThrow(/사이클 기간/);
+    expect(() => addFill(account, { date: day(4), side: "sell", price: 70, quantity: 78 })).toThrow(/보유 수량/);
+    expect(() => addFill(account, { date: day(4), side: "buy", price: 60, quantity: 1.5 })).toThrow(/정수/);
+    const sellId = account.cycles.at(-1)!.fills![2].id;
+    expect(fillTotals(removeFill(account, sellId).cycles.at(-1)!).shares).toBe(78);
+
+    const closed = closeCycle(account, { shares: 77, pool: 749.1, price: 60 });
+    expect(closed.cycles.at(-2)!.fills).toHaveLength(3);
+    expect(closed.cycles.at(-1)!.fills).toBeUndefined();
+    expect(reopenLastCycle(closed).cycles.at(-1)!.fills).toHaveLength(3);
+    expect(parseVrAccount(exportVrAccount(closed))).toEqual(closed);
+    const broken = { ...closed, cycles: closed.cycles.map((c, i) => i === closed.cycles.length - 2 ? { ...c, fills: [{ id: "x", date: day(1), side: "buy", price: -1, quantity: 1 }] } : c) };
+    expect(parseVrAccount(JSON.stringify(broken))).toBeNull();
+  });
+
+  it("counts overdue cycles from the cycle start", () => {
+    const cycle = sheetAccount().cycles.at(-1)!;
+    expect(overdueCycles(cycle, cycle.endDate)).toBe(0);
+    expect(overdueCycles(cycle, addDays(cycle.endDate, 1))).toBe(1);
+    expect(overdueCycles(cycle, addDays(cycle.startDate, 28))).toBe(2);
   });
 });

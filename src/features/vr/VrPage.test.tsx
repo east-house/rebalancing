@@ -38,7 +38,7 @@ describe("VR installment page", () => {
     expect(screen.getByText(/제안: 173주 매수/)).toBeTruthy();
   });
 
-  it("continues the sheet account, shows the sheet ladder, closes a cycle and persists", () => {
+  it("continues the sheet account, shows the sheet ladder, closes a cycle and persists", async () => {
     render(<VrPage {...props} />);
     startExistingSkill();
     expect(screen.getByRole("heading", { name: /20주차 · 2026-11-15 ~ 2026-11-28/ })).toBeTruthy();
@@ -47,6 +47,13 @@ describe("VR installment page", () => {
     expect(screen.getByRole("heading", { name: /매도 74줄/ })).toBeTruthy();
     expect(screen.getByText("$61.79")).toBeTruthy();
     expect(screen.getByText("$83.62")).toBeTruthy();
+    // 최근 종가 50 × 75주 = 3,750 < V 최소 → 매수 12줄 모두 체결되는 가격
+    expect(await screen.findByText(/2026-11-17 종가 \$50\.00 × 75주 = 평가금 \$3,750\.00 · V 최소 아래: 주문표 매수 12줄까지 체결되는 가격/)).toBeTruthy();
+    expect(screen.getByRole("img", { name: /V 밴드와 평가금 추이, 20주차부터 20주차까지/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "20주차 주문 지정가와 최근 종가" })).toBeTruthy();
+    fill("다른 가격으로 확인 (선택, USD)", "90");
+    expect(screen.getByText(/입력한 가격 \$90\.00 × 75주 = 평가금 \$6,750\.00 · V 최대 위: 주문표 매도/)).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent?.slice(0, 2))).toEqual(["01", "02", "03", "04", "05", "06", "07", "08"]);
 
     fill("마감 Pool, 적립 전 (USD)", "862.91"); fill("마감 종가 (USD)", "51.81");
     fireEvent.click(screen.getByRole("button", { name: "사이클 마감" }));
@@ -86,5 +93,31 @@ describe("VR installment page", () => {
     fireEvent.click(screen.getByRole("button", { name: "계좌 시작" }));
     expect(screen.getByRole("alert").textContent).toContain("0일차");
     expect(window.localStorage.getItem(VR_STORAGE_KEY)).toBeNull();
+  });
+
+  it("records a fill from the order table and prefills the overdue close", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-30T12:00:00"));
+    try {
+      render(<VrPage {...props} />);
+      startExistingSkill();
+      expect(screen.getByText("20주차 사이클이 2026-11-28에 끝났습니다.")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "매수 1번 $61.79 체결 기록" }));
+      expect((screen.getByLabelText("체결가 (USD)") as HTMLInputElement).value).toBe("61.79");
+      fill("체결일", "2026-11-16");
+      fireEvent.click(screen.getByRole("button", { name: "체결 추가" }));
+      // 75주 · Pool 862.91 → 매수 1주 61.79 후 76주 · 801.12
+      expect(screen.getByText(/매수 1주 \$61\.79 · 매도 0주 \$0\.00 → 보유 76주 · Pool \$801\.12/)).toBeTruthy();
+      expect((screen.getByLabelText("마감 보유 수량 (주)") as HTMLInputElement).value).toBe("76");
+      expect((screen.getByLabelText("마감 Pool, 적립 전 (USD)") as HTMLInputElement).value).toBe("801.12");
+      await waitFor(() => expect((screen.getByLabelText("마감 종가 (USD)") as HTMLInputElement).value).toBe("50"));
+      expect(screen.getByText(/마감 종가는 2026-11-17 종가입니다/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "사이클 마감" }));
+      expect(screen.getByRole("heading", { name: /22주차 · 2026-11-29/ })).toBeTruthy();
+      expect(screen.queryByText(/사이클이 .*에 끝났습니다/)).toBeNull();
+      const saved = JSON.parse(window.localStorage.getItem(VR_STORAGE_KEY)!);
+      expect(saved.cycles[0].fills).toHaveLength(1);
+      expect(saved.cycles[0].close).toEqual({ shares: 76, pool: 801.12, price: 50 });
+    } finally { vi.useRealTimers(); }
   });
 });

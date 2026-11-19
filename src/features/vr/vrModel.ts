@@ -47,6 +47,17 @@ export interface VrCycleClose {
   price: number;
 }
 
+export type FillSide = "buy" | "sell";
+
+/** 사이클 중 증권사에서 체결된 거래 1건 */
+export interface VrFill {
+  id: string;
+  date: string;
+  side: FillSide;
+  price: number;
+  quantity: number;
+}
+
 export interface VrCycle {
   index: number;
   week: number;
@@ -71,6 +82,8 @@ export interface VrCycle {
   poolCap: number;
   poolReserve: number;
   close?: VrCycleClose;
+  /** 사이클 중 체결 기록(선택). 없으면 마감 때 입력한 잔고만 쓴다. */
+  fills?: VrFill[];
 }
 
 export type VBasis = "cost" | "market";
@@ -346,6 +359,57 @@ export function closeCycle(account: VrAccount, close: VrCycleClose): VrAccount {
   const closed: VrCycle = { ...cycle, close: { shares: close.shares, pool: roundCent(close.pool), price: close.price } };
   const next = openCycle(cycle.index + 1, addDays(cycle.startDate, CYCLE_DAYS), cycle.v, close.shares, close.pool, close.price, settings);
   return { ...account, cycles: [...account.cycles.slice(0, -1), closed, next] };
+}
+
+export interface FillTotals {
+  count: number;
+  buyQuantity: number;
+  buyAmount: number;
+  sellQuantity: number;
+  sellAmount: number;
+  /** 시작 수량 + 매수 − 매도 */
+  shares: number;
+  /** 시작일 Pool(적립 후) − 매수 금액 + 매도 금액 (수수료·세금 제외) */
+  pool: number;
+}
+
+export function fillTotals(cycle: VrCycle, until?: string): FillTotals {
+  const fills = (cycle.fills ?? []).filter((f) => until == null || f.date <= until);
+  const sum = (side: FillSide, pick: (f: VrFill) => number) => fills.filter((f) => f.side === side).reduce((acc, f) => acc + pick(f), 0);
+  const buyQuantity = sum("buy", (f) => f.quantity);
+  const sellQuantity = sum("sell", (f) => f.quantity);
+  const buyAmount = roundCent(sum("buy", (f) => f.price * f.quantity));
+  const sellAmount = roundCent(sum("sell", (f) => f.price * f.quantity));
+  return { count: fills.length, buyQuantity, buyAmount, sellQuantity, sellAmount, shares: cycle.shares + buyQuantity - sellQuantity, pool: roundCent(cycle.pool - buyAmount + sellAmount) };
+}
+
+let fillSeq = 0;
+
+/** 열린 사이클에 체결 1건을 기록한다. */
+export function addFill(account: VrAccount, input: Omit<VrFill, "id">): VrAccount {
+  const cycle = currentCycle(account);
+  if (!DATE_RE.test(input.date)) throw new Error("체결일을 입력하세요.");
+  if (input.date < cycle.startDate || input.date > cycle.endDate) throw new Error(`체결일은 이번 사이클 기간(${cycle.startDate} ~ ${cycle.endDate}) 안이어야 합니다.`);
+  requireFinite(input.price, "체결가", { positive: true });
+  requireFinite(input.quantity, "체결 수량", { positive: true, integer: true });
+  if (input.side === "sell" && input.quantity > fillTotals(cycle).shares) throw new Error("매도 수량이 현재 보유 수량보다 많습니다.");
+  fillSeq += 1;
+  const fill: VrFill = { id: `${Date.now().toString(36)}-${fillSeq}`, date: input.date, side: input.side, price: roundCent(input.price), quantity: input.quantity };
+  const fills = [...(cycle.fills ?? []), fill].sort((a, b) => a.date.localeCompare(b.date));
+  return { ...account, cycles: [...account.cycles.slice(0, -1), { ...cycle, fills }] };
+}
+
+export function removeFill(account: VrAccount, id: string): VrAccount {
+  const cycle = currentCycle(account);
+  const fills = (cycle.fills ?? []).filter((f) => f.id !== id);
+  return { ...account, cycles: [...account.cycles.slice(0, -1), { ...cycle, fills }] };
+}
+
+/** 오늘 기준으로 마감이 밀린 사이클 수(0이면 진행 중). */
+export function overdueCycles(cycle: VrCycle, today: string): number {
+  if (today <= cycle.endDate) return 0;
+  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${cycle.startDate}T00:00:00Z`)) / 86_400_000);
+  return Math.floor(days / CYCLE_DAYS);
 }
 
 /** 직전 마감을 취소하고 그 사이클을 다시 연다(입력 실수 정정용). */

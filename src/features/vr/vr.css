@@ -65,3 +65,56 @@
 .vr-orders-scroll thead th { position: sticky; top: 0; background: inherit; }
 .vr-orders--buy .vr-orders-scroll thead th { background: #f6fbf9; }
 .vr-orders--sell .vr-orders-scroll thead th { background: #fffaf6; }
+.vr-steps { list-style: none; counter-reset: vr-step; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; }
+.vr-steps li { counter-increment: vr-step; display: grid; gap: 6px; align-content: start; padding: 14px; border-radius: 10px; background: #f3f6f9; font-size: 12px; line-height: 1.7; color: #53677b; }
+.vr-steps li strong { font-size: 13px; color: #213449; }
+.vr-steps li strong::before { content: counter(vr-step) ". "; color: #176f70; }
+.vr-check .vr-zone { flex: 1 1 320px; }
+.vr-chart { --vr-v: #33475b; --vr-band: #e3e9ef; --vr-value: #2a78d6; --vr-buy: #1baf7a; --vr-sell: #eb6834; margin: 8px 0 20px; }
+.vr-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #53677b; margin-bottom: 6px; }
+.vr-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.vr-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.vr-swatch--v { background: var(--vr-v); }
+.vr-swatch--band { height: 10px; background: var(--vr-band); border: 1px solid #b9c5d1; box-sizing: border-box; }
+.vr-swatch--value, .vr-swatch--price { background: var(--vr-value); }
+.vr-swatch--dot { width: 9px; height: 9px; border-radius: 50%; background: var(--vr-value); }
+.vr-swatch--buy { background: var(--vr-buy); }
+.vr-swatch--sell { background: var(--vr-sell); }
+.vr-chart-plot { position: relative; }
+.vr-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.vr-chart-axes line { stroke: #edf1f5; stroke-width: 1; }
+.vr-chart-axes text, .vr-chart-note { font-size: 11px; fill: #7a899a; font-variant-numeric: tabular-nums; }
+.vr-chart-label { font-size: 11px; fill: #42576d; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vr-chart-band { fill: var(--vr-band); }
+.vr-chart-edge { fill: none; stroke: #b9c5d1; stroke-width: 1; }
+.vr-chart-v { fill: none; stroke: var(--vr-v); stroke-width: 2; }
+.vr-chart-value, .vr-chart-price { fill: none; stroke: var(--vr-value); stroke-width: 2; stroke-linejoin: round; }
+.vr-chart-dot { fill: var(--vr-value); stroke: white; stroke-width: 2; }
+.vr-chart-buy { stroke: var(--vr-buy); stroke-width: 1; opacity: .75; }
+.vr-chart-sell { stroke: var(--vr-sell); stroke-width: 1; opacity: .75; }
+.vr-chart-cycle { fill: #f5f8fa; }
+.vr-chart-cross { stroke: #9aa9b7; stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.vr-chart-tip { position: absolute; top: 8px; transform: translateX(12px); display: grid; gap: 3px; min-width: 170px; padding: 10px 12px; border: 1px solid #dce4eb; border-radius: 8px; background: white; box-shadow: 0 4px 14px rgba(24, 38, 56, .12); font-size: 12px; color: #42576d; pointer-events: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vr-chart-tip[data-side="left"] { transform: translateX(calc(-100% - 12px)); }
+.vr-chart-tip strong { color: #213449; }
+.vr-chart-tip span { display: inline-flex; align-items: center; gap: 6px; }
+.vr-chart-tip em { font-style: normal; font-weight: 650; color: #213449; }
+@media (max-width: 900px) { .vr-steps { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 420px) { .vr-steps { grid-template-columns: 1fr; } }
+.vr-chart-fill { stroke: white; stroke-width: 2; }
+.vr-chart-fill--buy { fill: #0f8a5f; }
+.vr-chart-fill--sell { fill: #c4501f; }
+.vr-swatch--fill { width: 10px; height: 10px; border-radius: 50%; background: #0f8a5f; box-shadow: 4px 0 0 #c4501f; margin-right: 4px; }
+.vr-due { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 16px 20px; border-radius: 12px; border: 1px solid #f1cfa9; background: #fff6ea; color: #7a4a14; font-size: 13px; line-height: 1.7; }
+.vr-due strong { color: #5d3608; }
+.vr-due a { margin-left: auto; padding: 8px 14px; border-radius: 6px; background: #176f70; color: white; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.vr-fields--fill { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vr-fields select { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid #dce4eb; border-radius: 8px; padding: 11px; background: #fbfcfd; color: #1e3348; font: inherit; font-size: 14px; }
+.vr-mini { padding: 3px 8px; border: 1px solid #c4d3dc; border-radius: 5px; background: white; color: #2a4a5a; font: inherit; font-size: 11px; cursor: pointer; }
+.vr-mini:hover { background: #eef4f7; }
+.vr-fills { margin-top: 14px; }
+.vr-side--buy { color: #0f7a54; font-weight: 650; }
+.vr-side--sell { color: #b04716; font-weight: 650; }
+.vr-fill-sum { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #f3f6f9; font-size: 13px; font-variant-numeric: tabular-nums; }
+.vr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 760px) { .vr-fields--fill { grid-template-columns: 1fr 1fr; } }

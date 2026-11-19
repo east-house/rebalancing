@@ -11,12 +11,18 @@ function isSettings(value: unknown): value is VrSettings {
     && ["g", "bandPct", "poolLimitPct", "deposit"].every((key) => isNumber(value[key]));
 }
 
+function isFill(value: unknown): boolean {
+  return isObject(value) && typeof value.id === "string" && isDate(value.date) && (value.side === "buy" || value.side === "sell")
+    && isNumber(value.price) && value.price > 0 && isNumber(value.quantity) && Number.isInteger(value.quantity) && value.quantity > 0;
+}
+
 function isCycle(value: unknown): value is VrCycle {
   if (!isObject(value)) return false;
   const numbers = ["index", "week", "g", "bandPct", "poolLimitPct", "previousV", "referenceClose", "previousValuation", "v", "lower", "upper",
     "shares", "poolBeforeDeposit", "deposit", "pool", "poolCap", "poolReserve"];
   if (!numbers.every((key) => isNumber(value[key])) || !isDate(value.startDate) || !isDate(value.endDate)) return false;
   if (value.formula !== "basic" && value.formula !== "skill") return false;
+  if (value.fills !== undefined && !(Array.isArray(value.fills) && value.fills.every(isFill))) return false;
   if (value.close === undefined) return true;
   return isObject(value.close) && isNumber(value.close.shares) && isNumber(value.close.pool) && isNumber(value.close.price);
 }
