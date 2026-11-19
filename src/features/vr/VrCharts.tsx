@@ -151,11 +151,12 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
   const allPts = byCycle.flatMap((g) => g.pts);
   const lastPt = allPts[allPts.length - 1];
   const lastClose = closes[closes.length - 1];
+  const lastShares = (lastClose && allPts.find((p) => p.date === lastClose.date)?.shares) ?? lastPt.shares;
   const labels = placeLabels([
     { key: "max", y: y(lastPt.max), text: `V 최대 ${usd(lastPt.cycle.upper, 0)}`, sub: `(${usd(lastPt.max)})` },
     { key: "target", y: y(lastPt.target), text: `V ${usd(lastPt.cycle.v, 0)}`, sub: `(${usd(lastPt.target)})` },
     { key: "min", y: y(lastPt.min), text: `V 최소 ${usd(lastPt.cycle.lower, 0)}`, sub: `(${usd(lastPt.min)})` },
-    ...(lastClose ? [{ key: "close", y: y(lastClose.close), text: `종가 ${usd(lastClose.close)}`, sub: "" }] : []),
+    ...(lastClose ? [{ key: "close", y: y(lastClose.close), text: `평가금 ${usd(lastClose.close * lastShares, 0)}`, sub: `(종가 ${usd(lastClose.close)})` }] : []),
   ], 25);
   const realStart = byCycle.find((g) => !isSim(g.cycle));
   const hasSim = byCycle.some((g) => isSim(g.cycle));
@@ -169,7 +170,7 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     const zone = close < nearest.min ? "V 최소 아래 · 매수 구간" : close > nearest.max ? "V 최대 위 · 매도 구간" : "밴드 안";
     setHover({ x: x(nearest.t), content: <>
       <strong>{nearest.date} · {nearest.cycle.week}주차{isSim(nearest.cycle) ? " (추정)" : ""}</strong>
-      <span><Swatch kind="price" />종가 {usd(close)}</span>
+      <span><Swatch kind="price" />평가금 {usd(close * nearest.shares, 0)} (종가 {usd(close)})</span>
       <span><Swatch kind="v" />V {usd(nearest.cycle.v, 0)} ({usd(nearest.target)})</span>
       <span><Swatch kind="band" />V 최소~최대 {usd(nearest.cycle.lower, 0)} ~ {usd(nearest.cycle.upper, 0)} ({usd(nearest.min)} ~ {usd(nearest.max)})</span>
       <span>괄호는 1주 가격 = 금액 ÷ 보유 {nearest.shares}주</span>
@@ -180,8 +181,8 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
 
   const long = t1 - t0 > 200 * DAY;
   return <ChartFrame plotRef={plotRef} W={W}
-    label={`종가와 V·V 최소·V 최대(1주 가격), ${byCycle[0].cycle.week}주차부터 ${byCycle[byCycle.length - 1].cycle.week}주차까지`}
-    legend={<><span><Swatch kind="price" />종가</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span className="vr-chart-legend-note">괄호 = 1주 가격 (금액 ÷ 보유 수량)</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}</>}
+    label={`평가금과 V·V 최소·V 최대(1주 가격), ${byCycle[0].cycle.week}주차부터 ${byCycle[byCycle.length - 1].cycle.week}주차까지`}
+    legend={<><span><Swatch kind="price" />평가금 (보유 수량 × 종가)</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span className="vr-chart-legend-note">괄호 = 1주 가격 (금액 ÷ 보유 수량, 평가금은 종가)</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}</>}
     hover={hover} onMove={move} onLeave={() => setHover(null)}>
     <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={dateTicks(t0, t1, W < 560 ? 3 : long ? 6 : 4)} x={x} long={long} />
     {byCycle.map((g) => <g key={g.cycle.index} className={isSim(g.cycle) ? "vr-chart-sim" : undefined}>

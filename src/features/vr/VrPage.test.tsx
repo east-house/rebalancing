@@ -61,7 +61,11 @@ describe("VR installment page", () => {
     expect(nowText()).toContain("입력한 가격 $90.00 × 75주");
     expect(nowText()).toContain("매도 구간");
     // 그래프는 기본으로 펼쳐져 있고, 종가 위에 목표가·최소가·최대가를 겹친다
-    expect(await screen.findByRole("img", { name: "종가와 V·V 최소·V 최대(1주 가격), 20주차부터 20주차까지" })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: "평가금과 V·V 최소·V 최대(1주 가격), 20주차부터 20주차까지" })).toBeTruthy();
+    // 마지막 라벨: 평가금 50 × 75 = 3,750 (종가 50)
+    const chartText = screen.getByRole("img", { name: /평가금과 V/ }).textContent!;
+    expect(chartText).toContain("평가금 $3,750");
+    expect(chartText).toContain("(종가 $50.00)");
     // 사용 순서만 접혀 있고 나머지는 펼쳐져 있다
     const folds = [...document.querySelectorAll<HTMLDetailsElement>("details.vr-fold")];
     expect(folds.filter((d) => !d.open).map((d) => d.querySelector(".vr-fold-title")!.textContent)).toEqual(["사용 순서"]);

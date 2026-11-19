@@ -553,8 +553,8 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
 
     {(message || error) && <p className={error ? "vr-error" : "vr-message"} role={error ? "alert" : "status"}>{error || message}</p>}
 
-    <Fold id="vr-fold-charts" title="가격과 V" open={open.charts} onToggle={(v) => setFold("charts", v)} summary="종가 위에 V·V 최소·V 최대, 매수 ▲ · 매도 ▼">
-      <p className="vr-hint">V·V 최소·V 최대는 금액이고, 종가와 같은 눈금에 겹치려고 보유 수량으로 나눈 1주 가격으로 그립니다(라벨의 괄호 값). 종가가 V 최소 선 아래로 내려가면 매수 주문이, V 최대 선 위로 올라가면 매도 주문이 체결되는 구간입니다. 체결은 매수 ▲, 매도 ▼ 지점으로 표시합니다. 가격 자료는 최근 약 1년치입니다.</p>
+    <Fold id="vr-fold-charts" title="가격과 V" open={open.charts} onToggle={(v) => setFold("charts", v)} summary="평가금과 V·V 최소·V 최대, 매수 ▲ · 매도 ▼">
+      <p className="vr-hint">파란 선은 내 보유분의 평가금(보유 수량 × 종가)이고, V·V 최소·V 최대도 금액입니다. 서로 같은 눈금에 겹치려고 모두 보유 수량으로 나눈 1주 가격으로 그립니다. 그래서 세로축은 1주 가격이고, 라벨은 금액 뒤 괄호에 1주 가격(평가금은 종가)을 씁니다. 평가금 선이 V 최소 아래로 내려가면 매수 주문이, V 최대 위로 올라가면 매도 주문이 체결되는 구간입니다. 체결은 매수 ▲, 매도 ▼ 지점으로 표시합니다. 가격 자료는 최근 약 1년치입니다.</p>
       {history.status === "loading" ? <p className="vr-hint">종가를 불러오는 중입니다.</p>
         : open.charts && <VrPriceBandChart cycles={account.cycles} prices={history.prices} />}
     </Fold>
