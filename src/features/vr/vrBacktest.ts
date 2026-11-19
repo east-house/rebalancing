@@ -1,5 +1,5 @@
 import {
-  WEEKS_PER_CYCLE, addDays, addFill, buildOrders, closeCycle, createNewAccount, currentCycle, fillTotals, roundCent,
+  WEEKS_PER_CYCLE, addDays, addFill, buildOrders, closeCycle, costBasis, createNewAccount, currentCycle, fillTotals, removeEstimatedHistory, roundCent,
   suggestInitialBuy, type VrAccount, type VrSettings,
 } from "./vrModel";
 import type { ReferenceClose } from "./vrPrices";
@@ -73,3 +73,72 @@ export function estimatePrincipal(cost: number | null, poolBeforeDeposit: number
   return value > 0 ? value : roundCent(cost);
 }
 
+export interface HistoryTarget {
+  shares: number;
+  poolBeforeDeposit: number;
+}
+
+export interface CalibratedBacktest {
+  result: BacktestResult;
+  principal: number;
+  /** 원금을 자동으로 맞췄으면 true */
+  calibrated: boolean;
+}
+
+const gap = (result: BacktestResult, target: HistoryTarget) => {
+  const last = result.account.cycles.at(-1)!;
+  return Math.abs(last.shares - target.shares) * 1_000_000 + Math.abs(last.poolBeforeDeposit - target.poolBeforeDeposit);
+};
+
+/**
+ * 원금을 모르면 이번 주차 시작 잔고(보유 수량, 적립 전 Pool)에 가장 가깝게 도착하는 0주차 원금을 찾는다.
+ * 수량을 먼저, 그다음 Pool을 맞춘다. 원금을 주면 그대로 한 번만 재생한다.
+ */
+export function calibrateBacktest(input: Omit<BacktestInput, "principal">, target: HistoryTarget, guess: number, principal?: number): CalibratedBacktest {
+  if (principal != null) return { result: runBacktest({ ...input, principal }), principal, calibrated: false };
+  if (!(guess > 0)) throw new Error("0주차 원금을 입력하세요.");
+  let best: CalibratedBacktest | null = null;
+  let bestGap = Infinity;
+  let lastError: unknown = null;
+  const tryPrincipal = (value: number) => {
+    const p = roundCent(value);
+    try {
+      const result = runBacktest({ ...input, principal: p });
+      if (!result.reached) { if (!best) best = { result, principal: p, calibrated: true }; return; }
+      const g = gap(result, target);
+      if (g < bestGap) { bestGap = g; best = { result, principal: p, calibrated: true }; }
+    } catch (cause) { lastError = cause; }
+  };
+  const steps = 240;
+  for (let k = 0; k <= steps; k += 1) tryPrincipal(guess * (0.4 + 1.6 * k / steps));
+  // 가장 가까운 원금 주변을 1달러 단위로 다듬는다.
+  const found = best as CalibratedBacktest | null;
+  if (found && found.result.reached) {
+    const center = found.principal;
+    const span = guess * 1.6 / steps;
+    for (let d = -span; d <= span; d += 1) tryPrincipal(center + d);
+  }
+  if (!best) throw lastError instanceof Error ? lastError : new Error("지난 기록을 만들 수 없습니다.");
+  return best;
+}
+
+/**
+ * 재생 결과를 계좌의 지난 기록으로 넣는다. 재생한 주차는 추정(estimated)으로 표시하고,
+ * 마지막 추정 주차의 마감은 실제 첫 주차 시작 잔고(수량·적립 전 Pool·직전 종가)로 이어 붙인다.
+ * 실제 첫 주차의 V·주문·체결은 바꾸지 않고, 시작 평단가는 기존 값으로 고정한다.
+ */
+export function mergeHistory(account: VrAccount, result: BacktestResult): VrAccount {
+  const clean = removeEstimatedHistory(account);
+  const first = clean.cycles[0];
+  const sim = result.account.cycles.filter((c) => c.close && c.week < first.week);
+  if (sim.length === 0) throw new Error("넣을 지난 주차가 없습니다.");
+  if (sim[sim.length - 1].week !== first.week - WEEKS_PER_CYCLE) throw new Error("가격 자료가 모자라 이번 주차 직전까지 재생하지 못했습니다.");
+  const avg = costBasis(clean, 0, "").averageCost;
+  const estimated = sim.map((c, i) => ({
+    ...c,
+    estimated: true,
+    ...(i === sim.length - 1 ? { close: { shares: first.shares, pool: first.poolBeforeDeposit, price: first.referenceClose } } : {}),
+  }));
+  const firstReal = first.averageCost == null && avg != null ? { ...first, averageCost: avg } : first;
+  return { ...clean, start: result.account.start, resumedStart: clean.start, cycles: [...estimated, firstReal, ...clean.cycles.slice(1)] };
+}

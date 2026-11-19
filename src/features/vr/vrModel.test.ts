@@ -4,7 +4,8 @@ import {
   nextV, openCycle, poolLimitForWeek, reopenLastCycle, suggestInitialBuy, valuationStatus, type VrAccount,
 } from "./vrModel";
 import { exportVrAccount, parseVrAccount } from "./vrStorage";
-import { estimatePrincipal, runBacktest, week0DateFor } from "./vrBacktest";
+import { calibrateBacktest, estimatePrincipal, mergeHistory, runBacktest, week0DateFor } from "./vrBacktest";
+import { firstRealIndex, hasEstimatedHistory, removeEstimatedHistory } from "./vrModel";
 
 const basic = { ...VR_DEFAULT_SETTINGS };
 
@@ -234,5 +235,38 @@ describe("account lifecycle", () => {
     expect(() => runBacktest({ settings: basic, week0Date: "2025-01-01", principal: 10000, poolRatio: 0.15, untilWeek: 8, prices })).toThrow(/이전 종가가 없습니다/);
     // 원금 어림: 매입금액 3,885.75 + 현금 100 − 적립금 250 × 9
     expect(estimatePrincipal(3885.75, 100, 250, 20)).toBe(1735.75);
+  });
+  it("fills the missing weeks 0..N-2 of a resumed account so they lead to the real current balance", () => {
+    const prices = Array.from({ length: 120 }, (_, i) => ({ date: addDays("2026-01-04", i), close: Math.round((i < 30 ? 50 - i * 0.5 : 35 + (i - 30) * 0.3) * 100) / 100 }));
+    const ref = prices.find((p) => p.date === "2026-04-25")!.close;
+    const resumed = createQuickResumeAccount(basic, { cycleStartDate: "2026-04-26", week: 16, shares: 230, averageCost: 45, referenceClose: ref, poolBeforeDeposit: 300, basis: "cost" });
+    const real = resumed.cycles[0];
+    const input = { settings: basic, week0Date: week0DateFor(real.startDate, real.week), poolRatio: 0.15, untilWeek: 16, prices };
+    expect(input.week0Date).toBe("2026-01-04");
+    const calibrated = calibrateBacktest(input, { shares: 230, poolBeforeDeposit: 300 }, 10000);
+    expect(calibrated.calibrated).toBe(true);
+    expect(calibrated.result.reached).toBe(true);
+    expect(calibrated.result.account.cycles.at(-1)!.shares).toBe(230);
+
+    const merged = mergeHistory(resumed, calibrated.result);
+    expect(merged.cycles.map((c) => c.week)).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
+    expect(merged.cycles.slice(0, -1).every((c) => c.estimated)).toBe(true);
+    expect(firstRealIndex(merged)).toBe(7);
+    // 실제 16주차는 그대로, 14주차 종료는 실제 시작 잔고로 이어 붙인다
+    expect(merged.cycles[7]).toMatchObject({ v: real.v, shares: 230, poolBeforeDeposit: 300, averageCost: 45 });
+    expect(merged.cycles[6].close).toEqual({ shares: 230, pool: 300, price: ref });
+    expect(merged.start).toMatchObject({ kind: "new", date: "2026-01-04" });
+    expect(merged.resumedStart).toEqual(resumed.start);
+    expect(costBasis(merged)).toMatchObject({ averageCost: 45, shares: 230, estimated: false });
+    expect(() => reopenLastCycle(merged)).toThrow(/재구성/);
+    expect(() => rescheduleCurrentCycle(merged, "2026-04-19")).toThrow(/재구성/);
+    expect(parseVrAccount(exportVrAccount(merged))).toEqual(merged);
+    // 지우면 이어받을 때 상태로 돌아간다(평단가 고정만 남음)
+    const cleared = removeEstimatedHistory(merged);
+    expect(hasEstimatedHistory(cleared)).toBe(false);
+    expect(cleared.start).toEqual(resumed.start);
+    expect(cleared.cycles).toEqual([{ ...real, averageCost: 45 }]);
+    // 원금을 직접 주면 그 값으로 한 번만 재생한다
+    expect(calibrateBacktest(input, { shares: 230, poolBeforeDeposit: 300 }, 10000, 9000)).toMatchObject({ principal: 9000, calibrated: false });
   });
 });

@@ -24,9 +24,15 @@ function isCycle(value: unknown): value is VrCycle {
   if (value.formula !== "basic" && value.formula !== "skill") return false;
   if (value.fills !== undefined && !(Array.isArray(value.fills) && value.fills.every(isFill))) return false;
   if (value.averageCost !== undefined && !(isNumber(value.averageCost) && value.averageCost > 0)) return false;
+  if (value.estimated !== undefined && typeof value.estimated !== "boolean") return false;
   if (value.close === undefined) return true;
   return isObject(value.close) && isNumber(value.close.shares) && isNumber(value.close.pool) && isNumber(value.close.price)
     && (value.close.averageCost === undefined || (isNumber(value.close.averageCost) && value.close.averageCost > 0));
+}
+
+function isStart(start: unknown): boolean {
+  return isObject(start) && (start.kind === "new" || start.kind === "existing" || start.kind === "quick") && isDate(start.date)
+    && isNumber(start.shares) && isNumber(start.pool) && isNumber(start.price) && isNumber(start.v0);
 }
 
 /** 저장본·백업 파일을 검증한다. 형식이 맞지 않으면 null. */
@@ -34,9 +40,8 @@ export function parseVrAccount(raw: string): VrAccount | null {
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return null; }
   if (!isObject(value) || value.version !== 2 || !isSettings(value.settings) || !Array.isArray(value.cycles)) return null;
-  const start = value.start;
-  if (!isObject(start) || (start.kind !== "new" && start.kind !== "existing" && start.kind !== "quick") || !isDate(start.date)
-    || !isNumber(start.shares) || !isNumber(start.pool) || !isNumber(start.price) || !isNumber(start.v0)) return null;
+  if (!isStart(value.start)) return null;
+  if (value.resumedStart !== undefined && !isStart(value.resumedStart)) return null;
   if (value.cycles.length === 0 || !value.cycles.every(isCycle)) return null;
   // 마감되지 않은 사이클은 마지막 하나뿐이어야 한다.
   if (value.cycles.slice(0, -1).some((cycle) => (cycle as VrCycle).close === undefined)) return null;

@@ -88,6 +88,8 @@ export interface VrCycle {
   fills?: VrFill[];
   /** 사용자가 보정한 사이클 시작 평단가(선택) */
   averageCost?: number;
+  /** 실제 기록이 아니라 일별 종가로 재구성한 지난 주차 */
+  estimated?: boolean;
 }
 
 export type VBasis = "cost" | "market";
@@ -110,6 +112,8 @@ export interface VrAccount {
   settings: VrSettings;
   start: VrStart;
   cycles: VrCycle[];
+  /** 지난 기록을 재구성하기 전의 시작 정보(재구성을 지우면 되돌린다) */
+  resumedStart?: VrStart;
 }
 
 export interface OrderRow {
@@ -446,6 +450,7 @@ export function costBasis(account: VrAccount, index = account.cycles.length - 1,
   for (let k = 0; k <= index && k < account.cycles.length; k += 1) {
     const cycle = account.cycles[k];
     if (cycle.averageCost != null) { avg = cycle.averageCost; estimated = false; }
+    else if (cycle.estimated) estimated = true;
     shares = cycle.shares;
     let cost = avg == null ? null : avg * shares;
     for (const fill of cycle.fills ?? []) {
@@ -486,6 +491,7 @@ export function rescheduleCurrentCycle(account: VrAccount, startDate: string): V
   const cycle = currentCycle(account);
   const delta = Math.round((Date.parse(`${startDate}T00:00:00Z`) - Date.parse(`${cycle.startDate}T00:00:00Z`)) / 86_400_000);
   if (delta === 0) return account;
+  if (account.cycles.some((c) => c.estimated)) throw new Error("재구성한 지난 기록이 있으면 시작일을 옮길 수 없습니다. 지난 기록에서 재구성 기록을 먼저 지우세요.");
   const cycles = account.cycles.map((c) => ({ ...c, startDate: addDays(c.startDate, delta), endDate: addDays(c.endDate, delta) }));
   for (const c of cycles) {
     if ((c.fills ?? []).some((f) => f.date < c.startDate || f.date > c.endDate)) throw new Error("옮긴 기간 밖에 있는 체결 기록이 있습니다. 해당 기록을 먼저 지우세요.");
@@ -494,9 +500,27 @@ export function rescheduleCurrentCycle(account: VrAccount, startDate: string): V
 }
 
 /** 직전 마감을 취소하고 그 사이클을 다시 연다(입력 실수 정정용). */
+/** 실제로 기록한 첫 사이클의 위치(재구성한 지난 기록 다음) */
+export function firstRealIndex(account: VrAccount): number {
+  const index = account.cycles.findIndex((c) => !c.estimated);
+  return index < 0 ? account.cycles.length - 1 : index;
+}
+
+export function hasEstimatedHistory(account: VrAccount): boolean {
+  return account.cycles.some((c) => c.estimated);
+}
+
+/** 재구성한 지난 기록을 지우고 이어받을 때의 상태로 되돌린다. */
+export function removeEstimatedHistory(account: VrAccount): VrAccount {
+  if (!hasEstimatedHistory(account)) return account;
+  const { resumedStart, ...rest } = account;
+  return { ...rest, start: resumedStart ?? account.start, cycles: account.cycles.filter((c) => !c.estimated) };
+}
+
 export function reopenLastCycle(account: VrAccount): VrAccount {
   if (account.cycles.length < 2) throw new Error("되돌릴 마감 기록이 없습니다.");
   const previous = account.cycles.at(-2)!;
+  if (previous.estimated) throw new Error("재구성한 지난 기록은 되돌릴 수 없습니다.");
   const { close: _removed, ...reopened } = previous;
   return { ...account, cycles: [...account.cycles.slice(0, -2), reopened] };
 }
