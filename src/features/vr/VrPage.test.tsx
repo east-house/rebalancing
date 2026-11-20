@@ -13,7 +13,7 @@ const history = {
 };
 const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(history), { status: 200 }));
 
-beforeEach(() => { window.localStorage.removeItem(VR_STORAGE_KEY); fetchMock.mockClear(); vi.stubGlobal("fetch", fetchMock); });
+beforeEach(() => { window.localStorage.removeItem(VR_STORAGE_KEY); fetchMock.mockClear(); fetchMock.mockImplementation(async () => new Response(JSON.stringify(history), { status: 200 })); vi.stubGlobal("fetch", fetchMock); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 // 시트 20주차 상태(실력공식, 적립금 65)로 이어가기
@@ -66,6 +66,16 @@ describe("VR installment page", () => {
     const nowRow = document.querySelector(".vr-chart-now")!.textContent!;
     expect(nowRow).toContain("20주차보유 75주");
     expect(nowRow).toContain("평가금$3,750 (종가 $50.00)");
+    // 손가락으로 누르는 동안만 금액 상자가 보이고, 떼면 사라진다
+    const svg = document.querySelector<SVGSVGElement>(".vr-chart svg")!;
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 300, height: 200, right: 300, bottom: 200, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(svg, { pointerType: "touch", clientX: 150 });
+    expect(document.querySelector(".vr-chart-tip")).not.toBeNull();
+    fireEvent.pointerUp(svg, { pointerType: "touch", clientX: 150 });
+    expect(document.querySelector(".vr-chart-tip")).toBeNull();
+    fireEvent.pointerDown(svg, { pointerType: "touch", clientX: 150 });
+    fireEvent.pointerCancel(svg, { pointerType: "touch" });
+    expect(document.querySelector(".vr-chart-tip")).toBeNull();
 
     // 매일 쓰는 구역만 펼쳐 두고 나머지는 접어 둔다
     const folds = [...document.querySelectorAll<HTMLDetailsElement>("details.vr-fold")];
@@ -96,7 +106,8 @@ describe("VR installment page", () => {
     fill("2주 적립금 (USD)", "65");
     fill("이번 주차 시작일", "2026-11-17");
     await waitFor(() => expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).value).toBe("51.64"));
-    expect(screen.getByText("2026-11-16 종가 자동 입력 (수정 가능)")).toBeTruthy();
+    expect(screen.getByText("2026-11-16 종가 자동 입력")).toBeTruthy();
+    expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).readOnly).toBe(true);
     expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("api/market-data/history/US/TQQQ");
     fill("현재 주차", "20"); fill("보유 수량 (주)", "75"); fill("평단가 (USD)", "51.81");
     // 직전 V 대체값 75 × 51.81 = 3,885.75 → V = 3,885.75 + 0/10 + 65
@@ -118,12 +129,15 @@ describe("VR installment page", () => {
     expect(screen.getByRole("heading", { name: /20주차 · 2026-11-15 ~ 2026-11-28/ })).toBeTruthy();
   });
 
-  it("keeps a manually entered close and shows validation errors", async () => {
+  it("asks for the close only when the price data cannot be loaded, and shows validation errors", async () => {
+    fetchMock.mockImplementation(async () => new Response("nope", { status: 500 }));
     render(<VrPage {...props} />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    fill("직전 마감 종가 (USD)", "60");
     fill("이번 주차 시작일", "2026-11-17");
+    await waitFor(() => expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).readOnly).toBe(false));
+    expect(screen.getByText(/직접 입력하세요/)).toBeTruthy();
+    fill("직전 마감 종가 (USD)", "60");
     expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).value).toBe("60");
+    expect(screen.getByText("가격 자료가 없어 직접 입력한 종가를 사용합니다.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "계좌 시작" }));
     expect(screen.getByRole("alert").textContent).toContain("현재 주차");
     fireEvent.click(screen.getByRole("tab", { name: "새로 시작" }));
@@ -132,16 +146,15 @@ describe("VR installment page", () => {
     expect(window.localStorage.getItem(VR_STORAGE_KEY)).toBeNull();
   });
 
-  it("uses the close typed at start when the site has no price on or after the week start", async () => {
+  it("uses the automatic close before the week start when the site has no price on or after it", async () => {
     render(<VrPage {...props} />);
     fill("이번 주차 시작일", "2026-11-18");
     await waitFor(() => expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).value).toBe("50"));
-    fill("직전 마감 종가 (USD)", "52.44");
     fill("현재 주차", "20"); fill("보유 수량 (주)", "75"); fill("평단가 (USD)", "51.81");
     fireEvent.click(screen.getByRole("button", { name: "계좌 시작" }));
-    // 사이트 마지막 가격은 11-17(50)이고 주차 시작은 11-18이므로 입력한 52.44를 쓴다: 75 × 52.44 = 3,933
-    await waitFor(() => expect(nowText()).toContain("주차 시작 기준 종가 $52.44 × 75주"));
-    expect(nowText()).toContain("평가금 $3,933");
+    // 사이트 마지막 가격은 11-17(50)이고 주차 시작은 11-18이므로 시작 기준 종가 50을 쓴다: 75 × 50 = 3,750
+    await waitFor(() => expect(nowText()).toContain("주차 시작 기준 종가 $50.00 × 75주"));
+    expect(nowText()).toContain("평가금 $3,750");
     expect(nowText()).not.toContain("2026-11-17 종가");
   });
 

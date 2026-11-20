@@ -62,8 +62,9 @@ function ChartFrame({ plotRef, scrollRef, W, label, legend, now, hover, onMove, 
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width > 0) onMove(((event.clientX - rect.left) / rect.width) * W);
   }
-  // 손가락으로 누르면 손을 떼도 금액이 남아 있게 하고, 마우스는 벗어나면 지운다.
+  // 마우스는 그래프를 벗어나면, 손가락은 떼거나 밀어서 스크롤이 시작되면 금액 상자를 지운다.
   function leave(event: PointerEvent<SVGSVGElement>) { if (event.pointerType === "mouse") onLeave(); }
+  function release(event: PointerEvent<SVGSVGElement>) { if (event.pointerType !== "mouse") onLeave(); }
   const view = scrollRef.current;
   const tipLeft = hover != null && view != null && hover.x - view.scrollLeft > view.clientWidth / 2;
   return <figure className="vr-chart" role="img" aria-label={label}>
@@ -72,7 +73,7 @@ function ChartFrame({ plotRef, scrollRef, W, label, legend, now, hover, onMove, 
     <div className="vr-chart-plot" ref={plotRef}>
       <div className="vr-chart-scroll" ref={scrollRef}>
         <div className="vr-chart-canvas" style={{ width: W }}>
-          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" onPointerMove={move} onPointerDown={move} onPointerLeave={leave}>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" onPointerMove={move} onPointerDown={move} onPointerLeave={leave} onPointerUp={release} onPointerCancel={release}>
             {children}
             {hover && <line className="vr-chart-cross" x1={hover.x} x2={hover.x} y1={M.t} y2={H - M.b} />}
           </svg>

@@ -67,6 +67,7 @@
   min-width: 0; width: 100%; height: 40px; box-sizing: border-box; padding: 0 12px;
   border: 1px solid var(--line-2); border-radius: var(--r1); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-md);
 }
+.vr-fields input.is-auto { background: var(--subtle); color: var(--ink-2); border-color: var(--line); cursor: default; }
 .vr-fields input:focus, .vr-fields select:focus, .vr-check input:focus, .vr-modal-field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 .vr-check { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .vr-check label { width: 240px; }
@@ -252,7 +253,7 @@
 .vr-chart-now dt { color: var(--muted); }
 .vr-chart-now dd { margin: 0; font-weight: 600; color: var(--ink); }
 .vr-chart-now small { font-weight: 500; color: var(--muted); }
-.vr-chart svg { display: block; max-width: none; overflow: visible; touch-action: pan-x pan-y; }
+.vr-chart svg { display: block; max-width: none; overflow: visible; touch-action: pan-x pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .vr-chart-axes line { stroke: #edf0f3; stroke-width: 1; }
 .vr-chart-axes text, .vr-chart-note { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
 .vr-chart-band { fill: var(--vr-band); }

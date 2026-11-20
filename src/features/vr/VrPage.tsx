@@ -65,22 +65,24 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
     try { return suggestInitialBuy(num(plan.principal), num(plan.refPrice), num(plan.ratio)); } catch { return null; }
   }, [plan]);
 
-  // 간단 이어가기: 사이클 시작일 이전 마지막 종가를 사이트 가격 API에서 채운다. 직접 고친 값은 덮어쓰지 않는다.
+  // 간단 이어가기: 직전 마감 종가는 사이클 시작일 이전 마지막 종가를 사이트 가격 API에서 자동으로 쓴다.
+  // 가격을 불러오지 못했을 때만 직접 입력 칸을 연다.
   const ticker = settings.ticker.trim().toUpperCase();
-  const manualClose = closeInfo.status === "manual";
+  const closeEditable = closeInfo.status === "error" || closeInfo.status === "manual";
   useEffect(() => {
-    if (mode !== "quick" || manualClose || !ticker || !/^\d{4}-\d{2}-\d{2}$/.test(quick.cycleStartDate)) return;
+    if (mode !== "quick" || !ticker || !/^\d{4}-\d{2}-\d{2}$/.test(quick.cycleStartDate)) return;
     let cancelled = false;
+    setQuick((prev) => ({ ...prev, referenceClose: "" }));
     setCloseInfo({ status: "loading", text: `${ticker} 종가를 불러오는 중…` });
     fetchCloseBefore(ticker, quick.cycleStartDate)
       .then((point) => {
         if (cancelled) return;
         setQuick((prev) => ({ ...prev, referenceClose: String(point.close) }));
-        setCloseInfo({ status: "ok", text: `${point.date} 종가 자동 입력 (수정 가능)` });
+        setCloseInfo({ status: "ok", text: `${point.date} 종가 자동 입력` });
       })
       .catch((cause) => { if (!cancelled) setCloseInfo({ status: "error", text: `${errorText(cause, "종가를 불러오지 못했습니다.")} 직접 입력하세요.` }); });
     return () => { cancelled = true; };
-  }, [mode, ticker, quick.cycleStartDate, manualClose]);
+  }, [mode, ticker, quick.cycleStartDate]);
 
   const quickPreview = useMemo(() => {
     if (mode !== "quick") return null;
@@ -129,13 +131,15 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
       <SettingsFields form={settings} onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))} />
       {mode === "quick" ? <>
         <h3>현재 계좌 (아는 값만)</h3>
-        <Help><p>현재 주차, 보유 수량, 평단가와 위의 2주 적립금만 있으면 이어서 시작합니다. 이번 주차 시작일은 오늘이 아니라 이번 2주가 시작된 날(예: 시트의 주차 시작 일요일)을 넣으세요. 직전 V는 모르므로 아래 기준으로 대신 정합니다. 직전 마감 종가는 사이트 가격 자료에서 자동으로 채웁니다.</p></Help>
+        <Help><p>현재 주차, 보유 수량, 평단가와 위의 2주 적립금만 있으면 이어서 시작합니다. 이번 주차 시작일은 오늘이 아니라 이번 2주가 시작된 날(예: 시트의 주차 시작 일요일)을 넣으세요. 직전 V는 모르므로 아래 기준으로 대신 정합니다. 직전 마감 종가는 이번 주차 시작일 전날까지의 마지막 종가를 사이트 가격 자료에서 자동으로 씁니다.</p></Help>
         <div className="vr-fields">
           <label>현재 주차<input type="number" min="1" step="1" value={quick.week} onChange={(e) => setQuick({ ...quick, week: e.target.value })} /></label>
           <label>보유 수량 (주)<input type="number" min="1" step="1" value={quick.shares} onChange={(e) => setQuick({ ...quick, shares: e.target.value })} /></label>
           <label>평단가 (USD)<input type="number" min="0" step="any" value={quick.averageCost} onChange={(e) => setQuick({ ...quick, averageCost: e.target.value })} /></label>
           <label>이번 주차 시작일<input type="date" value={quick.cycleStartDate} onChange={(e) => setQuick({ ...quick, cycleStartDate: e.target.value })} /></label>
-          <label>직전 마감 종가 (USD)<input type="number" min="0" step="any" value={quick.referenceClose} onChange={(e) => { setQuick({ ...quick, referenceClose: e.target.value }); setCloseInfo({ status: "manual", text: "직접 입력한 종가를 사용합니다." }); }} /></label>
+          <label>직전 마감 종가 (USD){closeEditable
+            ? <input type="number" min="0" step="any" value={quick.referenceClose} onChange={(e) => { setQuick({ ...quick, referenceClose: e.target.value }); setCloseInfo({ status: "manual", text: "가격 자료가 없어 직접 입력한 종가를 사용합니다." }); }} />
+            : <input type="number" className="is-auto" readOnly tabIndex={-1} value={quick.referenceClose} placeholder="자동" />}</label>
           <label>현재 현금 Pool (모르면 0)<input type="number" min="0" step="any" value={quick.pool} onChange={(e) => setQuick({ ...quick, pool: e.target.value })} /></label>
         </div>
         {closeInfo.text && <p className={closeInfo.status === "error" ? "vr-error" : "vr-hint"} aria-live="polite">{closeInfo.text}</p>}
