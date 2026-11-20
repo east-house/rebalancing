@@ -197,7 +197,7 @@ class HistoryPlanningTests(unittest.TestCase):
 
         self.assertIn(
             FetchRange(
-                start=date(2026, 7, 18),
+                start=date(2026, 7, 14),
                 end=date(2026, 7, 21),
                 purpose="incremental",
             ),
@@ -231,7 +231,9 @@ class HistoryPlanningTests(unittest.TestCase):
 
         self.assertNotIn("repair", {item.purpose for item in ranges})
 
-    def test_current_history_needs_no_duplicate_provider_request(self) -> None:
+    def test_current_history_still_refreshes_recent_days(self) -> None:
+        # A run during a trading session stores that day's live price, so the
+        # last few days are re-fetched on every run to pick up final closes.
         today = date(2026, 7, 20)
         history = {
             "prices": [
@@ -241,7 +243,30 @@ class HistoryPlanningTests(unittest.TestCase):
             "nonTradingDates": [],
         }
 
-        self.assertEqual(plan_fetch_ranges(history, today), [])
+        self.assertEqual(
+            plan_fetch_ranges(history, today),
+            [
+                FetchRange(
+                    start=date(2026, 7, 14),
+                    end=date(2026, 7, 21),
+                    purpose="incremental",
+                )
+            ],
+        )
+        self.assertEqual(plan_fetch_ranges(history, today, refresh_days=0), [])
+
+    def test_large_refresh_rebuilds_whole_window(self) -> None:
+        today = date(2026, 7, 20)
+        window_start = today - timedelta(days=ROLLING_WINDOW_DAYS)
+        history = {
+            "prices": [{"date": "2026-07-20", "close": 101}],
+            "nonTradingDates": [],
+        }
+
+        ranges = plan_fetch_ranges(history, today, refresh_days=366)
+
+        self.assertEqual(ranges[0].start, window_start)
+        self.assertEqual(ranges[0].end, today + timedelta(days=1))
 
 
 class RollingHistoryTests(unittest.TestCase):

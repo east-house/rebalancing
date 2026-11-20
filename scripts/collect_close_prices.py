@@ -36,6 +36,10 @@ ROLLING_WINDOW_DAYS = 365
 MAX_REPAIR_SPAN_DAYS = 7
 NON_TRADING_CONFIRMATION_DELAY_DAYS = 7
 RECENT_CLOSE_COUNT = 2
+# A run can land while a market is still trading, and the provider then returns
+# the live price for that day. Re-fetch the most recent days on every run so
+# any such intraday value is replaced by the final close on a later run.
+DEFAULT_REFRESH_DAYS = 7
 DEFAULT_SOFT_TIME_BUDGET_MINUTES = 45.0
 
 
@@ -290,6 +294,7 @@ class FetchRange:
 def plan_fetch_ranges(
     history: dict[str, Any] | None,
     today: date,
+    refresh_days: int = DEFAULT_REFRESH_DAYS,
 ) -> list[FetchRange]:
     """Plan a backfill, an increment, and at most one bounded gap repair."""
 
@@ -312,7 +317,13 @@ def plan_fetch_ranges(
 
     ranges: list[FetchRange] = []
     last_price_date = max(price_dates)
-    incremental_start = max(window_start, last_price_date + timedelta(days=1))
+    incremental_start = max(
+        window_start,
+        min(
+            last_price_date + timedelta(days=1),
+            today - timedelta(days=max(refresh_days, 0) - 1),
+        ),
+    )
     if incremental_start <= today:
         ranges.append(
             FetchRange(
@@ -788,6 +799,7 @@ def collect_active_histories(
     retries: int = 1,
     request_delay: float = 0.25,
     max_consecutive_failures: int = 25,
+    refresh_days: int = DEFAULT_REFRESH_DAYS,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> tuple[
@@ -859,7 +871,7 @@ def collect_active_histories(
                 break
             continue
 
-        fetch_ranges = plan_fetch_ranges(existing, today)
+        fetch_ranges = plan_fetch_ranges(existing, today, refresh_days)
         fetched_points: list[dict[str, Any]] = []
         successful_ranges: list[FetchRange] = []
         range_errors: list[str] = []
@@ -1102,6 +1114,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Read and write per-ticker history in R2",
     )
     parser.add_argument(
+        "--refresh-days",
+        type=int,
+        default=DEFAULT_REFRESH_DAYS,
+        help=(
+            "Re-fetch this many recent calendar days on every run so prices "
+            "captured during a trading session are replaced by final closes "
+            "(use 366 once to rebuild the whole window)"
+        ),
+    )
+    parser.add_argument(
         "--r2-prefix",
         default="market-data",
         help="R2 object-key prefix",
@@ -1169,6 +1191,7 @@ def main(argv: list[str] | None = None) -> int:
         retries=args.retries,
         request_delay=max(args.request_delay, 0),
         max_consecutive_failures=args.max_consecutive_failures,
+        refresh_days=args.refresh_days,
     )
     finished_at = datetime.now(timezone.utc)
     summary: dict[str, Any] = {

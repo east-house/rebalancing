@@ -4,9 +4,15 @@ run-name: Rolling closing-price collection (${{ github.event_name }})
 
 on:
   schedule:
-    - cron: "30 16 * * 1-5"
-      timezone: "Asia/Seoul"
+    # 22:30 UTC (07:30 KST next day): after the US close (16:00 ET) and before the
+    # Korean open, so both markets' latest rows are final closes.
+    - cron: "30 22 * * 1-5"
   workflow_dispatch:
+    inputs:
+      refresh_days:
+        description: "Recent calendar days to re-fetch (366 rebuilds the whole window)"
+        required: false
+        default: "7"
 
 permissions:
   contents: read
@@ -78,6 +84,7 @@ jobs:
           --shard-count 8
           --shard-index "${{ matrix.shard }}"
           --soft-time-budget-minutes 95
+          --refresh-days "${{ inputs.refresh_days || '7' }}"
           --rotation-seed "${{ github.run_number }}"
           --retries 2
           --request-delay 0.4

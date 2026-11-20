@@ -131,6 +131,19 @@ describe("VR installment page", () => {
     expect(window.localStorage.getItem(VR_STORAGE_KEY)).toBeNull();
   });
 
+  it("uses the close typed at start when the site has no price on or after the week start", async () => {
+    render(<VrPage {...props} />);
+    fill("이번 주차 시작일", "2026-11-18");
+    await waitFor(() => expect((screen.getByLabelText("직전 마감 종가 (USD)") as HTMLInputElement).value).toBe("50"));
+    fill("직전 마감 종가 (USD)", "52.44");
+    fill("현재 주차", "20"); fill("보유 수량 (주)", "75"); fill("평단가 (USD)", "51.81");
+    fireEvent.click(screen.getByRole("button", { name: "계좌 시작" }));
+    // 사이트 마지막 가격은 11-17(50)이고 주차 시작은 11-18이므로 입력한 52.44를 쓴다: 75 × 52.44 = 3,933
+    await waitFor(() => expect(nowText()).toContain("주차 시작 기준 종가 $52.44 × 75주"));
+    expect(nowText()).toContain("평가금 $3,933");
+    expect(nowText()).not.toContain("2026-11-17 종가");
+  });
+
   it("records daily fills and ends an overdue week with the button after choosing later", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-30T12:00:00"));

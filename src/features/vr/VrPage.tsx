@@ -189,11 +189,11 @@ function OrderTable({ title, rows, side, filled, onPick }: { title: string; rows
   return <div className={`vr-orders vr-orders--${side}`}>
     <h3>{title} <small>{rows.length}줄{filled > 0 ? ` 중 ${filled}줄 체결 · 남은 ${rows.length - filled}줄` : ""}</small></h3>
     {rows.length === 0 ? <p className="vr-hint">주문 없음</p> : <div className="vr-orders-scroll"><table>
-      <thead><tr><th>순번</th><th>지정가</th><th>수량</th><th>체결 후 보유</th><th>체결 후 Pool</th><th><span className="vr-sr">체결 상태</span></th></tr></thead>
+      <thead><tr><th>순번</th><th>지정가</th><th className="vr-col-qty">수량</th><th>체결 후 보유</th><th>체결 후 Pool</th><th><span className="vr-sr">체결 상태</span></th></tr></thead>
       <tbody>{rows.map((row, i) => {
         const done = i < filled;
         return <tr key={row.holdings} className={done ? "is-filled" : i === filled ? "is-next" : undefined}>
-          <td>{i + 1}</td><td>{money(row.price)}</td><td>1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td>
+          <td>{i + 1}</td><td>{money(row.price)}</td><td className="vr-col-qty">1주</td><td>{row.holdings}주</td><td>{money(row.poolAfter)}</td>
           <td>{done
             ? <span className="vr-filled-tag"><Check size={12} aria-hidden="true" />체결됨</span>
             : <button type="button" className="vr-mini" aria-label={`${title} ${i + 1}번 ${money(row.price)} 체결 기록`} onClick={() => onPick(row, side)}>체결</button>}</td>
@@ -396,9 +396,13 @@ function AccountView({ account, onChange, onReset }: { account: VrAccount; onCha
 
   const check = useMemo(() => {
     const manual = num(refPrice);
-    const price = Number.isFinite(manual) && manual > 0 ? manual : latest?.close;
+    const isManual = Number.isFinite(manual) && manual > 0;
+    // 사이트 가격이 이번 주차 시작 전 것뿐이면, 시작할 때 넣은(또는 직전 주차 종료) 종가가 같은 날이거나 더 최신이다.
+    const useStart = !isManual && (!latest || latest.date < cycle.startDate) && cycle.referenceClose > 0;
+    const price = isManual ? manual : useStart ? cycle.referenceClose : latest?.close;
     if (price == null || totals.shares === 0) return null;
-    return { price, source: Number.isFinite(manual) && manual > 0 ? "입력한 가격" : `${latest!.date} 종가`, ...valuationStatus({ ...cycle, shares: totals.shares }, price), fills: countFills(orders, price) };
+    const source = isManual ? "입력한 가격" : useStart ? "주차 시작 기준 종가" : `${latest!.date} 종가`;
+    return { price, source, ...valuationStatus({ ...cycle, shares: totals.shares }, price), fills: countFills(orders, price) };
   }, [cycle, orders, refPrice, latest, totals.shares]);
   const nextWeek = cycle.week + 2;
   const nextG = gForWeek(account.settings.g, nextWeek);
