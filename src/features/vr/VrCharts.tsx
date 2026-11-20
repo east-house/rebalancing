@@ -56,15 +56,12 @@ function domain(values: number[], pad = 0.06): [number, number] {
   return [lo - span * pad, hi + span * pad];
 }
 
-/** 오른쪽 직접 라벨: 서로 12px 이상 떨어지도록 아래로 민다. */
-function placeLabels<T extends { y: number }>(items: T[], gap = 13): (T & { ly: number })[] {
-  const sorted = [...items].sort((a, b) => a.y - b.y);
-  let last = -Infinity;
-  return sorted.map((item) => {
-    const ly = Math.max(item.y, last + gap);
-    last = ly;
-    return { ...item, ly };
-  });
+/** 오른쪽 직접 라벨: 서로 gap 이상 떨어지게 벌리고, 그래프 위아래(top~bottom) 밖으로 나가지 않게 한다. */
+function placeLabels<T extends { y: number }>(items: T[], gap = 13, top = -Infinity, bottom = Infinity): (T & { ly: number })[] {
+  const placed = [...items].sort((a, b) => a.y - b.y).map((item) => ({ ...item, ly: item.y }));
+  for (let i = 0; i < placed.length; i++) placed[i].ly = Math.max(placed[i].ly, i ? placed[i - 1].ly + gap : top);
+  for (let i = placed.length - 1; i >= 0; i--) placed[i].ly = Math.min(placed[i].ly, i < placed.length - 1 ? placed[i + 1].ly - gap : bottom);
+  return placed;
 }
 
 interface Hover { x: number; content: ReactNode }
@@ -157,7 +154,7 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     { key: "target", y: y(lastPt.target), text: `V ${usd(lastPt.cycle.v, 0)}`, sub: `(${usd(lastPt.target)})` },
     { key: "min", y: y(lastPt.min), text: `V 최소 ${usd(lastPt.cycle.lower, 0)}`, sub: `(${usd(lastPt.min)})` },
     ...(lastClose ? [{ key: "close", y: y(lastClose.close), text: `평가금 ${usd(lastClose.close * lastShares, 0)}`, sub: `(종가 ${usd(lastClose.close)})` }] : []),
-  ], 25);
+  ], 28, M.t + 8, H - M.b - 12);
   const realStart = byCycle.find((g) => !isSim(g.cycle));
   const hasSim = byCycle.some((g) => isSim(g.cycle));
 
@@ -182,7 +179,7 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
   const long = t1 - t0 > 200 * DAY;
   return <ChartFrame plotRef={plotRef} W={W}
     label={`평가금과 V·V 최소·V 최대(1주 가격), ${byCycle[0].cycle.week}주차부터 ${byCycle[byCycle.length - 1].cycle.week}주차까지`}
-    legend={<><span><Swatch kind="price" />평가금 (보유 수량 × 종가)</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span className="vr-chart-legend-note">괄호 = 1주 가격 (금액 ÷ 보유 수량, 평가금은 종가)</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}</>}
+    legend={<><span><Swatch kind="price" />평가금 (보유 수량 × 종가)</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}</>}
     hover={hover} onMove={move} onLeave={() => setHover(null)}>
     <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={dateTicks(t0, t1, W < 560 ? 3 : long ? 6 : 4)} x={x} long={long} />
     {byCycle.map((g) => <g key={g.cycle.index} className={isSim(g.cycle) ? "vr-chart-sim" : undefined}>

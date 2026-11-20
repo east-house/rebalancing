@@ -66,9 +66,9 @@ describe("VR installment page", () => {
     const chartText = screen.getByRole("img", { name: /평가금과 V/ }).textContent!;
     expect(chartText).toContain("평가금 $3,750");
     expect(chartText).toContain("(종가 $50.00)");
-    // 사용 순서만 접혀 있고 나머지는 펼쳐져 있다
+    // 매일 쓰는 구역만 펼쳐 두고 나머지는 접어 둔다
     const folds = [...document.querySelectorAll<HTMLDetailsElement>("details.vr-fold")];
-    expect(folds.filter((d) => !d.open).map((d) => d.querySelector(".vr-fold-title")!.textContent)).toEqual(["사용 순서"]);
+    expect(folds.filter((d) => !d.open).map((d) => d.querySelector(".vr-fold-title")!.textContent)).toEqual(["사용 순서", "지난 기록 (주차 원장)", "설정 · 계좌 정보 고치기", "백업 · 불러오기", "계산 기준과 한계"]);
     // 가격 자료가 0주차(2026-06-28)까지 없으면 백테스트가 안내를 띄운다
     expect((screen.getByLabelText("0주차 날짜") as HTMLInputElement).value).toBe("2026-06-28");
     expect(screen.getByText(/2026-06-28 이전 종가가 없습니다/)).toBeTruthy();
