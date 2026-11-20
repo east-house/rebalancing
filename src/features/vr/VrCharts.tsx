@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { fillTotals, type VrCycle, type VrOrders } from "./vrModel";
 import type { ReferenceClose } from "./vrPrices";
 
@@ -19,7 +19,9 @@ function useWidth(fallback = 760): [RefObject<HTMLDivElement | null>, number] {
   }, []);
   return [ref, width];
 }
-const M = { l: 64, r: 104, t: 14, b: 30 };
+const M = { l: 8, r: 8, t: 14, b: 30 };
+/** 한 화면에 보이는 기간(일). 나머지는 좌우로 스크롤한다. */
+const VIEW_DAYS = 14;
 const DAY = 86_400_000;
 const time = (date: string) => Date.parse(`${date}T00:00:00Z`);
 const usd = (value: number, digits = 2) => `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -38,12 +40,6 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return out;
 }
 
-function dateTicks(t0: number, t1: number, count = 5): number[] {
-  const out: number[] = [];
-  for (let i = 0; i <= count; i += 1) out.push(t0 + ((t1 - t0) * i) / count);
-  return out;
-}
-
 const dateLabel = (t: number, long: boolean) => {
   const iso = new Date(t).toISOString();
   return long ? iso.slice(2, 7).replace("-", ".") : iso.slice(5, 10).replace("-", "/");
@@ -56,40 +52,42 @@ function domain(values: number[], pad = 0.06): [number, number] {
   return [lo - span * pad, hi + span * pad];
 }
 
-/** 오른쪽 직접 라벨: 서로 gap 이상 떨어지게 벌리고, 그래프 위아래(top~bottom) 밖으로 나가지 않게 한다. */
-function placeLabels<T extends { y: number }>(items: T[], gap = 13, top = -Infinity, bottom = Infinity): (T & { ly: number })[] {
-  const placed = [...items].sort((a, b) => a.y - b.y).map((item) => ({ ...item, ly: item.y }));
-  for (let i = 0; i < placed.length; i++) placed[i].ly = Math.max(placed[i].ly, i ? placed[i - 1].ly + gap : top);
-  for (let i = placed.length - 1; i >= 0; i--) placed[i].ly = Math.min(placed[i].ly, i < placed.length - 1 ? placed[i + 1].ly - gap : bottom);
-  return placed;
-}
-
 interface Hover { x: number; content: ReactNode }
 
-function ChartFrame({ plotRef, W, label, legend, hover, onMove, onLeave, children }: {
-  plotRef: RefObject<HTMLDivElement | null>; W: number; label: string; legend: ReactNode; hover: Hover | null;
+function ChartFrame({ plotRef, scrollRef, W, label, legend, now, hover, onMove, onLeave, children }: {
+  plotRef: RefObject<HTMLDivElement | null>; scrollRef: RefObject<HTMLDivElement | null>; W: number; label: string; legend: ReactNode; now: ReactNode; hover: Hover | null;
   onMove: (svgX: number) => void; onLeave: () => void; children: ReactNode;
 }) {
   function move(event: PointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width > 0) onMove(((event.clientX - rect.left) / rect.width) * W);
   }
-  return <figure className="vr-chart">
+  // 손가락으로 누르면 손을 떼도 금액이 남아 있게 하고, 마우스는 벗어나면 지운다.
+  function leave(event: PointerEvent<SVGSVGElement>) { if (event.pointerType === "mouse") onLeave(); }
+  const view = scrollRef.current;
+  const tipLeft = hover != null && view != null && hover.x - view.scrollLeft > view.clientWidth / 2;
+  return <figure className="vr-chart" role="img" aria-label={label}>
     <div className="vr-chart-legend">{legend}</div>
+    {now}
     <div className="vr-chart-plot" ref={plotRef}>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} onPointerMove={move} onPointerLeave={onLeave}>
-        {children}
-        {hover && <line className="vr-chart-cross" x1={hover.x} x2={hover.x} y1={M.t} y2={H - M.b} />}
-      </svg>
-      {hover && <div className="vr-chart-tip" style={{ left: `${(hover.x / W) * 100}%` }} data-side={hover.x > W / 2 ? "left" : "right"}>{hover.content}</div>}
+      <div className="vr-chart-scroll" ref={scrollRef}>
+        <div className="vr-chart-canvas" style={{ width: W }}>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" onPointerMove={move} onPointerDown={move} onPointerLeave={leave}>
+            {children}
+            {hover && <line className="vr-chart-cross" x1={hover.x} x2={hover.x} y1={M.t} y2={H - M.b} />}
+          </svg>
+        </div>
+      </div>
+      {hover && <div className="vr-chart-tip" data-side={tipLeft ? "left" : "right"}>{hover.content}</div>}
     </div>
   </figure>;
 }
 
-function Axes({ W, yTicks, y, xTicks, x, long }: { W: number; yTicks: number[]; y: (v: number) => number; xTicks: number[]; x: (t: number) => number; long: boolean }) {
+/** 가로 눈금선(값 글자 없음)과 날짜 */
+function Axes({ W, yTicks, y, xTicks, x }: { W: number; yTicks: number[]; y: (v: number) => number; xTicks: number[]; x: (t: number) => number }) {
   return <g className="vr-chart-axes">
-    {yTicks.map((v) => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} /><text x={M.l - 8} y={y(v)} dy="0.32em" textAnchor="end">{usd(v, v >= 1000 ? 0 : 2)}</text></g>)}
-    {xTicks.map((t) => <text key={t} x={x(t)} y={H - M.b + 18} textAnchor="middle">{dateLabel(t, long)}</text>)}
+    {yTicks.map((v) => <line key={v} x1={0} x2={W} y1={y(v)} y2={y(v)} />)}
+    {xTicks.map((t) => <text key={t} x={x(t)} y={H - M.b + 18} textAnchor="middle">{dateLabel(t, false)}</text>)}
   </g>;
 }
 
@@ -106,7 +104,8 @@ const triangle = (x: number, y: number, up: boolean, r = 6) => up
  * 종가가 최소가 아래로 내려가면 평가금이 V 최소 아래(매수 구간), 최대가 위로 올라가면 V 최대 위(매도 구간)이다.
  */
 export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices: ReferenceClose[] }) {
-  const [plotRef, W] = useWidth();
+  const [plotRef, boxW] = useWidth();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const isSim = (c: VrCycle) => Boolean(c.estimated);
 
@@ -127,15 +126,39 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     const t1 = time(byCycle[byCycle.length - 1].cycle.endDate) + DAY;
     const closes = prices.filter((p) => time(p.date) >= t0 && time(p.date) < t1);
     const fills = byCycle.flatMap((g) => (g.cycle.fills ?? []).map((f) => ({ ...f, sim: isSim(g.cycle) })));
-    const values = [...closes.map((p) => p.close), ...byCycle.flatMap((g) => g.pts.flatMap((p) => [p.min, p.max])), ...fills.map((f) => f.price)];
-    const [y0, y1] = domain(values);
-    return { byCycle, t0, t1, closes, fills, y0, y1 };
+    return { byCycle, t0, t1, closes, fills };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycles, prices]);
 
+  // 보이는 폭에 2주(VIEW_DAYS)가 들어가도록 전체 폭을 늘리고, 처음에는 가장 최근(오른쪽 끝)을 보여 준다.
+  const viewW = Math.max(200, boxW);
+  const days = model ? (model.t1 - model.t0) / DAY : VIEW_DAYS;
+  const W = Math.max(viewW, Math.round((viewW * days) / VIEW_DAYS));
+  const [scrollLeft, setScrollLeft] = useState(0);
+  useEffect(() => { const el = scrollRef.current; if (el) { el.scrollLeft = el.scrollWidth; setScrollLeft(el.scrollLeft); } }, [W, model]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => { setScrollLeft(el.scrollLeft); setHover(null); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [model]);
+
   if (!model) return <p className="vr-hint">표시할 데이터가 없습니다.</p>;
-  const { byCycle, t0, t1, closes, fills, y0, y1 } = model;
+  const { byCycle, t0, t1, closes, fills } = model;
   const x = linear(t0, t1, M.l, W - M.r);
+  // 세로 범위와 오른쪽 라벨은 지금 화면에 보이는 기간에 맞춘다(왼쪽 가격 눈금이 없으므로).
+  const tAt = (px: number) => t0 + ((px - M.l) / Math.max(1, W - M.l - M.r)) * (t1 - t0);
+  const tA = tAt(scrollLeft) - DAY;
+  const tB = tAt(scrollLeft + viewW) + DAY;
+  const allPts = byCycle.flatMap((g) => g.pts);
+  const inView = (t: number) => t >= tA && t <= tB;
+  const visValues = [
+    ...closes.filter((p) => inView(time(p.date))).map((p) => p.close),
+    ...allPts.filter((p) => inView(p.t)).flatMap((p) => [p.min, p.max]),
+    ...fills.filter((f) => inView(time(f.date))).map((f) => f.price),
+  ];
+  const [y0, y1] = domain(visValues.length ? visValues : [...closes.map((p) => p.close), ...allPts.flatMap((p) => [p.min, p.max])]);
   const y = linear(y0, y1, H - M.b, M.t);
   const xEnd = (g: { cycle: VrCycle; pts: BandPoint[] }, i: number) => i + 1 < g.pts.length ? x(g.pts[i + 1].t) : x(time(g.cycle.endDate) + DAY);
   const step = (g: { cycle: VrCycle; pts: BandPoint[] }, key: "target" | "min" | "max") =>
@@ -145,16 +168,17 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     const bottom = g.pts.flatMap((p, i) => [`${x(p.t)},${y(p.min)}`, `${xEnd(g, i)},${y(p.min)}`]).reverse();
     return `M${[...top, ...bottom].join(" L")} Z`;
   };
-  const allPts = byCycle.flatMap((g) => g.pts);
+  // 범례 아래 한 줄: 현재 주차 값(금액, 괄호는 1주 가격)
   const lastPt = allPts[allPts.length - 1];
   const lastClose = closes[closes.length - 1];
   const lastShares = (lastClose && allPts.find((p) => p.date === lastClose.date)?.shares) ?? lastPt.shares;
-  const labels = placeLabels([
-    { key: "max", y: y(lastPt.max), text: `V 최대 ${usd(lastPt.cycle.upper, 0)}`, sub: `(${usd(lastPt.max)})` },
-    { key: "target", y: y(lastPt.target), text: `V ${usd(lastPt.cycle.v, 0)}`, sub: `(${usd(lastPt.target)})` },
-    { key: "min", y: y(lastPt.min), text: `V 최소 ${usd(lastPt.cycle.lower, 0)}`, sub: `(${usd(lastPt.min)})` },
-    ...(lastClose ? [{ key: "close", y: y(lastClose.close), text: `평가금 ${usd(lastClose.close * lastShares, 0)}`, sub: `(종가 ${usd(lastClose.close)})` }] : []),
-  ], 28, M.t + 8, H - M.b - 12);
+  const nowRow = <dl className="vr-chart-now">
+    <div><dt>{lastPt.cycle.week}주차</dt><dd>보유 {lastShares}주</dd></div>
+    <div><dt>V 최대</dt><dd>{usd(lastPt.cycle.upper, 0)} <small>({usd(lastPt.max)})</small></dd></div>
+    <div><dt>V</dt><dd>{usd(lastPt.cycle.v, 0)} <small>({usd(lastPt.target)})</small></dd></div>
+    <div><dt>V 최소</dt><dd>{usd(lastPt.cycle.lower, 0)} <small>({usd(lastPt.min)})</small></dd></div>
+    {lastClose && <div><dt>평가금</dt><dd>{usd(lastClose.close * lastShares, 0)} <small>(종가 {usd(lastClose.close)})</small></dd></div>}
+  </dl>;
   const realStart = byCycle.find((g) => !isSim(g.cycle));
   const hasSim = byCycle.some((g) => isSim(g.cycle));
 
@@ -176,12 +200,14 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     </> });
   }
 
-  const long = t1 - t0 > 200 * DAY;
-  return <ChartFrame plotRef={plotRef} W={W}
+  // 날짜 눈금: 7일마다(주차 시작일과 그 중간)
+  const xTicks: number[] = [];
+  for (let t = t0; t < t1; t += 7 * DAY) xTicks.push(t);
+  return <ChartFrame plotRef={plotRef} scrollRef={scrollRef} W={W}
     label={`평가금과 V·V 최소·V 최대(1주 가격), ${byCycle[0].cycle.week}주차부터 ${byCycle[byCycle.length - 1].cycle.week}주차까지`}
-    legend={<><span><Swatch kind="price" />평가금 (보유 수량 × 종가)</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}</>}
-    hover={hover} onMove={move} onLeave={() => setHover(null)}>
-    <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={dateTicks(t0, t1, W < 560 ? 3 : long ? 6 : 4)} x={x} long={long} />
+    legend={<><span><Swatch kind="price" />평가금 (보유 수량 × 종가)</span><span><Swatch kind="v" />V 목표</span><span><Swatch kind="band" />V 최소~최대</span><span><Swatch kind="buy-pt" />매수 체결</span><span><Swatch kind="sell-pt" />매도 체결</span>{hasSim && <span><Swatch kind="sim" />추정 지난 기록</span>}{W > viewW && <span className="vr-chart-legend-note">← 좌우로 밀어 지난 기간 보기</span>}</>}
+    now={nowRow} hover={hover} onMove={move} onLeave={() => setHover(null)}>
+    <Axes W={W} yTicks={niceTicks(y0, y1)} y={y} xTicks={xTicks} x={x} />
     {byCycle.map((g) => <g key={g.cycle.index} className={isSim(g.cycle) ? "vr-chart-sim" : undefined}>
       <path className="vr-chart-band" d={area(g)} />
       <path className="vr-chart-edge" d={step(g, "max")} />
@@ -194,8 +220,6 @@ export function VrPriceBandChart({ cycles, prices }: { cycles: VrCycle[]; prices
     {fills.map((f) => <path key={f.id} className={`vr-chart-fill vr-chart-fill--${f.side}${f.sim ? " is-sim" : ""}`} d={triangle(x(time(f.date)), y(f.price), f.side === "buy")}>
       <title>{`${f.date} ${f.side === "buy" ? "매수" : "매도"} ${f.quantity}주 × ${usd(f.price)}${f.sim ? " (추정)" : ""}`}</title>
     </path>)}
-    {labels.map((l) => <text key={l.key} className="vr-chart-label" x={W - M.r + 8} y={l.sub ? l.ly - 5 : l.ly} dy="0.32em">{l.text}
-      {l.sub && <tspan className="vr-chart-label-sub" x={W - M.r + 8} dy="1.15em">{l.sub}</tspan>}</text>)}
   </ChartFrame>;
 }
 

@@ -62,10 +62,11 @@ describe("VR installment page", () => {
     expect(nowText()).toContain("매도 구간");
     // 그래프는 기본으로 펼쳐져 있고, 종가 위에 목표가·최소가·최대가를 겹친다
     expect(await screen.findByRole("img", { name: "평가금과 V·V 최소·V 최대(1주 가격), 20주차부터 20주차까지" })).toBeTruthy();
-    // 마지막 라벨: 평가금 50 × 75 = 3,750 (종가 50)
-    const chartText = screen.getByRole("img", { name: /평가금과 V/ }).textContent!;
-    expect(chartText).toContain("평가금 $3,750");
-    expect(chartText).toContain("(종가 $50.00)");
+    // 범례 아래 현재 주차 줄: 평가금 50 × 75 = 3,750 (종가 50)
+    const nowRow = document.querySelector(".vr-chart-now")!.textContent!;
+    expect(nowRow).toContain("20주차보유 75주");
+    expect(nowRow).toContain("평가금$3,750 (종가 $50.00)");
+
     // 매일 쓰는 구역만 펼쳐 두고 나머지는 접어 둔다
     const folds = [...document.querySelectorAll<HTMLDetailsElement>("details.vr-fold")];
     expect(folds.filter((d) => !d.open).map((d) => d.querySelector(".vr-fold-title")!.textContent)).toEqual(["사용 순서", "지난 기록 (주차 원장)", "설정 · 계좌 정보 고치기", "백업 · 불러오기", "계산 기준과 한계"]);

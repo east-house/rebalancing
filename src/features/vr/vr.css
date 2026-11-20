@@ -244,12 +244,17 @@
 .vr-swatch--buy-pt { border-bottom: 10px solid var(--buy); }
 .vr-swatch--sell-pt { border-top: 10px solid var(--sell); }
 .vr-swatch--sim { height: 10px; background: #eef1f4; border: 1px dashed var(--faint); box-sizing: border-box; }
-.vr-chart-plot { position: relative; }
-.vr-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.vr-chart-plot { position: relative; display: flex; align-items: stretch; }
+.vr-chart-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.vr-chart-canvas { position: relative; }
+.vr-chart-now { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 8px; padding: 8px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.vr-chart-now > div { display: flex; align-items: baseline; gap: 6px; }
+.vr-chart-now dt { color: var(--muted); }
+.vr-chart-now dd { margin: 0; font-weight: 600; color: var(--ink); }
+.vr-chart-now small { font-weight: 500; color: var(--muted); }
+.vr-chart svg { display: block; max-width: none; overflow: visible; touch-action: pan-x pan-y; }
 .vr-chart-axes line { stroke: #edf0f3; stroke-width: 1; }
 .vr-chart-axes text, .vr-chart-note { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
-.vr-chart-label { font-size: 11px; fill: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vr-chart-label-sub { font-size: 10px; font-weight: 500; fill: var(--muted); }
 .vr-chart-band { fill: var(--vr-band); }
 .vr-chart-edge { fill: none; stroke: var(--line-2); stroke-width: 1; }
 .vr-chart-v { fill: none; stroke: var(--vr-v); stroke-width: 2; }
@@ -264,8 +269,9 @@
 .vr-chart-fill.is-sim { opacity: .7; }
 .vr-chart-sim .vr-chart-band { fill: #eef1f4; }
 .vr-chart-sim .vr-chart-v { stroke: var(--faint); }
-.vr-chart-tip { position: absolute; top: 8px; z-index: 2; transform: translateX(12px); display: grid; gap: 4px; width: max-content; max-width: min(280px, 72vw); padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--r1); background: var(--surface); box-shadow: 0 4px 12px rgba(26, 36, 48, .12); font-size: var(--fs-xs); color: var(--ink-2); pointer-events: none; font-variant-numeric: tabular-nums; }
-.vr-chart-tip[data-side="left"] { transform: translateX(calc(-100% - 12px)); }
+.vr-chart-tip { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; gap: 4px; width: max-content; max-width: min(280px, calc(100% - 16px)); padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--r1); background: var(--surface); box-shadow: 0 4px 12px rgba(26, 36, 48, .12); font-size: var(--fs-xs); color: var(--ink-2); pointer-events: none; font-variant-numeric: tabular-nums; }
+/* 짚은 곳이 오른쪽이면 왼쪽 위에, 왼쪽이면 오른쪽 위에 띄워 선을 가리지 않는다 */
+.vr-chart-tip[data-side="left"] { right: auto; left: 8px; }
 .vr-chart-tip strong { color: var(--ink); }
 .vr-chart-tip span { display: flex; align-items: baseline; gap: 6px; }
 .vr-chart-tip em { font-style: normal; font-weight: 600; color: var(--ink); }
