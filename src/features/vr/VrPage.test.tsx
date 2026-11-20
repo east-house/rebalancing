@@ -9,7 +9,7 @@ const fill = (name: string, value: string) => fireEvent.change(screen.getByLabel
 const history = {
   schemaVersion: 1,
   instrument: { ticker: "TQQQ", name: "ProShares UltraPro QQQ", country: "US", assetType: "ETF" },
-  prices: [{ date: "2026-11-13", close: 52.5 }, { date: "2026-11-16", close: 51.6399 }, { date: "2026-11-17", close: 50 }],
+  prices: [{ date: "2026-11-13", close: 57.68 }, { date: "2026-11-16", close: 51.6399 }, { date: "2026-11-17", close: 50 }],
 };
 const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(history), { status: 200 }));
 
@@ -17,14 +17,15 @@ beforeEach(() => { window.localStorage.removeItem(VR_STORAGE_KEY); fetchMock.moc
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 // 시트 20주차 상태(실력공식, 적립금 65)로 이어가기
-function startExistingSkill() {
+async function startExistingSkill() {
   fireEvent.click(screen.getByRole("tab", { name: "이어가기 (V를 알 때)" }));
   fill("2주 적립금 (USD)", "65");
   fireEvent.click(screen.getByRole("radio", { name: /실력공식/ }));
   fill("이번 사이클 시작일", "2026-11-15");
   fill("이번 사이클 주차 (짝수)", "20");
   fill("직전 사이클 V (USD)", "5492.548");
-  fill("직전 사이클 마감 종가 (USD)", "57.68");
+  // 직전 사이클 마감 종가는 11-15 이전 마지막 종가(11-13 57.68)가 자동으로 들어간다
+  await waitFor(() => expect((screen.getByLabelText("직전 사이클 마감 종가 (USD)") as HTMLInputElement).value).toBe("57.68"));
   fill("현재 보유 수량 (주)", "75");
   fill("현재 Pool, 적립 전 (USD)", "797.91");
   fireEvent.click(screen.getByRole("button", { name: "계좌 시작" }));
@@ -43,7 +44,7 @@ describe("VR installment page", () => {
   it("continues the sheet account, shows the current situation, chart and ladder, ends a week and persists", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<VrPage {...props} />);
-    startExistingSkill();
+    await startExistingSkill();
     expect(screen.getByRole("heading", { name: /20주차 · 2026-11-15 ~ 2026-11-28/ })).toBeTruthy();
     expect(screen.getAllByText("$5,452.905").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: /매수 12줄/ })).toBeTruthy();
@@ -163,7 +164,7 @@ describe("VR installment page", () => {
     vi.setSystemTime(new Date("2026-11-30T12:00:00"));
     try {
       render(<VrPage {...props} />);
-      startExistingSkill();
+      await startExistingSkill();
       expect(screen.getByRole("alertdialog", { name: "20주차가 끝났습니다" })).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "나중에" }));
       expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -196,7 +197,7 @@ describe("VR installment page", () => {
     vi.setSystemTime(new Date("2026-11-30T12:00:00"));
     try {
       render(<VrPage {...props} />);
-      startExistingSkill();
+      await startExistingSkill();
       const dialog = screen.getByRole("alertdialog", { name: "20주차가 끝났습니다" });
       await waitFor(() => expect(dialog.textContent).toContain("$50.00 (2026-11-17)"));
       fireEvent.click(screen.getByRole("button", { name: "확인" }));
@@ -206,11 +207,11 @@ describe("VR installment page", () => {
       expect(saved.cycles[0].close).toEqual({ shares: 75, pool: 862.91, price: 50 });
     } finally { vi.useRealTimers(); }
   });
-  it("clears the account from the top button and returns to setup", () => {
+  it("clears the account from the top button and returns to setup", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     render(<VrPage {...props} />);
-    startExistingSkill();
+    await startExistingSkill();
     expect(window.localStorage.getItem(VR_STORAGE_KEY)).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "지우고 새로 시작" }));
     expect(screen.getByRole("heading", { name: /20주차 · / })).toBeTruthy();

@@ -65,24 +65,29 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
     try { return suggestInitialBuy(num(plan.principal), num(plan.refPrice), num(plan.ratio)); } catch { return null; }
   }, [plan]);
 
-  // 간단 이어가기: 직전 마감 종가는 사이클 시작일 이전 마지막 종가를 사이트 가격 API에서 자동으로 쓴다.
+  // 이어가기 두 탭 모두 직전 마감 종가는 사이클 시작일 이전 마지막 종가를 사이트 가격 API에서 자동으로 쓴다.
   // 가격을 불러오지 못했을 때만 직접 입력 칸을 연다.
   const ticker = settings.ticker.trim().toUpperCase();
   const closeEditable = closeInfo.status === "error" || closeInfo.status === "manual";
+  const closeDate = mode === "quick" ? quick.cycleStartDate : mode === "existing" ? existing.cycleStartDate : "";
   useEffect(() => {
-    if (mode !== "quick" || !ticker || !/^\d{4}-\d{2}-\d{2}$/.test(quick.cycleStartDate)) return;
+    if (mode === "new") return;
+    const put = (value: string) => mode === "quick"
+      ? setQuick((prev) => ({ ...prev, referenceClose: value }))
+      : setExisting((prev) => ({ ...prev, previousClose: value }));
+    put("");
+    if (!ticker || !/^\d{4}-\d{2}-\d{2}$/.test(closeDate)) { setCloseInfo({ status: "idle", text: "시작일을 넣으면 직전 마감 종가를 자동으로 채웁니다." }); return; }
     let cancelled = false;
-    setQuick((prev) => ({ ...prev, referenceClose: "" }));
     setCloseInfo({ status: "loading", text: `${ticker} 종가를 불러오는 중…` });
-    fetchCloseBefore(ticker, quick.cycleStartDate)
+    fetchCloseBefore(ticker, closeDate)
       .then((point) => {
         if (cancelled) return;
-        setQuick((prev) => ({ ...prev, referenceClose: String(point.close) }));
+        put(String(point.close));
         setCloseInfo({ status: "ok", text: `${point.date} 종가 자동 입력` });
       })
       .catch((cause) => { if (!cancelled) setCloseInfo({ status: "error", text: `${errorText(cause, "종가를 불러오지 못했습니다.")} 직접 입력하세요.` }); });
     return () => { cancelled = true; };
-  }, [mode, ticker, quick.cycleStartDate]);
+  }, [mode, ticker, closeDate]);
 
   const quickPreview = useMemo(() => {
     if (mode !== "quick") return null;
@@ -172,16 +177,19 @@ function SetupPanel({ onCreate }: { onCreate: (account: VrAccount) => void }) {
         </div>
       </> : <>
         <h3>현재 계좌</h3>
-        <Help><p>직전 사이클의 V와 마감 종가, 지금의 실제 보유 수량·현금으로 이번 사이클 V를 계산합니다. 주차는 시트의 Week(2주마다 2씩 증가)입니다. Pool은 이번 적립금을 넣기 전 금액입니다.</p></Help>
+        <Help><p>직전 사이클의 V와 마감 종가(사이클 시작일 전 마지막 종가를 자동으로 씀), 지금의 실제 보유 수량·현금으로 이번 사이클 V를 계산합니다. 주차는 시트의 Week(2주마다 2씩 증가)입니다. Pool은 이번 적립금을 넣기 전 금액입니다.</p></Help>
         <div className="vr-fields">
           <label>이번 사이클 시작일<input type="date" value={existing.cycleStartDate} onChange={(e) => setExisting({ ...existing, cycleStartDate: e.target.value })} /></label>
           <label>이번 사이클 주차 (짝수)<input type="number" min="2" step="2" value={existing.week} onChange={(e) => setExisting({ ...existing, week: e.target.value })} /></label>
           <label>직전 사이클 V (USD)<input type="number" min="0" step="any" value={existing.previousV} onChange={(e) => setExisting({ ...existing, previousV: e.target.value })} /></label>
-          <label>직전 사이클 마감 종가 (USD)<input type="number" min="0" step="any" value={existing.previousClose} onChange={(e) => setExisting({ ...existing, previousClose: e.target.value })} /></label>
+          <label>직전 사이클 마감 종가 (USD){closeEditable
+            ? <input type="number" min="0" step="any" value={existing.previousClose} onChange={(e) => { setExisting({ ...existing, previousClose: e.target.value }); setCloseInfo({ status: "manual", text: "가격 자료가 없어 직접 입력한 종가를 사용합니다." }); }} />
+            : <input type="number" className="is-auto" readOnly tabIndex={-1} value={existing.previousClose} placeholder="자동" />}</label>
           <label>현재 보유 수량 (주)<input type="number" min="0" step="1" value={existing.shares} onChange={(e) => setExisting({ ...existing, shares: e.target.value })} /></label>
           <label>현재 Pool, 적립 전 (USD)<input type="number" min="0" step="any" value={existing.poolBeforeDeposit} onChange={(e) => setExisting({ ...existing, poolBeforeDeposit: e.target.value })} /></label>
           <label>현재 평단가 (선택, USD)<input type="number" min="0" step="any" value={existing.averageCost} onChange={(e) => setExisting({ ...existing, averageCost: e.target.value })} /></label>
         </div>
+        {closeInfo.text && <p className={closeInfo.status === "error" ? "vr-error" : "vr-hint"} aria-live="polite">{closeInfo.text}</p>}
       </>}
       <button className="vr-primary" type="submit">계좌 시작</button>
       {error && <p className="vr-error" role="alert">{error}</p>}
